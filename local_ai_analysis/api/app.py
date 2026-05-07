@@ -15,7 +15,7 @@ def create_app(db_path: str | Path = "results/local_ai_analysis.duckdb") -> Fast
     app = FastAPI(
         title="Local AI Analysis API",
         version=__version__,
-        description="Reproducible Global MMLU Lite benchmark API for local AI servers.",
+        description="Reproducible local benchmark API for local AI servers.",
     )
     app.state.db_path = str(db_path)
     app.add_middleware(
@@ -50,10 +50,7 @@ def create_app(db_path: str | Path = "results/local_ai_analysis.duckdb") -> Fast
             and _matches(row, "hardware_accelerator", hardware)
             and (
                 min_quality is None
-                or (
-                    row.get("global_mmlu_lite_pass_at_1") is not None
-                    and row["global_mmlu_lite_pass_at_1"] >= min_quality
-                )
+                or (_quality_value(row) is not None and _quality_value(row) >= min_quality)
             )
             and (
                 max_runtime_seconds is None
@@ -83,6 +80,25 @@ def create_app(db_path: str | Path = "results/local_ai_analysis.duckdb") -> Fast
 
 def _matches(row: dict[str, Any], key: str, expected: str | None) -> bool:
     return expected is None or str(row.get(key)) == expected
+
+
+def _quality_value(row: dict[str, Any]) -> float | None:
+    for key in (
+        "model_intelligence_score",
+        "global_mmlu_lite_pass_at_1",
+        "ifbench_prompt_level_loose",
+        "bfcl_v4_selected_accuracy",
+        "ocrbench_v2_score",
+        "mmmu_accuracy",
+        "mbpp_pass_at_1",
+        "rgb_all_rate",
+        "simpleqa_f1",
+        "harmbench_refusal_rate",
+    ):
+        value = row.get(key)
+        if value is not None:
+            return float(value)
+    return None
 
 
 app = create_app()

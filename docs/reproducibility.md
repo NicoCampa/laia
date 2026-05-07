@@ -2,11 +2,25 @@
 
 Local AI Analysis treats each row as an auditable local measurement.
 
+Suite aliases are intentionally layered:
+
+- `text`: text-only, non-judge benchmarks.
+- `vision`: multimodal non-judge benchmarks.
+- `judge`: benchmarks that require an LLM judge.
+- `suite`: `text` plus `vision`, without judge-based benchmarks.
+- `full`: every benchmark family.
+
+For compatibility, `core` maps to `text`, `all` maps to `suite`, and `judged`
+maps to `judge`.
+
 Every run records:
 
 - provider name and native API base URL
 - exact model tag or model id
-- dataset name, revision, split, and languages
+- model/run modality metadata and benchmark input modalities
+- dataset name, revision, split, languages, OCRBench configs, MMMU subjects,
+  MBPP config/split, RGB dataset/noise/passage settings, SimpleQA grader,
+  HarmBench judge/category settings, and BFCL categories
 - prompt template and parser version
 - temperature, max tokens, seed, stop, top-p, and reasoning effort
 - raw prompt, raw output, extracted answer, gold answer, and correctness per question
@@ -25,3 +39,25 @@ For publishable runs:
   strict or instruction-level metrics
 - compare BFCL v4 rows by `bfcl_v4_selected_accuracy`, and record the selected
   BFCL category set because smoke, single-turn, and all-scoring runs are not equivalent
+- compare OCRBench v2 rows by `ocrbench_v2_score`, and only compare rows that use
+  the same evaluator version and dataset config set
+- compare MMMU rows by `mmmu_accuracy`, and record the split and subject list
+- compare MBPP rows by `mbpp_pass_at_1`, and record whether the run used the
+  `full` or `sanitized` config and whether challenge tests were enabled
+- compare RGB rows by `rgb_all_rate`, and record the RGB dataset, noise rate,
+  passage count, correct rate, and whether the row is noise robustness,
+  negative rejection, information integration, or counterfactual robustness
+- compare SimpleQA rows by `simpleqa_f1`, and record whether the grader was an
+  LLM judge or the deterministic heuristic. For publishable rows, use a stronger
+  pinned judge model instead of an unpinned `same` grader.
+- compare HarmBench rows by `harmbench_attack_success_rate` for attack success
+  or `harmbench_refusal_rate` for safety. Record the selected functional
+  categories and judge model. Default generated configs reuse the same local
+  judge-model convention as SimpleQA.
+- compare broad model profiles by `model_intelligence_score`; check
+  `model_intelligence_coverage` before ranking rows because missing benchmark
+  families are intentionally counted as zero
+
+Default model intelligence weights are Global MMLU Lite 15%, SimpleQA 10%,
+IFBench 15%, BFCL v4 15%, OCRBench v2 10%, MMMU 15%, MBPP 15%, and RGB 5%.
+HarmBench is reported separately as a safety benchmark.

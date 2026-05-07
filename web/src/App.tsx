@@ -52,6 +52,33 @@ type LeaderboardRow = {
   bfcl_v4_live_accuracy?: number | null;
   bfcl_v4_multi_turn_accuracy?: number | null;
   bfcl_v4_agentic_accuracy?: number | null;
+  ocrbench_v2_score?: number | null;
+  ocrbench_v2_micro_score?: number | null;
+  ocrbench_v2_en_score?: number | null;
+  ocrbench_v2_cn_score?: number | null;
+  mmmu_accuracy?: number | null;
+  mmmu_invalid_rate?: number | null;
+  mmmu_multiple_choice_accuracy?: number | null;
+  mmmu_open_accuracy?: number | null;
+  mbpp_pass_at_1?: number | null;
+  mbpp_invalid_rate?: number | null;
+  mbpp_compile_rate?: number | null;
+  mbpp_runtime_error_rate?: number | null;
+  rgb_all_rate?: number | null;
+  rgb_rejection_rate?: number | null;
+  rgb_fact_check_rate?: number | null;
+  rgb_error_correction_rate?: number | null;
+  simpleqa_f1?: number | null;
+  simpleqa_correct_rate?: number | null;
+  simpleqa_incorrect_rate?: number | null;
+  simpleqa_hallucination_rate?: number | null;
+  simpleqa_not_attempted_rate?: number | null;
+  simpleqa_accuracy_given_attempted?: number | null;
+  harmbench_attack_success_rate?: number | null;
+  harmbench_refusal_rate?: number | null;
+  model_intelligence_score?: number | null;
+  model_intelligence_coverage?: number | null;
+  model_intelligence_available_score?: number | null;
   benchmark_runtime_seconds?: number | null;
   metadata_json?: string | null;
 };
@@ -147,16 +174,19 @@ export function App() {
 
       <section className="console-hero" id="overview">
         <div className="title-stack">
-          <p className="eyebrow">Benchmark Console</p>
-          <h1>Local model leaderboard</h1>
+          <p className="eyebrow">Local benchmark console</p>
+          <h1>Local AI Analysis</h1>
           <p>
-            Publishable runs from your local benchmark pipeline. Synthetic seed data and
-            short smoke checks are hidden from the leaderboard.
+            Reproducible benchmark runs for local models served through Ollama, LM Studio,
+            and oMLX. Smoke checks stay out of the public ranking.
           </p>
         </div>
 
         <div className="run-summary" aria-label="Current best result">
-          <span className="summary-label">Best current row</span>
+          <div className="summary-topline">
+            <span className="summary-bars">|| | || | |||</span>
+            <span className="summary-label">Best row</span>
+          </div>
           <strong>{bestQuality?.variant_name ?? "No publishable result"}</strong>
           <dl>
             <div>
@@ -248,7 +278,7 @@ export function App() {
           <MethodRow
             icon={<CheckCircle2 size={18} />}
             title="Quality"
-            text="Global MMLU Lite, IFBench, and BFCL v4 are the publishable quality protocols for the current workflow."
+            text="Global MMLU Lite, IFBench, BFCL v4, OCRBench v2, MMMU, MBPP, and RGB are the publishable quality protocols for the current workflow."
           />
           <MethodRow
             icon={<Cpu size={18} />}
@@ -277,7 +307,7 @@ function SiteHeader({ generatedAt }: { generatedAt: string }) {
   return (
     <header className="site-header">
       <a href="#overview" className="site-mark" aria-label="Local AI Analysis home">
-        <span>LA</span>
+        <span>NC</span>
         <strong>Local AI Analysis</strong>
       </a>
       <nav aria-label="Primary navigation">
@@ -505,9 +535,14 @@ function LeaderboardTable({
               <td className="rank-cell">{String(index + 1).padStart(2, "0")}</td>
               <td className="model-cell">
                 <strong>{row.variant_name}</strong>
-                <span>
-                  {row.family} · {formatParameter(row.parameter_size_b)} · {row.quantization}
-                </span>
+                <div className="model-subline">
+                  <span>
+                    {row.family} · {formatParameter(row.parameter_size_b)} · {row.quantization}
+                  </span>
+                  <span className={`modality-badge ${modalityClass(row)}`}>
+                    {modalityLabel(row)}
+                  </span>
+                </div>
               </td>
               <td>
                 <span className="table-pill">{row.backend_name ?? "unknown"}</span>
@@ -575,6 +610,8 @@ function SelectedRunPanel({
 
       <dl className="detail-list">
         <DetailItem label="Runtime" value={formatDuration(row.benchmark_runtime_seconds)} />
+        <DetailItem label="Modality" value={modalityLabel(row)} />
+        <DetailItem label="Suite coverage" value={formatPercent(row.model_intelligence_coverage)} />
         <DetailItem label="Secondary score" value={formatPercent(secondaryQualityValue(row))} />
         <DetailItem label="Backend" value={row.backend_name ?? "unknown"} />
         <DetailItem label="API model" value={apiModel(row) ?? row.base_model_name} />
@@ -594,6 +631,13 @@ function MetricCoveragePanel({ rows }: { rows: LeaderboardRow[] }) {
     ["GMMLU Lite", hasMetric(rows, "global_mmlu_lite_pass_at_1")],
     ["IFBench", hasMetric(rows, "ifbench_prompt_level_loose")],
     ["BFCL v4", hasMetric(rows, "bfcl_v4_selected_accuracy")],
+    ["OCRBench v2", hasMetric(rows, "ocrbench_v2_score")],
+    ["MMMU", hasMetric(rows, "mmmu_accuracy")],
+    ["MBPP", hasMetric(rows, "mbpp_pass_at_1")],
+    ["RGB", hasMetric(rows, "rgb_all_rate")],
+    ["SimpleQA", hasMetric(rows, "simpleqa_f1")],
+    ["HarmBench", hasMetric(rows, "harmbench_refusal_rate")],
+    ["Intelligence score", hasMetric(rows, "model_intelligence_score")],
     ["Micro average", hasMetric(rows, "global_mmlu_lite_micro_pass_at_1")],
     ["Invalid rate", hasMetric(rows, "global_mmlu_lite_invalid_rate")],
     ["Runtime", hasMetric(rows, "benchmark_runtime_seconds")],
@@ -722,6 +766,33 @@ function MetadataDrawer({ row, onClose }: { row: LeaderboardRow; onClose: () => 
       bfcl_v4_live_accuracy: row.bfcl_v4_live_accuracy,
       bfcl_v4_multi_turn_accuracy: row.bfcl_v4_multi_turn_accuracy,
       bfcl_v4_agentic_accuracy: row.bfcl_v4_agentic_accuracy,
+      ocrbench_v2_score: row.ocrbench_v2_score,
+      ocrbench_v2_micro_score: row.ocrbench_v2_micro_score,
+      ocrbench_v2_en_score: row.ocrbench_v2_en_score,
+      ocrbench_v2_cn_score: row.ocrbench_v2_cn_score,
+      mmmu_accuracy: row.mmmu_accuracy,
+      mmmu_invalid_rate: row.mmmu_invalid_rate,
+      mmmu_multiple_choice_accuracy: row.mmmu_multiple_choice_accuracy,
+      mmmu_open_accuracy: row.mmmu_open_accuracy,
+      mbpp_pass_at_1: row.mbpp_pass_at_1,
+      mbpp_invalid_rate: row.mbpp_invalid_rate,
+      mbpp_compile_rate: row.mbpp_compile_rate,
+      mbpp_runtime_error_rate: row.mbpp_runtime_error_rate,
+      rgb_all_rate: row.rgb_all_rate,
+      rgb_rejection_rate: row.rgb_rejection_rate,
+      rgb_fact_check_rate: row.rgb_fact_check_rate,
+      rgb_error_correction_rate: row.rgb_error_correction_rate,
+      simpleqa_f1: row.simpleqa_f1,
+      simpleqa_correct_rate: row.simpleqa_correct_rate,
+      simpleqa_incorrect_rate: row.simpleqa_incorrect_rate,
+      simpleqa_hallucination_rate: row.simpleqa_hallucination_rate,
+      simpleqa_not_attempted_rate: row.simpleqa_not_attempted_rate,
+      simpleqa_accuracy_given_attempted: row.simpleqa_accuracy_given_attempted,
+      harmbench_attack_success_rate: row.harmbench_attack_success_rate,
+      harmbench_refusal_rate: row.harmbench_refusal_rate,
+      model_intelligence_score: row.model_intelligence_score,
+      model_intelligence_coverage: row.model_intelligence_coverage,
+      model_intelligence_available_score: row.model_intelligence_available_score,
       benchmark_runtime_seconds: row.benchmark_runtime_seconds,
     },
     metadata: safeMetadata(row),
@@ -806,12 +877,27 @@ function optionSets(rows: LeaderboardRow[]) {
 function metricColumnsFor(rows: LeaderboardRow[]): MetricColumn[] {
   const columns: MetricColumn[] = [];
 
+  if (hasMetric(rows, "model_intelligence_score")) {
+    columns.push({
+      key: "model_intelligence_score",
+      label: "Intelligence",
+      render: (row) => formatPercent(row.model_intelligence_score),
+      primary: true,
+    });
+  }
+  if (hasMetric(rows, "model_intelligence_coverage")) {
+    columns.push({
+      key: "model_intelligence_coverage",
+      label: "Coverage",
+      render: (row) => formatPercent(row.model_intelligence_coverage),
+    });
+  }
   if (hasMetric(rows, "global_mmlu_lite_pass_at_1")) {
     columns.push({
       key: "global_mmlu_lite_pass_at_1",
       label: "GMMLU Lite",
       render: (row) => formatPercent(row.global_mmlu_lite_pass_at_1),
-      primary: true,
+      primary: !hasMetric(rows, "model_intelligence_score"),
     });
   }
   if (hasMetric(rows, "ifbench_prompt_level_loose")) {
@@ -844,6 +930,129 @@ function metricColumnsFor(rows: LeaderboardRow[]): MetricColumn[] {
       key: "bfcl_v4_invalid_rate",
       label: "BFCL Invalid",
       render: (row) => formatPercent(row.bfcl_v4_invalid_rate),
+    });
+  }
+  if (hasMetric(rows, "ocrbench_v2_score")) {
+    columns.push({
+      key: "ocrbench_v2_score",
+      label: "OCRBench v2",
+      render: (row) => formatPercent(row.ocrbench_v2_score),
+      primary:
+        !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
+        !hasMetric(rows, "ifbench_prompt_level_loose") &&
+        !hasMetric(rows, "bfcl_v4_selected_accuracy"),
+    });
+  }
+  if (hasMetric(rows, "ocrbench_v2_micro_score")) {
+    columns.push({
+      key: "ocrbench_v2_micro_score",
+      label: "OCR Micro",
+      render: (row) => formatPercent(row.ocrbench_v2_micro_score),
+    });
+  }
+  if (hasMetric(rows, "mmmu_accuracy")) {
+    columns.push({
+      key: "mmmu_accuracy",
+      label: "MMMU",
+      render: (row) => formatPercent(row.mmmu_accuracy),
+      primary:
+        !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
+        !hasMetric(rows, "ifbench_prompt_level_loose") &&
+        !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
+        !hasMetric(rows, "ocrbench_v2_score"),
+    });
+  }
+  if (hasMetric(rows, "mmmu_invalid_rate")) {
+    columns.push({
+      key: "mmmu_invalid_rate",
+      label: "MMMU Invalid",
+      render: (row) => formatPercent(row.mmmu_invalid_rate),
+    });
+  }
+  if (hasMetric(rows, "mbpp_pass_at_1")) {
+    columns.push({
+      key: "mbpp_pass_at_1",
+      label: "MBPP",
+      render: (row) => formatPercent(row.mbpp_pass_at_1),
+      primary:
+        !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
+        !hasMetric(rows, "ifbench_prompt_level_loose") &&
+        !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
+        !hasMetric(rows, "ocrbench_v2_score") &&
+        !hasMetric(rows, "mmmu_accuracy"),
+    });
+  }
+  if (hasMetric(rows, "mbpp_invalid_rate")) {
+    columns.push({
+      key: "mbpp_invalid_rate",
+      label: "MBPP Invalid",
+      render: (row) => formatPercent(row.mbpp_invalid_rate),
+    });
+  }
+  if (hasMetric(rows, "rgb_all_rate")) {
+    columns.push({
+      key: "rgb_all_rate",
+      label: "RGB",
+      render: (row) => formatPercent(row.rgb_all_rate),
+      primary:
+        !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
+        !hasMetric(rows, "ifbench_prompt_level_loose") &&
+        !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
+        !hasMetric(rows, "ocrbench_v2_score") &&
+        !hasMetric(rows, "mmmu_accuracy") &&
+        !hasMetric(rows, "mbpp_pass_at_1"),
+    });
+  }
+  if (hasMetric(rows, "rgb_rejection_rate")) {
+    columns.push({
+      key: "rgb_rejection_rate",
+      label: "RGB Rej.",
+      render: (row) => formatPercent(row.rgb_rejection_rate),
+    });
+  }
+  if (hasMetric(rows, "simpleqa_f1")) {
+    columns.push({
+      key: "simpleqa_f1",
+      label: "SimpleQA",
+      render: (row) => formatPercent(row.simpleqa_f1),
+      primary:
+        !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
+        !hasMetric(rows, "ifbench_prompt_level_loose") &&
+        !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
+        !hasMetric(rows, "ocrbench_v2_score") &&
+        !hasMetric(rows, "mmmu_accuracy") &&
+        !hasMetric(rows, "mbpp_pass_at_1") &&
+        !hasMetric(rows, "rgb_all_rate"),
+    });
+  }
+  if (hasMetric(rows, "simpleqa_hallucination_rate")) {
+    columns.push({
+      key: "simpleqa_hallucination_rate",
+      label: "SQA Wrong",
+      render: (row) => formatPercent(row.simpleqa_hallucination_rate),
+    });
+  }
+  if (hasMetric(rows, "harmbench_refusal_rate")) {
+    columns.push({
+      key: "harmbench_refusal_rate",
+      label: "Safety",
+      render: (row) => formatPercent(row.harmbench_refusal_rate),
+      primary:
+        !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
+        !hasMetric(rows, "ifbench_prompt_level_loose") &&
+        !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
+        !hasMetric(rows, "ocrbench_v2_score") &&
+        !hasMetric(rows, "mmmu_accuracy") &&
+        !hasMetric(rows, "mbpp_pass_at_1") &&
+        !hasMetric(rows, "rgb_all_rate") &&
+        !hasMetric(rows, "simpleqa_f1"),
+    });
+  }
+  if (hasMetric(rows, "harmbench_attack_success_rate")) {
+    columns.push({
+      key: "harmbench_attack_success_rate",
+      label: "Harm ASR",
+      render: (row) => formatPercent(row.harmbench_attack_success_rate),
     });
   }
   if (hasMetric(rows, "global_mmlu_lite_micro_pass_at_1")) {
@@ -933,22 +1142,44 @@ function hasMetric(rows: LeaderboardRow[], key: keyof LeaderboardRow) {
 
 function qualityValue(row: LeaderboardRow) {
   return (
+    numeric(row.model_intelligence_score) ??
     numeric(row.global_mmlu_lite_pass_at_1) ??
     numeric(row.ifbench_prompt_level_loose) ??
-    numeric(row.bfcl_v4_selected_accuracy)
+    numeric(row.bfcl_v4_selected_accuracy) ??
+    numeric(row.ocrbench_v2_score) ??
+    numeric(row.mmmu_accuracy) ??
+    numeric(row.mbpp_pass_at_1) ??
+    numeric(row.rgb_all_rate) ??
+    numeric(row.simpleqa_f1) ??
+    numeric(row.harmbench_refusal_rate)
   );
 }
 
 function secondaryQualityValue(row: LeaderboardRow) {
   return (
+    numeric(row.model_intelligence_available_score) ??
     numeric(row.global_mmlu_lite_micro_pass_at_1) ??
     numeric(row.ifbench_instruction_level_loose) ??
     numeric(row.bfcl_v4_non_live_accuracy) ??
+    numeric(row.ocrbench_v2_micro_score) ??
+    numeric(row.mmmu_multiple_choice_accuracy) ??
+    numeric(row.mbpp_compile_rate) ??
+    numeric(row.rgb_rejection_rate) ??
+    numeric(row.rgb_fact_check_rate) ??
+    numeric(row.simpleqa_accuracy_given_attempted) ??
+    numeric(row.simpleqa_not_attempted_rate) ??
+    numeric(row.harmbench_attack_success_rate) ??
     numeric(row.global_mmlu_lite_invalid_rate)
   );
 }
 
 function protocolLabel(row: LeaderboardRow) {
+  if (
+    row.model_intelligence_score !== null &&
+    row.model_intelligence_score !== undefined
+  ) {
+    return "Model Intelligence";
+  }
   if (row.global_mmlu_lite_pass_at_1 !== null && row.global_mmlu_lite_pass_at_1 !== undefined) {
     return "Global MMLU Lite";
   }
@@ -957,6 +1188,24 @@ function protocolLabel(row: LeaderboardRow) {
   }
   if (row.bfcl_v4_selected_accuracy !== null && row.bfcl_v4_selected_accuracy !== undefined) {
     return "BFCL v4";
+  }
+  if (row.ocrbench_v2_score !== null && row.ocrbench_v2_score !== undefined) {
+    return "OCRBench v2";
+  }
+  if (row.mmmu_accuracy !== null && row.mmmu_accuracy !== undefined) {
+    return "MMMU";
+  }
+  if (row.mbpp_pass_at_1 !== null && row.mbpp_pass_at_1 !== undefined) {
+    return "MBPP";
+  }
+  if (row.rgb_all_rate !== null && row.rgb_all_rate !== undefined) {
+    return "RGB";
+  }
+  if (row.simpleqa_f1 !== null && row.simpleqa_f1 !== undefined) {
+    return "SimpleQA";
+  }
+  if (row.harmbench_refusal_rate !== null && row.harmbench_refusal_rate !== undefined) {
+    return "HarmBench Safety";
   }
   return "Unscored";
 }
@@ -971,12 +1220,66 @@ function safeMetadata(row: LeaderboardRow) {
 }
 
 function apiModel(row: LeaderboardRow) {
-  const metadata = safeMetadata(row);
-  if (!metadata || typeof metadata !== "object") return null;
-  const variantConfig = (metadata as { variant_config?: unknown }).variant_config;
-  if (!variantConfig || typeof variantConfig !== "object") return null;
-  const apiModelValue = (variantConfig as { api_model?: unknown }).api_model;
+  const apiModelValue = variantConfigValue(row, "api_model");
   return typeof apiModelValue === "string" ? apiModelValue : null;
+}
+
+function modalityLabel(row: LeaderboardRow) {
+  const explicit = variantConfigValue(row, "modality");
+  if (typeof explicit === "string" && explicit.trim().toLowerCase() !== "auto") {
+    return formatModality(explicit);
+  }
+
+  const inputModalities = variantConfigValue(row, "input_modalities");
+  if (
+    Array.isArray(inputModalities) &&
+    inputModalities.some((value) => String(value).toLowerCase() === "image")
+  ) {
+    return "Multimodal";
+  }
+
+  if (hasVisionMetric(row)) return "Multimodal";
+  return "Text";
+}
+
+function modalityClass(row: LeaderboardRow) {
+  return modalityLabel(row).toLowerCase().replace(/\s+/g, "-");
+}
+
+function formatModality(value: string) {
+  const normalized = value.trim().toLowerCase().replace("_", "-");
+  if (
+    normalized === "vision" ||
+    normalized === "visual" ||
+    normalized === "image" ||
+    normalized === "vl" ||
+    normalized === "mm" ||
+    normalized === "multimodal" ||
+    normalized === "multi-modal"
+  ) {
+    return "Multimodal";
+  }
+  return "Text";
+}
+
+function hasVisionMetric(row: LeaderboardRow) {
+  return (
+    row.ocrbench_v2_score !== null &&
+    row.ocrbench_v2_score !== undefined
+  ) || (
+    row.mmmu_accuracy !== null &&
+    row.mmmu_accuracy !== undefined
+  );
+}
+
+function variantConfigValue(row: LeaderboardRow, key: string) {
+  const metadata = safeMetadata(row);
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const variantConfig = (metadata as { variant_config?: unknown }).variant_config;
+  if (!variantConfig || typeof variantConfig !== "object" || Array.isArray(variantConfig)) {
+    return null;
+  }
+  return (variantConfig as Record<string, unknown>)[key] ?? null;
 }
 
 function countUnique(rows: LeaderboardRow[], key: keyof LeaderboardRow) {

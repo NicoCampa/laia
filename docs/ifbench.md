@@ -59,8 +59,8 @@ laia ollama qwen3.5:0.8b-mlx-bf16 --benchmark ifbench
 laia lmstudio exact-model-id --benchmark ifbench
 ```
 
-Run both supported benchmarks in one generated config:
+Run the text-only non-judge suite in one generated config:
 
 ```bash
-laia omlx Qwen3.5-9B-4bit --benchmark all
+laia omlx Qwen3.5-9B-4bit --benchmark text
 ```

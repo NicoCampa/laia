@@ -19,6 +19,12 @@ def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
             if row.get("global_mmlu_lite_pass_at_1") is not None
             or row.get("ifbench_prompt_level_loose") is not None
             or row.get("bfcl_v4_selected_accuracy") is not None
+            or row.get("ocrbench_v2_score") is not None
+            or row.get("mmmu_accuracy") is not None
+            or row.get("mbpp_pass_at_1") is not None
+            or row.get("rgb_all_rate") is not None
+            or row.get("simpleqa_f1") is not None
+            or row.get("harmbench_refusal_rate") is not None
         ]
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -101,6 +107,33 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
         "bfcl_v4_live_accuracy",
         "bfcl_v4_multi_turn_accuracy",
         "bfcl_v4_agentic_accuracy",
+        "ocrbench_v2_score",
+        "ocrbench_v2_micro_score",
+        "ocrbench_v2_en_score",
+        "ocrbench_v2_cn_score",
+        "mmmu_accuracy",
+        "mmmu_invalid_rate",
+        "mmmu_multiple_choice_accuracy",
+        "mmmu_open_accuracy",
+        "mbpp_pass_at_1",
+        "mbpp_invalid_rate",
+        "mbpp_compile_rate",
+        "mbpp_runtime_error_rate",
+        "rgb_all_rate",
+        "rgb_rejection_rate",
+        "rgb_fact_check_rate",
+        "rgb_error_correction_rate",
+        "simpleqa_f1",
+        "simpleqa_correct_rate",
+        "simpleqa_incorrect_rate",
+        "simpleqa_hallucination_rate",
+        "simpleqa_not_attempted_rate",
+        "simpleqa_accuracy_given_attempted",
+        "harmbench_attack_success_rate",
+        "harmbench_refusal_rate",
+        "model_intelligence_score",
+        "model_intelligence_coverage",
+        "model_intelligence_available_score",
         "benchmark_runtime_seconds",
         "metadata_json",
     ]

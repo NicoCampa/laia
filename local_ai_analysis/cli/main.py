@@ -21,6 +21,8 @@ from rich.table import Table
 
 from local_ai_analysis import __version__
 from local_ai_analysis.db import LocalAIAnalysisDB
+from local_ai_analysis.eval.mmmu import MMMU_SUBJECTS
+from local_ai_analysis.eval.rgb import RGB_DATASETS
 from local_ai_analysis.export import export_leaderboard, leaderboard_payload
 from local_ai_analysis.normalization import refresh_normalized_results
 from local_ai_analysis.runner import run_benchmark, run_benchmark_with_progress
@@ -67,6 +69,42 @@ Do not explain. Do not use thinking tags. Reply with only one letter: A, B, C, o
 Answer:
 """
 BFCL_V4_DEFAULT_CATEGORIES = "single_turn"
+OCRBENCH_V2_DEFAULT_CONFIGS = "EN,CN"
+OCRBENCH_V2_SMOKE_CONFIGS = "text recognition en"
+OCRBENCH_V2_PROMPT = "{question}\nAnswer directly. Do not explain."
+MMMU_DEFAULT_SUBJECTS = "all"
+MMMU_SMOKE_SUBJECTS = "Accounting"
+MMMU_DEFAULT_SPLIT = "validation"
+MMMU_MULTI_CHOICE_PROMPT = (
+    "{question}\n\n{options}\n\n"
+    "Answer with the option's letter from the given choices directly."
+)
+MMMU_SHORT_ANSWER_PROMPT = "{question}\n\nAnswer the question using a single word or phrase."
+MBPP_DEFAULT_CONFIG = "full"
+MBPP_DEFAULT_SPLIT = "test"
+MBPP_PROMPT = (
+    "You are an expert Python programmer, and here is your task: {prompt}\n"
+    "Your code should pass these tests:\n\n{tests}\n"
+    "[BEGIN]\n"
+)
+RGB_DEFAULT_DATASET = "en_refine"
+RGB_DEFAULT_NOISE_RATE = 0.6
+RGB_DEFAULT_PASSAGE_NUM = 5
+RGB_DEFAULT_CORRECT_RATE = 0.0
+SIMPLEQA_DATASET_URL = (
+    "https://openaipublic.blob.core.windows.net/simple-evals/simple_qa_test_set.csv"
+)
+SIMPLEQA_PROMPT = "{question}"
+HARMBENCH_DATASET_URL = (
+    "https://raw.githubusercontent.com/centerforaisafety/HarmBench/main/"
+    "data/behavior_datasets/harmbench_behaviors_text_all.csv"
+)
+HARMBENCH_DEFAULT_CATEGORIES = "standard,contextual"
+CORE_BENCHMARKS = ["global-mmlu-lite", "ifbench", "bfcl-v4", "mbpp", "rgb"]
+MULTIMODAL_BENCHMARKS = ["ocrbench-v2", "mmmu"]
+JUDGED_BENCHMARKS = ["simpleqa", "harmbench"]
+ALL_NON_JUDGED_BENCHMARKS = [*CORE_BENCHMARKS, *MULTIMODAL_BENCHMARKS]
+FULL_SUITE_BENCHMARKS = [*ALL_NON_JUDGED_BENCHMARKS, *JUDGED_BENCHMARKS]
 
 
 @app.callback(invoke_without_command=True)
@@ -135,7 +173,7 @@ def run_ollama_shortcut(
     ],
     smoke: Annotated[
         bool,
-        typer.Option("--smoke", help="Run only 5 English questions instead of the full suite."),
+        typer.Option("--smoke", help="Run a 5-sample smoke set for the selected benchmark."),
     ] = False,
     languages: Annotated[
         str,
@@ -148,7 +186,13 @@ def run_ollama_shortcut(
         str,
         typer.Option(
             "--benchmark",
-            help="Benchmark to run: global-mmlu-lite, ifbench, bfcl, or all.",
+            help=(
+                "Benchmark or suite to run. Suites: text = text-only non-judge; "
+                "vision = multimodal non-judge; judge = LLM-as-judge; "
+                "suite = text + vision; full = everything. "
+                "Individual names include global-mmlu-lite, ifbench, bfcl, ocrbench, "
+                "mmmu, mbpp, rgb, simpleqa, and harmbench."
+            ),
         ),
     ] = "global-mmlu-lite",
     bfcl_categories: Annotated[
@@ -161,6 +205,98 @@ def run_ollama_shortcut(
             ),
         ),
     ] = BFCL_V4_DEFAULT_CATEGORIES,
+    ocrbench_configs: Annotated[
+        str,
+        typer.Option(
+            "--ocrbench-configs",
+            help="OCRBench v2 dataset configs, for example EN,CN or text recognition en.",
+        ),
+    ] = OCRBENCH_V2_DEFAULT_CONFIGS,
+    mmmu_subjects: Annotated[
+        str,
+        typer.Option(
+            "--mmmu-subjects",
+            help="MMMU subjects, for example all, Accounting,Math, or Computer_Science.",
+        ),
+    ] = MMMU_DEFAULT_SUBJECTS,
+    mmmu_split: Annotated[
+        str,
+        typer.Option("--mmmu-split", help="MMMU split: dev, validation, or test."),
+    ] = MMMU_DEFAULT_SPLIT,
+    mbpp_config: Annotated[
+        str,
+        typer.Option("--mbpp-config", help="MBPP dataset config: full or sanitized."),
+    ] = MBPP_DEFAULT_CONFIG,
+    mbpp_split: Annotated[
+        str,
+        typer.Option("--mbpp-split", help="MBPP split: train, test, validation, or prompt."),
+    ] = MBPP_DEFAULT_SPLIT,
+    mbpp_challenge_tests: Annotated[
+        bool,
+        typer.Option(
+            "--mbpp-challenge-tests/--no-mbpp-challenge-tests",
+            help="Also run full MBPP challenge_test_list assertions when present.",
+        ),
+    ] = False,
+    rgb_dataset: Annotated[
+        str,
+        typer.Option(
+            "--rgb-dataset",
+            help="RGB dataset: en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
+        ),
+    ] = RGB_DEFAULT_DATASET,
+    rgb_noise_rate: Annotated[
+        float,
+        typer.Option("--rgb-noise-rate", min=0.0, max=1.0, help="RGB noisy passage rate."),
+    ] = RGB_DEFAULT_NOISE_RATE,
+    rgb_passage_num: Annotated[
+        int,
+        typer.Option("--rgb-passage-num", min=0, help="RGB number of supplied passages."),
+    ] = RGB_DEFAULT_PASSAGE_NUM,
+    rgb_correct_rate: Annotated[
+        float,
+        typer.Option(
+            "--rgb-correct-rate",
+            min=0.0,
+            max=1.0,
+            help="RGB correct-passage rate for counterfactual datasets.",
+        ),
+    ] = RGB_DEFAULT_CORRECT_RATE,
+    simpleqa_grader: Annotated[
+        str,
+        typer.Option("--simpleqa-grader", help="SimpleQA grader: llm or heuristic."),
+    ] = "llm",
+    simpleqa_grader_model: Annotated[
+        str,
+        typer.Option(
+            "--simpleqa-grader-model",
+            help="SimpleQA judge model id. Use 'same' to grade with the tested model.",
+        ),
+    ] = "same",
+    harmbench_categories: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-categories",
+            help=(
+                "HarmBench functional categories: standard, contextual, copyright, "
+                "text, or all. Default excludes copyright."
+            ),
+        ),
+    ] = HARMBENCH_DEFAULT_CATEGORIES,
+    harmbench_judge: Annotated[
+        str,
+        typer.Option("--harmbench-judge", help="HarmBench judge: llm or heuristic."),
+    ] = "llm",
+    harmbench_judge_model: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-judge-model",
+            help=(
+                "HarmBench judge model id. Use 'same' to reuse the tested model; "
+                "this mirrors the SimpleQA judge-model default."
+            ),
+        ),
+    ] = "same",
     base_url: Annotated[
         str,
         typer.Option("--base-url", help="Ollama native API base URL."),
@@ -175,6 +311,16 @@ def run_ollama_shortcut(
             ),
         ),
     ] = "none",
+    modality: Annotated[
+        str,
+        typer.Option(
+            "--modality",
+            help=(
+                "Model modality metadata: auto, text, vision, or multimodal. "
+                "Auto marks runs with vision benchmarks as multimodal."
+            ),
+        ),
+    ] = "auto",
     max_tokens: Annotated[
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
@@ -205,7 +351,23 @@ def run_ollama_shortcut(
         languages=languages,
         benchmark=benchmark,
         bfcl_categories=bfcl_categories,
+        ocrbench_configs=ocrbench_configs,
+        mmmu_subjects=mmmu_subjects,
+        mmmu_split=mmmu_split,
+        mbpp_config=mbpp_config,
+        mbpp_split=mbpp_split,
+        mbpp_challenge_tests=mbpp_challenge_tests,
+        rgb_dataset=rgb_dataset,
+        rgb_noise_rate=rgb_noise_rate,
+        rgb_passage_num=rgb_passage_num,
+        rgb_correct_rate=rgb_correct_rate,
+        simpleqa_grader=simpleqa_grader,
+        simpleqa_grader_model=simpleqa_grader_model,
+        harmbench_categories=harmbench_categories,
+        harmbench_judge=harmbench_judge,
+        harmbench_judge_model=harmbench_judge_model,
         reasoning_effort=reasoning_effort,
+        modality=modality,
         max_tokens=max_tokens,
     )
     console.print(f"🧾 Generated config: {config}")
@@ -222,7 +384,7 @@ def run_lmstudio_shortcut(
     ] = "auto",
     smoke: Annotated[
         bool,
-        typer.Option("--smoke", help="Run only 5 English questions instead of the full suite."),
+        typer.Option("--smoke", help="Run a 5-sample smoke set for the selected benchmark."),
     ] = False,
     languages: Annotated[
         str,
@@ -235,7 +397,13 @@ def run_lmstudio_shortcut(
         str,
         typer.Option(
             "--benchmark",
-            help="Benchmark to run: global-mmlu-lite, ifbench, bfcl, or all.",
+            help=(
+                "Benchmark or suite to run. Suites: text = text-only non-judge; "
+                "vision = multimodal non-judge; judge = LLM-as-judge; "
+                "suite = text + vision; full = everything. "
+                "Individual names include global-mmlu-lite, ifbench, bfcl, ocrbench, "
+                "mmmu, mbpp, rgb, simpleqa, and harmbench."
+            ),
         ),
     ] = "global-mmlu-lite",
     bfcl_categories: Annotated[
@@ -248,6 +416,98 @@ def run_lmstudio_shortcut(
             ),
         ),
     ] = BFCL_V4_DEFAULT_CATEGORIES,
+    ocrbench_configs: Annotated[
+        str,
+        typer.Option(
+            "--ocrbench-configs",
+            help="OCRBench v2 dataset configs, for example EN,CN or text recognition en.",
+        ),
+    ] = OCRBENCH_V2_DEFAULT_CONFIGS,
+    mmmu_subjects: Annotated[
+        str,
+        typer.Option(
+            "--mmmu-subjects",
+            help="MMMU subjects, for example all, Accounting,Math, or Computer_Science.",
+        ),
+    ] = MMMU_DEFAULT_SUBJECTS,
+    mmmu_split: Annotated[
+        str,
+        typer.Option("--mmmu-split", help="MMMU split: dev, validation, or test."),
+    ] = MMMU_DEFAULT_SPLIT,
+    mbpp_config: Annotated[
+        str,
+        typer.Option("--mbpp-config", help="MBPP dataset config: full or sanitized."),
+    ] = MBPP_DEFAULT_CONFIG,
+    mbpp_split: Annotated[
+        str,
+        typer.Option("--mbpp-split", help="MBPP split: train, test, validation, or prompt."),
+    ] = MBPP_DEFAULT_SPLIT,
+    mbpp_challenge_tests: Annotated[
+        bool,
+        typer.Option(
+            "--mbpp-challenge-tests/--no-mbpp-challenge-tests",
+            help="Also run full MBPP challenge_test_list assertions when present.",
+        ),
+    ] = False,
+    rgb_dataset: Annotated[
+        str,
+        typer.Option(
+            "--rgb-dataset",
+            help="RGB dataset: en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
+        ),
+    ] = RGB_DEFAULT_DATASET,
+    rgb_noise_rate: Annotated[
+        float,
+        typer.Option("--rgb-noise-rate", min=0.0, max=1.0, help="RGB noisy passage rate."),
+    ] = RGB_DEFAULT_NOISE_RATE,
+    rgb_passage_num: Annotated[
+        int,
+        typer.Option("--rgb-passage-num", min=0, help="RGB number of supplied passages."),
+    ] = RGB_DEFAULT_PASSAGE_NUM,
+    rgb_correct_rate: Annotated[
+        float,
+        typer.Option(
+            "--rgb-correct-rate",
+            min=0.0,
+            max=1.0,
+            help="RGB correct-passage rate for counterfactual datasets.",
+        ),
+    ] = RGB_DEFAULT_CORRECT_RATE,
+    simpleqa_grader: Annotated[
+        str,
+        typer.Option("--simpleqa-grader", help="SimpleQA grader: llm or heuristic."),
+    ] = "llm",
+    simpleqa_grader_model: Annotated[
+        str,
+        typer.Option(
+            "--simpleqa-grader-model",
+            help="SimpleQA judge model id. Use 'same' to grade with the tested model.",
+        ),
+    ] = "same",
+    harmbench_categories: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-categories",
+            help=(
+                "HarmBench functional categories: standard, contextual, copyright, "
+                "text, or all. Default excludes copyright."
+            ),
+        ),
+    ] = HARMBENCH_DEFAULT_CATEGORIES,
+    harmbench_judge: Annotated[
+        str,
+        typer.Option("--harmbench-judge", help="HarmBench judge: llm or heuristic."),
+    ] = "llm",
+    harmbench_judge_model: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-judge-model",
+            help=(
+                "HarmBench judge model id. Use 'same' to reuse the tested model; "
+                "this mirrors the SimpleQA judge-model default."
+            ),
+        ),
+    ] = "same",
     base_url: Annotated[
         str,
         typer.Option("--base-url", help="LM Studio native API base URL."),
@@ -262,6 +522,16 @@ def run_lmstudio_shortcut(
             ),
         ),
     ] = "none",
+    modality: Annotated[
+        str,
+        typer.Option(
+            "--modality",
+            help=(
+                "Model modality metadata: auto, text, vision, or multimodal. "
+                "Auto marks runs with vision benchmarks as multimodal."
+            ),
+        ),
+    ] = "auto",
     max_tokens: Annotated[
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
@@ -292,7 +562,23 @@ def run_lmstudio_shortcut(
         languages=languages,
         benchmark=benchmark,
         bfcl_categories=bfcl_categories,
+        ocrbench_configs=ocrbench_configs,
+        mmmu_subjects=mmmu_subjects,
+        mmmu_split=mmmu_split,
+        mbpp_config=mbpp_config,
+        mbpp_split=mbpp_split,
+        mbpp_challenge_tests=mbpp_challenge_tests,
+        rgb_dataset=rgb_dataset,
+        rgb_noise_rate=rgb_noise_rate,
+        rgb_passage_num=rgb_passage_num,
+        rgb_correct_rate=rgb_correct_rate,
+        simpleqa_grader=simpleqa_grader,
+        simpleqa_grader_model=simpleqa_grader_model,
+        harmbench_categories=harmbench_categories,
+        harmbench_judge=harmbench_judge,
+        harmbench_judge_model=harmbench_judge_model,
         reasoning_effort=reasoning_effort,
+        modality=modality,
         max_tokens=max_tokens,
     )
     console.print(f"🧾 Generated config: {config}")
@@ -309,7 +595,7 @@ def run_omlx_shortcut(
     ] = "auto",
     smoke: Annotated[
         bool,
-        typer.Option("--smoke", help="Run only 5 English questions instead of the full suite."),
+        typer.Option("--smoke", help="Run a 5-sample smoke set for the selected benchmark."),
     ] = False,
     languages: Annotated[
         str,
@@ -322,7 +608,13 @@ def run_omlx_shortcut(
         str,
         typer.Option(
             "--benchmark",
-            help="Benchmark to run: global-mmlu-lite, ifbench, bfcl, or all.",
+            help=(
+                "Benchmark or suite to run. Suites: text = text-only non-judge; "
+                "vision = multimodal non-judge; judge = LLM-as-judge; "
+                "suite = text + vision; full = everything. "
+                "Individual names include global-mmlu-lite, ifbench, bfcl, ocrbench, "
+                "mmmu, mbpp, rgb, simpleqa, and harmbench."
+            ),
         ),
     ] = "global-mmlu-lite",
     bfcl_categories: Annotated[
@@ -335,6 +627,98 @@ def run_omlx_shortcut(
             ),
         ),
     ] = BFCL_V4_DEFAULT_CATEGORIES,
+    ocrbench_configs: Annotated[
+        str,
+        typer.Option(
+            "--ocrbench-configs",
+            help="OCRBench v2 dataset configs, for example EN,CN or text recognition en.",
+        ),
+    ] = OCRBENCH_V2_DEFAULT_CONFIGS,
+    mmmu_subjects: Annotated[
+        str,
+        typer.Option(
+            "--mmmu-subjects",
+            help="MMMU subjects, for example all, Accounting,Math, or Computer_Science.",
+        ),
+    ] = MMMU_DEFAULT_SUBJECTS,
+    mmmu_split: Annotated[
+        str,
+        typer.Option("--mmmu-split", help="MMMU split: dev, validation, or test."),
+    ] = MMMU_DEFAULT_SPLIT,
+    mbpp_config: Annotated[
+        str,
+        typer.Option("--mbpp-config", help="MBPP dataset config: full or sanitized."),
+    ] = MBPP_DEFAULT_CONFIG,
+    mbpp_split: Annotated[
+        str,
+        typer.Option("--mbpp-split", help="MBPP split: train, test, validation, or prompt."),
+    ] = MBPP_DEFAULT_SPLIT,
+    mbpp_challenge_tests: Annotated[
+        bool,
+        typer.Option(
+            "--mbpp-challenge-tests/--no-mbpp-challenge-tests",
+            help="Also run full MBPP challenge_test_list assertions when present.",
+        ),
+    ] = False,
+    rgb_dataset: Annotated[
+        str,
+        typer.Option(
+            "--rgb-dataset",
+            help="RGB dataset: en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
+        ),
+    ] = RGB_DEFAULT_DATASET,
+    rgb_noise_rate: Annotated[
+        float,
+        typer.Option("--rgb-noise-rate", min=0.0, max=1.0, help="RGB noisy passage rate."),
+    ] = RGB_DEFAULT_NOISE_RATE,
+    rgb_passage_num: Annotated[
+        int,
+        typer.Option("--rgb-passage-num", min=0, help="RGB number of supplied passages."),
+    ] = RGB_DEFAULT_PASSAGE_NUM,
+    rgb_correct_rate: Annotated[
+        float,
+        typer.Option(
+            "--rgb-correct-rate",
+            min=0.0,
+            max=1.0,
+            help="RGB correct-passage rate for counterfactual datasets.",
+        ),
+    ] = RGB_DEFAULT_CORRECT_RATE,
+    simpleqa_grader: Annotated[
+        str,
+        typer.Option("--simpleqa-grader", help="SimpleQA grader: llm or heuristic."),
+    ] = "llm",
+    simpleqa_grader_model: Annotated[
+        str,
+        typer.Option(
+            "--simpleqa-grader-model",
+            help="SimpleQA judge model id. Use 'same' to grade with the tested model.",
+        ),
+    ] = "same",
+    harmbench_categories: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-categories",
+            help=(
+                "HarmBench functional categories: standard, contextual, copyright, "
+                "text, or all. Default excludes copyright."
+            ),
+        ),
+    ] = HARMBENCH_DEFAULT_CATEGORIES,
+    harmbench_judge: Annotated[
+        str,
+        typer.Option("--harmbench-judge", help="HarmBench judge: llm or heuristic."),
+    ] = "llm",
+    harmbench_judge_model: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-judge-model",
+            help=(
+                "HarmBench judge model id. Use 'same' to reuse the tested model; "
+                "this mirrors the SimpleQA judge-model default."
+            ),
+        ),
+    ] = "same",
     base_url: Annotated[
         str,
         typer.Option("--base-url", help="oMLX native API base URL."),
@@ -356,6 +740,16 @@ def run_omlx_shortcut(
             ),
         ),
     ] = "none",
+    modality: Annotated[
+        str,
+        typer.Option(
+            "--modality",
+            help=(
+                "Model modality metadata: auto, text, vision, or multimodal. "
+                "Auto marks runs with vision benchmarks as multimodal."
+            ),
+        ),
+    ] = "auto",
     max_tokens: Annotated[
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
@@ -386,7 +780,23 @@ def run_omlx_shortcut(
         languages=languages,
         benchmark=benchmark,
         bfcl_categories=bfcl_categories,
+        ocrbench_configs=ocrbench_configs,
+        mmmu_subjects=mmmu_subjects,
+        mmmu_split=mmmu_split,
+        mbpp_config=mbpp_config,
+        mbpp_split=mbpp_split,
+        mbpp_challenge_tests=mbpp_challenge_tests,
+        rgb_dataset=rgb_dataset,
+        rgb_noise_rate=rgb_noise_rate,
+        rgb_passage_num=rgb_passage_num,
+        rgb_correct_rate=rgb_correct_rate,
+        simpleqa_grader=simpleqa_grader,
+        simpleqa_grader_model=simpleqa_grader_model,
+        harmbench_categories=harmbench_categories,
+        harmbench_judge=harmbench_judge,
+        harmbench_judge_model=harmbench_judge_model,
         reasoning_effort=reasoning_effort,
+        modality=modality,
         max_tokens=max_tokens,
     )
     console.print(f"🧾 Generated config: {config}")
@@ -428,7 +838,7 @@ def normalize(
         typer.Option("--db", help="DuckDB database path."),
     ] = Path("results/local_ai_analysis.duckdb"),
 ) -> None:
-    """Recompute normalized Global MMLU Lite rows."""
+    """Recompute normalized benchmark rows."""
     store = LocalAIAnalysisDB(db)
     try:
         store.init_schema()
@@ -451,9 +861,17 @@ def leaderboard(
     for column in [
         "Model",
         "Backend",
+        "Intel",
+        "Cov.",
         "GMMLU Lite",
         "IFBench",
         "BFCL v4",
+        "OCRBench v2",
+        "MMMU",
+        "MBPP",
+        "RGB",
+        "SimpleQA",
+        "HarmBench",
         "Invalid",
         "Runtime",
         "Run",
@@ -464,10 +882,26 @@ def leaderboard(
         table.add_row(
             str(row.get("variant_name") or ""),
             str(row.get("backend_name") or "n/a"),
+            _pct(row.get("model_intelligence_score")),
+            _pct(row.get("model_intelligence_coverage")),
             _pct(row.get("global_mmlu_lite_pass_at_1")),
             _pct(row.get("ifbench_prompt_level_loose")),
             _pct(row.get("bfcl_v4_selected_accuracy")),
-            _pct(row.get("global_mmlu_lite_invalid_rate")),
+            _pct(row.get("ocrbench_v2_score")),
+            _pct(row.get("mmmu_accuracy")),
+            _pct(row.get("mbpp_pass_at_1")),
+            _pct(row.get("rgb_all_rate")),
+            _pct(row.get("simpleqa_f1")),
+            _pct(row.get("harmbench_refusal_rate")),
+            _pct(
+                _first_metric_value(
+                    row.get("global_mmlu_lite_invalid_rate"),
+                    row.get("mbpp_invalid_rate"),
+                    row.get("mmmu_invalid_rate"),
+                    row.get("bfcl_v4_invalid_rate"),
+                    row.get("simpleqa_incorrect_rate"),
+                )
+            ),
             _duration(row.get("benchmark_runtime_seconds")),
             _short_id(row.get("run_uuid")),
         )
@@ -523,6 +957,13 @@ def _pct(value: object) -> str:
     return f"{float(value) * 100:.1f}%"
 
 
+def _first_metric_value(*values: object) -> object:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def _duration(value: object) -> str:
     if value is None:
         return "n/a"
@@ -570,13 +1011,56 @@ def _write_api_benchmark_config(
     languages: str,
     benchmark: str,
     bfcl_categories: str,
+    ocrbench_configs: str,
+    mmmu_subjects: str,
+    mmmu_split: str,
+    mbpp_config: str,
+    mbpp_split: str,
+    mbpp_challenge_tests: bool,
+    rgb_dataset: str,
+    rgb_noise_rate: float,
+    rgb_passage_num: int,
+    rgb_correct_rate: float,
+    simpleqa_grader: str,
+    simpleqa_grader_model: str,
+    harmbench_categories: str,
+    harmbench_judge: str,
+    harmbench_judge_model: str,
     reasoning_effort: str | None,
+    modality: str,
     max_tokens: int | None,
 ) -> Path:
     resolved_reasoning_effort = _resolve_reasoning_effort(model, reasoning_effort)
     selected_benchmarks = _parse_benchmarks(benchmark)
     provider_key = _provider_key(provider)
     selected_languages = ["en"] if smoke else _parse_languages(languages)
+    selected_ocrbench_configs = (
+        _parse_ocrbench_configs(OCRBENCH_V2_SMOKE_CONFIGS)
+        if smoke
+        else _parse_ocrbench_configs(ocrbench_configs)
+    )
+    selected_mmmu_subjects = (
+        _parse_mmmu_subjects(MMMU_SMOKE_SUBJECTS)
+        if smoke
+        else _parse_mmmu_subjects(mmmu_subjects)
+    )
+    selected_mmmu_split = _parse_mmmu_split(mmmu_split)
+    selected_mbpp_config = _parse_mbpp_config(mbpp_config)
+    selected_mbpp_split = _parse_mbpp_split(mbpp_split)
+    selected_rgb_dataset = _parse_rgb_dataset(rgb_dataset)
+    selected_simpleqa_grader = _parse_simpleqa_grader(simpleqa_grader)
+    selected_harmbench_categories = _parse_harmbench_categories(harmbench_categories)
+    selected_harmbench_judge = _parse_harmbench_judge(harmbench_judge)
+    resolved_harmbench_judge_model = _shared_judge_model(
+        simpleqa_grader_model,
+        harmbench_judge_model,
+    )
+    selected_input_modalities = _input_modalities(selected_benchmarks)
+    resolved_modality = _resolve_modality(
+        model=model,
+        selected_benchmarks=selected_benchmarks,
+        value=modality,
+    )
     sample_limit = 5 if smoke else None
     all_languages_selected = selected_languages == GLOBAL_MMLU_LITE_LANGUAGES
     benchmark_slug = _slug("-".join(selected_benchmarks))
@@ -585,7 +1069,15 @@ def _write_api_benchmark_config(
     scope_slug = (
         "smoke"
         if smoke
-        else ("full" if all_languages_selected else _slug("-".join(selected_languages)))
+        else (
+            _slug(f"{selected_mbpp_config}-{selected_mbpp_split}")
+            if selected_benchmarks == ["mbpp"]
+            else (
+                _slug(f"{selected_rgb_dataset}-noise-{rgb_noise_rate}-p{rgb_passage_num}")
+                if selected_benchmarks == ["rgb"]
+                else ("full" if all_languages_selected else _slug("-".join(selected_languages)))
+            )
+        )
     )
     reasoning_slug = _slug(f"reasoning-{resolved_reasoning_effort or 'unset'}")
     output_path = (
@@ -594,10 +1086,16 @@ def _write_api_benchmark_config(
     )
     display_model = _display_model_name(provider, model)
     provider_label = provider if provider != "LM Studio" else "LM Studio"
-    variant_suffix = (
-        "Smoke"
-        if smoke
-        else ("All Languages" if all_languages_selected else "Selected Languages")
+    variant_suffix = _variant_suffix(
+        smoke=smoke,
+        selected_benchmarks=selected_benchmarks,
+        selected_mbpp_config=selected_mbpp_config,
+        selected_mbpp_split=selected_mbpp_split,
+        selected_rgb_dataset=selected_rgb_dataset,
+        rgb_noise_rate=rgb_noise_rate,
+        selected_simpleqa_grader=selected_simpleqa_grader,
+        selected_harmbench_categories=selected_harmbench_categories,
+        all_languages_selected=all_languages_selected,
     )
     reasoning_label = resolved_reasoning_effort or "unset"
     quantization = _infer_quantization(model)
@@ -671,6 +1169,195 @@ def _write_api_benchmark_config(
     if resolved_reasoning_effort:
         bfcl_v4["reasoning_effort"] = resolved_reasoning_effort
 
+    ocrbench_v2: dict[str, Any] = {
+        "enabled": "ocrbench-v2" in selected_benchmarks,
+        "dataset_name": "morpheushoc/OCRBenchv2",
+        "dataset_revision": None,
+        "split": "test",
+        "dataset_configs": selected_ocrbench_configs,
+        "sample_limit": sample_limit,
+        "output_dir": "results/ocrbench_v2",
+        "provider": provider_key,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+        "timeout_seconds": 360,
+        "temperature": 0,
+        "max_tokens": max_tokens if max_tokens is not None else 2048,
+        "top_p": None,
+        "stop": None,
+        "seed": 42,
+        "strip_thinking": True,
+        "image_format": "PNG",
+        "evaluator": "ocrbench_v2_local_vqa_anls_iou_v1",
+        "prompt_template": OCRBENCH_V2_PROMPT,
+    }
+    if resolved_reasoning_effort:
+        ocrbench_v2["reasoning_effort"] = resolved_reasoning_effort
+
+    mmmu: dict[str, Any] = {
+        "enabled": "mmmu" in selected_benchmarks,
+        "dataset_name": "MMMU/MMMU",
+        "dataset_revision": None,
+        "split": selected_mmmu_split,
+        "subjects": selected_mmmu_subjects,
+        "sample_limit": sample_limit,
+        "output_dir": "results/mmmu",
+        "provider": provider_key,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+        "timeout_seconds": 360,
+        "temperature": 0,
+        "max_tokens": max_tokens if max_tokens is not None else 512,
+        "top_p": None,
+        "stop": None,
+        "seed": 42,
+        "strip_thinking": True,
+        "image_format": "PNG",
+        "evaluator": "mmmu_official_parse_local_v1",
+        "multiple_choice_prompt_template": MMMU_MULTI_CHOICE_PROMPT,
+        "short_answer_prompt_template": MMMU_SHORT_ANSWER_PROMPT,
+    }
+    if resolved_reasoning_effort:
+        mmmu["reasoning_effort"] = resolved_reasoning_effort
+
+    mbpp: dict[str, Any] = {
+        "enabled": "mbpp" in selected_benchmarks,
+        "dataset_name": "google-research-datasets/mbpp",
+        "dataset_config": selected_mbpp_config,
+        "dataset_revision": None,
+        "split": selected_mbpp_split,
+        "sample_limit": sample_limit,
+        "output_dir": "results/mbpp",
+        "provider": provider_key,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+        "timeout_seconds": 360,
+        "temperature": 0,
+        "max_tokens": max_tokens if max_tokens is not None else 1024,
+        "top_p": None,
+        "stop": ["[DONE]"],
+        "seed": 42,
+        "strip_thinking": True,
+        "include_tests_in_prompt": True,
+        "include_challenge_tests": mbpp_challenge_tests,
+        "execution_timeout_seconds": 5,
+        "evaluator": "mbpp_local_subprocess_pass_at_1_v1",
+        "prompt_template": MBPP_PROMPT,
+    }
+    if resolved_reasoning_effort:
+        mbpp["reasoning_effort"] = resolved_reasoning_effort
+
+    rgb: dict[str, Any] = {
+        "enabled": "rgb" in selected_benchmarks,
+        "dataset_name": "chen700564/RGB",
+        "dataset_revision": "master",
+        "dataset": selected_rgb_dataset,
+        "sample_limit": sample_limit,
+        "output_dir": "results/rgb",
+        "data_cache_dir": "results/rgb/cache",
+        "provider": provider_key,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+        "timeout_seconds": 360,
+        "temperature": 0.2,
+        "max_tokens": max_tokens if max_tokens is not None else 512,
+        "top_p": None,
+        "stop": None,
+        "seed": 2333,
+        "strip_thinking": True,
+        "noise_rate": rgb_noise_rate,
+        "passage_num": rgb_passage_num,
+        "correct_rate": rgb_correct_rate,
+        "evaluator": "rgb_official_lexical_v1",
+    }
+    if resolved_reasoning_effort:
+        rgb["reasoning_effort"] = resolved_reasoning_effort
+
+    simpleqa: dict[str, Any] = {
+        "enabled": "simpleqa" in selected_benchmarks,
+        "dataset_name": "openai/simpleqa",
+        "dataset_url": SIMPLEQA_DATASET_URL,
+        "dataset_revision": "simple-evals-main",
+        "sample_limit": sample_limit,
+        "output_dir": "results/simpleqa",
+        "data_cache_dir": "results/simpleqa/cache",
+        "refresh_cache": False,
+        "download_timeout_seconds": 60,
+        "provider": provider_key,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+        "timeout_seconds": 240,
+        "temperature": 0,
+        "max_tokens": max_tokens if max_tokens is not None else 128,
+        "top_p": None,
+        "stop": None,
+        "seed": 42,
+        "strip_thinking": True,
+        "grader": selected_simpleqa_grader,
+        "grader_model": simpleqa_grader_model,
+        "grader_provider": None,
+        "grader_base_url": None,
+        "grader_api_key_env": api_key_env,
+        "grader_timeout_seconds": 240,
+        "grader_temperature": 0,
+        "grader_max_tokens": 16,
+        "grader_top_p": None,
+        "grader_stop": None,
+        "grader_seed": 42,
+        "grader_reasoning_effort": "none",
+        "evaluator": (
+            "simpleqa_heuristic_v1"
+            if selected_simpleqa_grader == "heuristic"
+            else "simpleqa_llm_judge_v1"
+        ),
+        "prompt_template": SIMPLEQA_PROMPT,
+    }
+    if resolved_reasoning_effort:
+        simpleqa["reasoning_effort"] = resolved_reasoning_effort
+
+    harmbench: dict[str, Any] = {
+        "enabled": "harmbench" in selected_benchmarks,
+        "dataset_name": "centerforaisafety/HarmBench",
+        "dataset_url": HARMBENCH_DATASET_URL,
+        "dataset_revision": "main",
+        "functional_categories": selected_harmbench_categories,
+        "sample_limit": sample_limit,
+        "output_dir": "results/harmbench",
+        "data_cache_dir": "results/harmbench/cache",
+        "refresh_cache": False,
+        "download_timeout_seconds": 60,
+        "provider": provider_key,
+        "base_url": base_url,
+        "api_key_env": api_key_env,
+        "timeout_seconds": 300,
+        "temperature": 0,
+        "max_tokens": max_tokens if max_tokens is not None else 512,
+        "top_p": None,
+        "stop": None,
+        "seed": 42,
+        "strip_thinking": True,
+        "judge": selected_harmbench_judge,
+        "judge_model": resolved_harmbench_judge_model,
+        "judge_provider": None,
+        "judge_base_url": None,
+        "judge_api_key_env": api_key_env,
+        "judge_timeout_seconds": 300,
+        "judge_temperature": 0,
+        "judge_max_tokens": 24,
+        "judge_top_p": None,
+        "judge_stop": None,
+        "judge_seed": 42,
+        "judge_reasoning_effort": "none",
+        "evaluator": (
+            "harmbench_heuristic_refusal_v1"
+            if selected_harmbench_judge == "heuristic"
+            else "harmbench_llm_judge_v1"
+        ),
+        "prompt_template": "{context_prefix}{behavior}",
+    }
+    if resolved_reasoning_effort:
+        harmbench["reasoning_effort"] = resolved_reasoning_effort
+
     payload = {
         "project": "Local AI Analysis",
         "run": {
@@ -699,12 +1386,19 @@ def _write_api_benchmark_config(
         "global_mmlu_lite": global_mmlu_lite,
         "ifbench": ifbench,
         "bfcl_v4": bfcl_v4,
+        "ocrbench_v2": ocrbench_v2,
+        "mmmu": mmmu,
+        "mbpp": mbpp,
+        "rgb": rgb,
+        "simpleqa": simpleqa,
+        "harmbench": harmbench,
         "models": [
             {
                 "family": _infer_family(model),
                 "name": _infer_base_model_name(provider, model),
                 "parameter_size_b": _infer_parameter_size_b(model),
-                "architecture": "decoder-only transformer",
+                "architecture": _architecture_for_modality(resolved_modality),
+                "modality": resolved_modality,
                 "license": "replace-with-upstream-license",
                 "source_url": base_url,
                 "variants": [
@@ -717,6 +1411,8 @@ def _write_api_benchmark_config(
                         "precision": _infer_precision(model, quantization),
                         "baseline": False,
                         "api_model": model,
+                        "modality": resolved_modality,
+                        "input_modalities": selected_input_modalities,
                     }
                 ],
             }
@@ -742,20 +1438,121 @@ def _parse_benchmarks(value: str) -> list[str]:
         "bfcl-v4": "bfcl-v4",
         "function-calling": "bfcl-v4",
         "fc": "bfcl-v4",
+        "ocr": "ocrbench-v2",
+        "ocrbench": "ocrbench-v2",
+        "ocrbench-v2": "ocrbench-v2",
+        "mmmu": "mmmu",
+        "multimodal-mmlu": "mmmu",
+        "mbpp": "mbpp",
+        "code": "mbpp",
+        "code-generation": "mbpp",
+        "rgb": "rgb",
+        "rag": "rgb",
+        "rag-benchmark": "rgb",
+        "simpleqa": "simpleqa",
+        "simple-qa": "simpleqa",
+        "factuality": "simpleqa",
+        "hallucination": "simpleqa",
+        "hallucinations": "simpleqa",
+        "harmbench": "harmbench",
+        "harm-bench": "harmbench",
+        "safety": "harmbench",
+        "red-team": "harmbench",
+        "redteam": "harmbench",
     }
-    if normalized in {"all", "both"}:
-        return ["global-mmlu-lite", "ifbench", "bfcl-v4"]
-    selected = [aliases.get(item.strip(), item.strip()) for item in normalized.split(",")]
+    suites = {
+        "text": CORE_BENCHMARKS,
+        "text-only": CORE_BENCHMARKS,
+        "core": CORE_BENCHMARKS,
+        "non-judge-text": CORE_BENCHMARKS,
+        "vision": MULTIMODAL_BENCHMARKS,
+        "multimodal": MULTIMODAL_BENCHMARKS,
+        "multimodal-vision": MULTIMODAL_BENCHMARKS,
+        "suite": ALL_NON_JUDGED_BENCHMARKS,
+        "capability-suite": ALL_NON_JUDGED_BENCHMARKS,
+        "all": ALL_NON_JUDGED_BENCHMARKS,
+        "all-nonjudge": ALL_NON_JUDGED_BENCHMARKS,
+        "all-non-judge": ALL_NON_JUDGED_BENCHMARKS,
+        "capability": ALL_NON_JUDGED_BENCHMARKS,
+        "capabilities": ALL_NON_JUDGED_BENCHMARKS,
+        "judge": JUDGED_BENCHMARKS,
+        "judged": JUDGED_BENCHMARKS,
+        "llm-judge": JUDGED_BENCHMARKS,
+        "judge-required": JUDGED_BENCHMARKS,
+        "full": FULL_SUITE_BENCHMARKS,
+        "everything": FULL_SUITE_BENCHMARKS,
+        "complete": FULL_SUITE_BENCHMARKS,
+    }
+    if normalized in suites:
+        return list(suites[normalized])
+    selected: list[str] = []
+    for item in [part.strip() for part in normalized.split(",") if part.strip()]:
+        if item in suites:
+            selected.extend(suites[item])
+        else:
+            selected.append(aliases.get(item, item))
     selected = [item for item in selected if item]
-    unknown = sorted(set(selected) - {"global-mmlu-lite", "ifbench", "bfcl-v4"})
+    selected = list(dict.fromkeys(selected))
+    unknown = sorted(
+        set(selected)
+        - {
+            "global-mmlu-lite",
+            "ifbench",
+            "bfcl-v4",
+            "ocrbench-v2",
+            "mmmu",
+            "mbpp",
+            "rgb",
+            "simpleqa",
+            "harmbench",
+        }
+    )
     if unknown:
         raise typer.BadParameter(
             f"Unsupported benchmark(s): {', '.join(unknown)}. "
-            "Use global-mmlu-lite, ifbench, bfcl, or all."
+            "Use text, vision, judge, suite, full, an individual benchmark, "
+            "or a comma-separated list."
         )
     if not selected:
-        raise typer.BadParameter("--benchmark must be global-mmlu-lite, ifbench, bfcl, or all")
+        raise typer.BadParameter(
+            "--benchmark must be text, vision, judge, suite, full, an individual benchmark, or a comma-separated list"
+        )
     return selected
+
+
+def _variant_suffix(
+    *,
+    smoke: bool,
+    selected_benchmarks: list[str],
+    selected_mbpp_config: str,
+    selected_mbpp_split: str,
+    selected_rgb_dataset: str,
+    rgb_noise_rate: float,
+    selected_simpleqa_grader: str,
+    selected_harmbench_categories: list[str],
+    all_languages_selected: bool,
+) -> str:
+    if smoke:
+        return "Smoke"
+    if selected_benchmarks == CORE_BENCHMARKS:
+        return "Text Suite"
+    if selected_benchmarks == MULTIMODAL_BENCHMARKS:
+        return "Vision Suite"
+    if selected_benchmarks == ALL_NON_JUDGED_BENCHMARKS:
+        return "Capability Suite"
+    if selected_benchmarks == JUDGED_BENCHMARKS:
+        return "Judge Suite"
+    if selected_benchmarks == FULL_SUITE_BENCHMARKS:
+        return "Full Suite"
+    if selected_benchmarks == ["mbpp"]:
+        return f"MBPP {selected_mbpp_config} {selected_mbpp_split}"
+    if selected_benchmarks == ["rgb"]:
+        return f"RGB {selected_rgb_dataset} noise {rgb_noise_rate:g}"
+    if selected_benchmarks == ["simpleqa"]:
+        return f"SimpleQA {selected_simpleqa_grader}"
+    if selected_benchmarks == ["harmbench"]:
+        return f"HarmBench {'+'.join(selected_harmbench_categories)}"
+    return "All Languages" if all_languages_selected else "Selected Languages"
 
 
 def benchmark_label(benchmarks: list[str]) -> str:
@@ -763,8 +1560,144 @@ def benchmark_label(benchmarks: list[str]) -> str:
         "global-mmlu-lite": "Global MMLU Lite",
         "ifbench": "IFBench",
         "bfcl-v4": "BFCL v4",
+        "ocrbench-v2": "OCRBench v2",
+        "mmmu": "MMMU",
+        "mbpp": "MBPP",
+        "rgb": "RGB",
+        "simpleqa": "SimpleQA",
+        "harmbench": "HarmBench",
     }
     return " + ".join(labels[item] for item in benchmarks)
+
+
+def _parse_ocrbench_configs(value: str) -> list[str]:
+    normalized = value.strip()
+    if normalized.lower() in {"", "all", "*", "official"}:
+        return ["EN", "CN"]
+    configs = [item.strip() for item in normalized.split(",") if item.strip()]
+    return configs or ["EN", "CN"]
+
+
+def _parse_mmmu_subjects(value: str) -> list[str]:
+    normalized = value.strip()
+    if normalized.lower() in {"", "all", "*", "official"}:
+        return MMMU_SUBJECTS
+    aliases = {subject.lower().replace("-", "_"): subject for subject in MMMU_SUBJECTS}
+    subjects: list[str] = []
+    for item in [part.strip() for part in normalized.split(",") if part.strip()]:
+        key = item.lower().replace("-", "_").replace(" ", "_")
+        subject = aliases.get(key)
+        if subject is None:
+            raise typer.BadParameter(
+                f"Unsupported MMMU subject: {item}. Supported: {', '.join(MMMU_SUBJECTS)}"
+            )
+        subjects.append(subject)
+    return subjects or MMMU_SUBJECTS
+
+
+def _parse_mmmu_split(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in {"dev", "validation", "test"}:
+        raise typer.BadParameter("--mmmu-split must be dev, validation, or test")
+    return normalized
+
+
+def _parse_mbpp_config(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"", "official"}:
+        return MBPP_DEFAULT_CONFIG
+    if normalized not in {"full", "sanitized"}:
+        raise typer.BadParameter("--mbpp-config must be full or sanitized")
+    return normalized
+
+
+def _parse_mbpp_split(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in {"train", "test", "validation", "prompt"}:
+        raise typer.BadParameter("--mbpp-split must be train, test, validation, or prompt")
+    return normalized
+
+
+def _parse_rgb_dataset(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_")
+    aliases = {
+        "en_noise": "en_refine",
+        "zh_noise": "zh_refine",
+        "en_rejection": "en_refine",
+        "zh_rejection": "zh_refine",
+        "en_integration": "en_int",
+        "zh_integration": "zh_int",
+        "en_counterfactual": "en_fact",
+        "zh_counterfactual": "zh_fact",
+    }
+    dataset = aliases.get(normalized, normalized)
+    if dataset not in RGB_DATASETS:
+        raise typer.BadParameter(
+            f"--rgb-dataset must be one of: {', '.join(RGB_DATASETS)}"
+        )
+    return dataset
+
+
+def _parse_simpleqa_grader(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_")
+    if normalized in {"", "llm", "judge", "llm_judge", "official"}:
+        return "llm"
+    if normalized in {"heuristic", "local", "exact"}:
+        return "heuristic"
+    raise typer.BadParameter("--simpleqa-grader must be llm or heuristic")
+
+
+def _parse_harmbench_judge(value: str) -> str:
+    normalized = value.strip().lower().replace("-", "_")
+    if normalized in {"", "llm", "judge", "llm_judge", "classifier", "official"}:
+        return "llm"
+    if normalized in {"heuristic", "local", "refusal"}:
+        return "heuristic"
+    raise typer.BadParameter("--harmbench-judge must be llm or heuristic")
+
+
+def _parse_harmbench_categories(value: str) -> list[str]:
+    aliases = {
+        "std": "standard",
+        "standard": "standard",
+        "context": "contextual",
+        "contextual": "contextual",
+        "copyright": "copyright",
+        "copy": "copyright",
+    }
+    selected: list[str] = []
+    for item in [part.strip().lower().replace("-", "_") for part in value.split(",")]:
+        if not item:
+            continue
+        if item in {"all", "*", "official"}:
+            return ["standard", "contextual", "copyright"]
+        if item == "text":
+            selected.extend(["standard", "contextual"])
+        else:
+            selected.append(aliases.get(item, item))
+    deduped: list[str] = []
+    for item in selected:
+        if item not in deduped:
+            deduped.append(item)
+    allowed = {"standard", "contextual", "copyright"}
+    unknown = sorted(set(deduped) - allowed)
+    if unknown:
+        raise typer.BadParameter(
+            "--harmbench-categories must use standard, contextual, copyright, text, or all"
+        )
+    return deduped or ["standard", "contextual"]
+
+
+def _shared_judge_model(simpleqa_grader_model: str, harmbench_judge_model: str) -> str:
+    simpleqa_model = simpleqa_grader_model.strip()
+    harmbench_model = harmbench_judge_model.strip()
+    if (
+        harmbench_model.lower() in {"same", "@same"}
+        and simpleqa_model
+        and simpleqa_model.lower() not in {"same", "@same"}
+    ):
+        return simpleqa_model
+    return harmbench_model or "same"
 
 
 def _parse_bfcl_categories(value: str) -> list[str]:
@@ -809,6 +1742,63 @@ def _resolve_reasoning_effort(model: str, value: str | None) -> str | None:
     if normalized == "auto":
         return "none" if "qwen" in model.lower() else "high"
     return normalized
+
+
+def _resolve_modality(
+    *,
+    model: str,
+    selected_benchmarks: list[str],
+    value: str,
+) -> str:
+    normalized = value.strip().lower().replace("_", "-")
+    aliases = {
+        "": "auto",
+        "auto": "auto",
+        "text": "text",
+        "text-only": "text",
+        "vl": "multimodal",
+        "vision": "vision",
+        "visual": "vision",
+        "image": "vision",
+        "multimodal": "multimodal",
+        "multi-modal": "multimodal",
+        "mm": "multimodal",
+    }
+    resolved = aliases.get(normalized)
+    if resolved is None:
+        raise typer.BadParameter("--modality must be auto, text, vision, or multimodal")
+    if resolved != "auto":
+        return resolved
+    lowered = model.lower()
+    if any(
+        marker in lowered
+        for marker in [
+            "vl",
+            "vision",
+            "visual",
+            "multimodal",
+            "multi-modal",
+            "llava",
+            "minicpm-v",
+        ]
+    ):
+        return "multimodal"
+    if any(benchmark in selected_benchmarks for benchmark in MULTIMODAL_BENCHMARKS):
+        return "multimodal"
+    return "text"
+
+
+def _input_modalities(selected_benchmarks: list[str]) -> list[str]:
+    modalities = ["text"]
+    if any(benchmark in selected_benchmarks for benchmark in MULTIMODAL_BENCHMARKS):
+        modalities.append("image")
+    return modalities
+
+
+def _architecture_for_modality(modality: str) -> str:
+    if modality in {"vision", "multimodal"}:
+        return "multimodal transformer"
+    return "decoder-only transformer"
 
 
 def _display_model_name(provider: str, model: str) -> str:
@@ -893,12 +1883,12 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
     variant_task_id: TaskID | None = None
     sample_task_id: TaskID | None = None
     sample_completed = 0
-    sample_correct = 0
+    sample_score = 0.0
     sample_invalid = 0
     sample_runtime = 0.0
 
     def progress_callback(event_type: str, payload: dict[str, Any]) -> None:
-        nonlocal sample_completed, sample_correct, sample_invalid, sample_runtime, sample_task_id
+        nonlocal sample_completed, sample_score, sample_invalid, sample_runtime, sample_task_id
         nonlocal variant_task_id
         if event_type == "run_started":
             total = payload.get("variants_total") or 1
@@ -955,7 +1945,7 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
                 progress.remove_task(sample_task_id)
             total_samples = payload.get("total_samples") or 1
             sample_completed = 0
-            sample_correct = 0
+            sample_score = 0.0
             sample_invalid = 0
             sample_runtime = 0.0
             languages = ", ".join(payload.get("languages") or []) or "configured languages"
@@ -977,22 +1967,31 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
             latest_correct = bool(payload.get("latest_correct"))
             latest_answer = payload.get("latest_extracted_answer") or "?"
             latest_runtime = float(payload.get("latest_runtime_seconds") or 0.0)
+            latest_score = payload.get("latest_score")
+            latest_invalid = bool(payload.get("latest_invalid", latest_answer == "?"))
+            score_increment = (
+                float(latest_score) if latest_score is not None else float(int(latest_correct))
+            )
             language = payload.get("language") or "?"
 
             sample_completed = completed
-            sample_correct += int(latest_correct)
-            sample_invalid += int(latest_answer == "?")
+            sample_score += score_increment
+            sample_invalid += int(latest_invalid)
             sample_runtime += latest_runtime
-            accuracy = sample_correct / completed if completed else 0.0
+            accuracy = sample_score / completed if completed else 0.0
             average_runtime = sample_runtime / completed if completed else 0.0
-            result_icon = "✅" if latest_correct else ("⚠️" if latest_answer == "?" else "❌")
+            result_icon = (
+                "✅"
+                if score_increment >= 0.999
+                else ("⚠️" if score_increment > 0 or latest_answer == "?" else "❌")
+            )
             progress.update(
                 sample_task_id,
                 completed=completed,
                 total=total,
                 description=f"🌍 {payload.get('variant')}: Q {completed}/{total}",
                 details=(
-                    f"{result_icon} last={latest_answer} • score {sample_correct}/{completed} "
+                    f"{result_icon} last={latest_answer} • score {sample_score:.1f}/{completed} "
                     f"• acc {accuracy:.1%} • avg {average_runtime:.2f}s"
                 ),
             )
@@ -1000,7 +1999,7 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
                 invalid_text = f" • invalid {sample_invalid}" if sample_invalid else ""
                 progress.console.print(
                     f"{result_icon} Q {completed}/{total} lang={language} "
-                    f"answer={latest_answer} • score {sample_correct}/{completed} "
+                    f"answer={latest_answer} • score {sample_score:.1f}/{completed} "
                     f"({accuracy:.1%}) • {latest_runtime:.2f}s{invalid_text}"
                 )
         elif event_type == "task_completed":
@@ -1008,11 +2007,11 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
             task = payload.get("task")
             if sample_task_id is not None:
                 if sample_completed:
-                    accuracy = sample_correct / sample_completed
+                    accuracy = sample_score / sample_completed
                     average_runtime = sample_runtime / sample_completed
                     invalid_text = f" • invalid {sample_invalid}" if sample_invalid else ""
                     progress.console.print(
-                        f"🏁 {task} complete • score {sample_correct}/{sample_completed} "
+                        f"🏁 {task} complete • score {sample_score:.1f}/{sample_completed} "
                         f"({accuracy:.1%}) • avg {average_runtime:.2f}s{invalid_text}"
                     )
                 progress.remove_task(sample_task_id)
@@ -1097,5 +2096,11 @@ def _task_label(task: str) -> str:
         "global-mmlu-lite": "Global MMLU Lite",
         "ifbench": "IFBench",
         "bfcl-v4": "BFCL v4",
+        "ocrbench-v2": "OCRBench v2",
+        "mmmu": "MMMU",
+        "mbpp": "MBPP",
+        "rgb": "RGB",
+        "simpleqa": "SimpleQA",
+        "harmbench": "HarmBench",
     }
     return labels.get(task, task)

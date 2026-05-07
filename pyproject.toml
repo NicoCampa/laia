@@ -15,10 +15,15 @@ authors = [
 keywords = [
   "local-ai",
   "benchmark",
+  "code-generation",
+  "mbpp",
   "mmlu",
   "ollama",
   "lm-studio",
-  "omlx"
+  "omlx",
+  "rag",
+  "rgb",
+  "simpleqa"
 ]
 dependencies = [
   "duckdb>=0.10.0",
@@ -36,6 +41,7 @@ eval = [
   "datasets>=2.18.0",
   "ifbench @ git+https://github.com/allenai/IFBench.git@1091c4c3de6c1f6ed12c012ed68f11ea450b0117",
   "overrides>=7.7.0",
+  "pillow>=10.0.0",
   "tree_sitter==0.21.3",
   "tree-sitter-java==0.21.0",
   "tree-sitter-javascript==0.21.4",

@@ -9,7 +9,13 @@ from local_ai_analysis.config import BaseModelConfig, BenchmarkConfig, VariantCo
 from local_ai_analysis.db import LocalAIAnalysisDB
 from local_ai_analysis.eval.bfcl_v4 import BFCLV4Runner
 from local_ai_analysis.eval.global_mmlu_lite import GlobalMMLULiteRunner
+from local_ai_analysis.eval.harmbench import HarmBenchRunner
 from local_ai_analysis.eval.ifbench import IFBenchRunner
+from local_ai_analysis.eval.mbpp import MBPPRunner
+from local_ai_analysis.eval.mmmu import MMMURunner
+from local_ai_analysis.eval.ocrbench_v2 import OCRBenchV2Runner
+from local_ai_analysis.eval.rgb import RGBRunner
+from local_ai_analysis.eval.simpleqa import SimpleQARunner
 from local_ai_analysis.metrics import MetricResult
 from local_ai_analysis.normalization import refresh_normalized_results
 from local_ai_analysis.utils.jsonl import JsonlWriter
@@ -41,9 +47,16 @@ class BenchmarkRunner:
             not self.config.global_mmlu_lite.enabled
             and not self.config.ifbench.enabled
             and not self.config.bfcl_v4.enabled
+            and not self.config.ocrbench_v2.enabled
+            and not self.config.mmmu.enabled
+            and not self.config.mbpp.enabled
+            and not self.config.rgb.enabled
+            and not self.config.simpleqa.enabled
+            and not self.config.harmbench.enabled
         ):
             raise ValueError(
-                "Enable at least one benchmark: global_mmlu_lite, ifbench, or bfcl_v4."
+                "Enable at least one benchmark: global_mmlu_lite, ifbench, bfcl_v4, "
+                "ocrbench_v2, mmmu, mbpp, rgb, simpleqa, or harmbench."
             )
 
         cfg = self.config
@@ -63,6 +76,16 @@ class BenchmarkRunner:
                 "global_mmlu_lite": cfg.global_mmlu_lite.model_dump(exclude={"api_key"}),
                 "ifbench": cfg.ifbench.model_dump(exclude={"api_key"}),
                 "bfcl_v4": cfg.bfcl_v4.model_dump(exclude={"api_key"}),
+                "ocrbench_v2": cfg.ocrbench_v2.model_dump(exclude={"api_key"}),
+                "mmmu": cfg.mmmu.model_dump(exclude={"api_key"}),
+                "mbpp": cfg.mbpp.model_dump(exclude={"api_key"}),
+                "rgb": cfg.rgb.model_dump(exclude={"api_key"}),
+                "simpleqa": cfg.simpleqa.model_dump(
+                    exclude={"api_key", "grader_api_key"}
+                ),
+                "harmbench": cfg.harmbench.model_dump(
+                    exclude={"api_key", "judge_api_key"}
+                ),
             },
         )
         self.events.write(
@@ -331,6 +354,22 @@ class BenchmarkRunner:
             planned["ifbench"] = IFBenchRunner(self.config.ifbench).planned_command(variant)
         if self.config.bfcl_v4.enabled:
             planned["bfcl_v4"] = BFCLV4Runner(self.config.bfcl_v4).planned_command(variant)
+        if self.config.ocrbench_v2.enabled:
+            planned["ocrbench_v2"] = OCRBenchV2Runner(
+                self.config.ocrbench_v2
+            ).planned_command(variant)
+        if self.config.mmmu.enabled:
+            planned["mmmu"] = MMMURunner(self.config.mmmu).planned_command(variant)
+        if self.config.mbpp.enabled:
+            planned["mbpp"] = MBPPRunner(self.config.mbpp).planned_command(variant)
+        if self.config.rgb.enabled:
+            planned["rgb"] = RGBRunner(self.config.rgb).planned_command(variant)
+        if self.config.simpleqa.enabled:
+            planned["simpleqa"] = SimpleQARunner(self.config.simpleqa).planned_command(variant)
+        if self.config.harmbench.enabled:
+            planned["harmbench"] = HarmBenchRunner(self.config.harmbench).planned_command(
+                variant
+            )
         return planned
 
     def _run_variant_metrics(self, variant: VariantConfig) -> list[MetricResult]:
@@ -364,9 +403,259 @@ class BenchmarkRunner:
                 )
             )
             self._progress("task_completed", {"task": "bfcl-v4", "variant": variant.name})
+        if self.config.ocrbench_v2.enabled:
+            self._progress("task_started", {"task": "ocrbench-v2", "variant": variant.name})
+            metrics.extend(
+                OCRBenchV2Runner(self.config.ocrbench_v2).run(
+                    variant,
+                    progress_callback=self._progress,
+                )
+            )
+            self._progress("task_completed", {"task": "ocrbench-v2", "variant": variant.name})
+        if self.config.mmmu.enabled:
+            self._progress("task_started", {"task": "mmmu", "variant": variant.name})
+            metrics.extend(
+                MMMURunner(self.config.mmmu).run(
+                    variant,
+                    progress_callback=self._progress,
+                )
+            )
+            self._progress("task_completed", {"task": "mmmu", "variant": variant.name})
+        if self.config.mbpp.enabled:
+            self._progress("task_started", {"task": "mbpp", "variant": variant.name})
+            metrics.extend(
+                MBPPRunner(self.config.mbpp).run(
+                    variant,
+                    progress_callback=self._progress,
+                )
+            )
+            self._progress("task_completed", {"task": "mbpp", "variant": variant.name})
+        if self.config.rgb.enabled:
+            self._progress("task_started", {"task": "rgb", "variant": variant.name})
+            metrics.extend(
+                RGBRunner(self.config.rgb).run(
+                    variant,
+                    progress_callback=self._progress,
+                )
+            )
+            self._progress("task_completed", {"task": "rgb", "variant": variant.name})
+        if self.config.simpleqa.enabled:
+            self._progress("task_started", {"task": "simpleqa", "variant": variant.name})
+            metrics.extend(
+                SimpleQARunner(self.config.simpleqa).run(
+                    variant,
+                    progress_callback=self._progress,
+                )
+            )
+            self._progress("task_completed", {"task": "simpleqa", "variant": variant.name})
+        if self.config.harmbench.enabled:
+            self._progress("task_started", {"task": "harmbench", "variant": variant.name})
+            metrics.extend(
+                HarmBenchRunner(self.config.harmbench).run(
+                    variant,
+                    progress_callback=self._progress,
+                )
+            )
+            self._progress("task_completed", {"task": "harmbench", "variant": variant.name})
         return metrics
 
     def _task_for_metric(self, metric: MetricResult) -> str:
+        if metric.metric_name.startswith("harmbench_"):
+            return self.db.get_or_create_task(
+                {
+                    "name": "harmbench",
+                    "task_type": "safety_red_team",
+                    "task_version": self.config.harmbench.dataset_name,
+                    "few_shot": 0,
+                    "prompt_template": self.config.harmbench.prompt_template,
+                    "decoding": {
+                        "provider": self.config.harmbench.provider,
+                        "base_url": self.config.harmbench.base_url,
+                        "temperature": self.config.harmbench.temperature,
+                        "max_tokens": self.config.harmbench.max_tokens,
+                        "top_p": self.config.harmbench.top_p,
+                        "stop": self.config.harmbench.stop,
+                        "seed": self.config.harmbench.seed,
+                        "reasoning_effort": self.config.harmbench.reasoning_effort,
+                        "response_format": self.config.harmbench.response_format,
+                        "request_extra": self.config.harmbench.request_extra,
+                        "dataset_url": self.config.harmbench.dataset_url,
+                        "dataset_revision": self.config.harmbench.dataset_revision,
+                        "functional_categories": (
+                            self.config.harmbench.functional_categories
+                        ),
+                        "sample_limit": self.config.harmbench.sample_limit,
+                        "judge": self.config.harmbench.judge,
+                        "judge_model": self.config.harmbench.judge_model,
+                        "judge_provider": self.config.harmbench.judge_provider,
+                        "judge_base_url": self.config.harmbench.judge_base_url,
+                        "judge_temperature": self.config.harmbench.judge_temperature,
+                        "judge_max_tokens": self.config.harmbench.judge_max_tokens,
+                        "judge_reasoning_effort": (
+                            self.config.harmbench.judge_reasoning_effort
+                        ),
+                        "evaluator": self.config.harmbench.evaluator,
+                    },
+                    "metric_name": metric.metric_name,
+                }
+            )
+        if metric.metric_name.startswith("simpleqa_"):
+            return self.db.get_or_create_task(
+                {
+                    "name": "simpleqa",
+                    "task_type": "short_form_factuality",
+                    "task_version": self.config.simpleqa.dataset_name,
+                    "few_shot": 0,
+                    "prompt_template": self.config.simpleqa.prompt_template,
+                    "decoding": {
+                        "provider": self.config.simpleqa.provider,
+                        "base_url": self.config.simpleqa.base_url,
+                        "temperature": self.config.simpleqa.temperature,
+                        "max_tokens": self.config.simpleqa.max_tokens,
+                        "top_p": self.config.simpleqa.top_p,
+                        "stop": self.config.simpleqa.stop,
+                        "seed": self.config.simpleqa.seed,
+                        "reasoning_effort": self.config.simpleqa.reasoning_effort,
+                        "response_format": self.config.simpleqa.response_format,
+                        "request_extra": self.config.simpleqa.request_extra,
+                        "dataset_url": self.config.simpleqa.dataset_url,
+                        "dataset_revision": self.config.simpleqa.dataset_revision,
+                        "sample_limit": self.config.simpleqa.sample_limit,
+                        "grader": self.config.simpleqa.grader,
+                        "grader_model": self.config.simpleqa.grader_model,
+                        "grader_provider": self.config.simpleqa.grader_provider,
+                        "grader_base_url": self.config.simpleqa.grader_base_url,
+                        "grader_temperature": self.config.simpleqa.grader_temperature,
+                        "grader_max_tokens": self.config.simpleqa.grader_max_tokens,
+                        "grader_reasoning_effort": (
+                            self.config.simpleqa.grader_reasoning_effort
+                        ),
+                        "evaluator": self.config.simpleqa.evaluator,
+                    },
+                    "metric_name": metric.metric_name,
+                }
+            )
+        if metric.metric_name.startswith("rgb_"):
+            return self.db.get_or_create_task(
+                {
+                    "name": "rgb",
+                    "task_type": "rag_generation",
+                    "task_version": self.config.rgb.dataset_name,
+                    "few_shot": 0,
+                    "prompt_template": self.config.rgb.instruction_template_en,
+                    "decoding": {
+                        "provider": self.config.rgb.provider,
+                        "base_url": self.config.rgb.base_url,
+                        "temperature": self.config.rgb.temperature,
+                        "max_tokens": self.config.rgb.max_tokens,
+                        "top_p": self.config.rgb.top_p,
+                        "stop": self.config.rgb.stop,
+                        "seed": self.config.rgb.seed,
+                        "reasoning_effort": self.config.rgb.reasoning_effort,
+                        "response_format": self.config.rgb.response_format,
+                        "request_extra": self.config.rgb.request_extra,
+                        "dataset": self.config.rgb.dataset,
+                        "dataset_revision": self.config.rgb.dataset_revision,
+                        "sample_limit": self.config.rgb.sample_limit,
+                        "noise_rate": self.config.rgb.noise_rate,
+                        "passage_num": self.config.rgb.passage_num,
+                        "correct_rate": self.config.rgb.correct_rate,
+                        "evaluator": self.config.rgb.evaluator,
+                    },
+                    "metric_name": metric.metric_name,
+                }
+            )
+        if metric.metric_name.startswith("mbpp_"):
+            return self.db.get_or_create_task(
+                {
+                    "name": "mbpp",
+                    "task_type": "code_generation",
+                    "task_version": self.config.mbpp.dataset_name,
+                    "few_shot": 0,
+                    "prompt_template": self.config.mbpp.prompt_template,
+                    "decoding": {
+                        "provider": self.config.mbpp.provider,
+                        "base_url": self.config.mbpp.base_url,
+                        "temperature": self.config.mbpp.temperature,
+                        "max_tokens": self.config.mbpp.max_tokens,
+                        "top_p": self.config.mbpp.top_p,
+                        "stop": self.config.mbpp.stop,
+                        "seed": self.config.mbpp.seed,
+                        "reasoning_effort": self.config.mbpp.reasoning_effort,
+                        "response_format": self.config.mbpp.response_format,
+                        "request_extra": self.config.mbpp.request_extra,
+                        "dataset_config": self.config.mbpp.dataset_config,
+                        "split": self.config.mbpp.split,
+                        "dataset_revision": self.config.mbpp.dataset_revision,
+                        "sample_limit": self.config.mbpp.sample_limit,
+                        "include_tests_in_prompt": self.config.mbpp.include_tests_in_prompt,
+                        "include_challenge_tests": self.config.mbpp.include_challenge_tests,
+                        "execution_timeout_seconds": (
+                            self.config.mbpp.execution_timeout_seconds
+                        ),
+                        "evaluator": self.config.mbpp.evaluator,
+                    },
+                    "metric_name": metric.metric_name,
+                }
+            )
+        if metric.metric_name.startswith("mmmu_"):
+            return self.db.get_or_create_task(
+                {
+                    "name": "mmmu",
+                    "task_type": "vision_reasoning",
+                    "task_version": self.config.mmmu.dataset_name,
+                    "few_shot": 0,
+                    "prompt_template": self.config.mmmu.multiple_choice_prompt_template,
+                    "decoding": {
+                        "provider": self.config.mmmu.provider,
+                        "base_url": self.config.mmmu.base_url,
+                        "temperature": self.config.mmmu.temperature,
+                        "max_tokens": self.config.mmmu.max_tokens,
+                        "top_p": self.config.mmmu.top_p,
+                        "stop": self.config.mmmu.stop,
+                        "seed": self.config.mmmu.seed,
+                        "reasoning_effort": self.config.mmmu.reasoning_effort,
+                        "response_format": self.config.mmmu.response_format,
+                        "request_extra": self.config.mmmu.request_extra,
+                        "split": self.config.mmmu.split,
+                        "dataset_revision": self.config.mmmu.dataset_revision,
+                        "subjects": self.config.mmmu.subjects,
+                        "sample_limit": self.config.mmmu.sample_limit,
+                        "image_format": self.config.mmmu.image_format,
+                        "evaluator": self.config.mmmu.evaluator,
+                    },
+                    "metric_name": metric.metric_name,
+                }
+            )
+        if metric.metric_name.startswith("ocrbench_v2_"):
+            return self.db.get_or_create_task(
+                {
+                    "name": "ocrbench-v2",
+                    "task_type": "vision_ocr",
+                    "task_version": self.config.ocrbench_v2.dataset_name,
+                    "few_shot": 0,
+                    "prompt_template": self.config.ocrbench_v2.prompt_template,
+                    "decoding": {
+                        "provider": self.config.ocrbench_v2.provider,
+                        "base_url": self.config.ocrbench_v2.base_url,
+                        "temperature": self.config.ocrbench_v2.temperature,
+                        "max_tokens": self.config.ocrbench_v2.max_tokens,
+                        "top_p": self.config.ocrbench_v2.top_p,
+                        "stop": self.config.ocrbench_v2.stop,
+                        "seed": self.config.ocrbench_v2.seed,
+                        "reasoning_effort": self.config.ocrbench_v2.reasoning_effort,
+                        "response_format": self.config.ocrbench_v2.response_format,
+                        "request_extra": self.config.ocrbench_v2.request_extra,
+                        "split": self.config.ocrbench_v2.split,
+                        "dataset_revision": self.config.ocrbench_v2.dataset_revision,
+                        "dataset_configs": self.config.ocrbench_v2.dataset_configs,
+                        "sample_limit": self.config.ocrbench_v2.sample_limit,
+                        "image_format": self.config.ocrbench_v2.image_format,
+                        "evaluator": self.config.ocrbench_v2.evaluator,
+                    },
+                    "metric_name": metric.metric_name,
+                }
+            )
         if metric.metric_name.startswith("bfcl_v4_"):
             return self.db.get_or_create_task(
                 {

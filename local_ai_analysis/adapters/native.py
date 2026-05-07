@@ -17,6 +17,12 @@ class GenerationResponse:
     runtime_seconds: float
 
 
+@dataclass(frozen=True)
+class ImagePayload:
+    data: str
+    mime_type: str = "image/png"
+
+
 def create_native_client(
     *,
     provider: str,
@@ -83,6 +89,7 @@ class NativeClient:
         reasoning_effort: str | None = None,
         response_format: dict[str, Any] | None = None,
         request_extra: dict[str, Any] | None = None,
+        images: list[ImagePayload | dict[str, str]] | None = None,
     ) -> GenerationResponse:
         raise NotImplementedError
 
@@ -162,6 +169,7 @@ class OllamaNativeClient(NativeClient):
         reasoning_effort: str | None = None,
         response_format: dict[str, Any] | None = None,
         request_extra: dict[str, Any] | None = None,
+        images: list[ImagePayload | dict[str, str]] | None = None,
     ) -> GenerationResponse:
         options: dict[str, Any] = {
             "temperature": temperature,
@@ -174,9 +182,13 @@ class OllamaNativeClient(NativeClient):
         if seed is not None:
             options["seed"] = seed
 
+        message: dict[str, Any] = {"role": "user", "content": prompt}
+        if images:
+            message["images"] = [_image_data(image) for image in images]
+
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [message],
             "stream": False,
             "options": options,
         }
@@ -245,10 +257,20 @@ class LMStudioNativeClient(NativeClient):
         reasoning_effort: str | None = None,
         response_format: dict[str, Any] | None = None,
         request_extra: dict[str, Any] | None = None,
+        images: list[ImagePayload | dict[str, str]] | None = None,
     ) -> GenerationResponse:
+        input_payload: str | list[dict[str, Any]]
+        if images:
+            input_payload = [{"type": "message", "content": prompt}]
+            input_payload.extend(
+                {"type": "image", "data_url": _image_data_url(image)} for image in images
+            )
+        else:
+            input_payload = prompt
+
         payload: dict[str, Any] = {
             "model": model,
-            "input": prompt,
+            "input": input_payload,
             "temperature": temperature,
             "max_output_tokens": max_tokens,
             "stream": False,
@@ -436,10 +458,24 @@ class OmlxNativeClient(NativeClient):
         reasoning_effort: str | None = None,
         response_format: dict[str, Any] | None = None,
         request_extra: dict[str, Any] | None = None,
+        images: list[ImagePayload | dict[str, str]] | None = None,
     ) -> GenerationResponse:
+        content: str | list[dict[str, Any]]
+        if images:
+            content = [{"type": "text", "text": prompt}]
+            content.extend(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": _image_data_url(image)},
+                }
+                for image in images
+            )
+        else:
+            content = prompt
+
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": content}],
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": False,
@@ -501,3 +537,22 @@ def _openai_chat_completion_text(raw: dict[str, Any]) -> str:
     if not isinstance(message, dict):
         return ""
     return str(message.get("content") or "")
+
+
+def _image_data(image: ImagePayload | dict[str, str]) -> str:
+    if isinstance(image, ImagePayload):
+        return image.data
+    return str(image.get("data") or "")
+
+
+def _image_mime_type(image: ImagePayload | dict[str, str]) -> str:
+    if isinstance(image, ImagePayload):
+        return image.mime_type
+    return str(image.get("mime_type") or "image/png")
+
+
+def _image_data_url(image: ImagePayload | dict[str, str]) -> str:
+    data = _image_data(image)
+    if data.startswith("data:"):
+        return data
+    return f"data:{_image_mime_type(image)};base64,{data}"
