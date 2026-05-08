@@ -9,13 +9,12 @@ from local_ai_analysis.db.repository import LocalAIAnalysisDB
 
 
 MODEL_INTELLIGENCE_WEIGHTS = {
-    "global_mmlu_lite_pass_at_1": 0.15,
-    "simpleqa_f1": 0.10,
-    "ifbench_prompt_level_loose": 0.15,
-    "bfcl_v4_selected_accuracy": 0.15,
-    "ocrbench_v2_score": 0.10,
-    "mmmu_accuracy": 0.15,
-    "mbpp_pass_at_1": 0.15,
+    "global_mmlu_lite_pass_at_1": 0.17,
+    "ifbench_prompt_level_loose": 0.17,
+    "bfcl_v4_selected_accuracy": 0.17,
+    "ocrbench_v2_score": 0.11,
+    "mmmu_accuracy": 0.17,
+    "mbpp_pass_at_1": 0.16,
     "rgb_all_rate": 0.05,
 }
 

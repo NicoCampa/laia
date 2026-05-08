@@ -24,11 +24,13 @@ coverage, and metadata.
 Model intelligence columns:
 
 - `model_intelligence_score`: full-suite weighted score with missing benchmark
-  families counted as zero.
+  families counted as zero. The database stores this as a normalized 0-1 value;
+  user-facing views render it as points out of 100.
 - `model_intelligence_coverage`: sum of the benchmark-family weights present in
   the row.
 - `model_intelligence_available_score`: weighted average over the benchmark
-  families present in the row.
+  families present in the row, also rendered as points out of 100.
 
-HarmBench safety metrics are stored in the same row shape but are not included in
-the model intelligence score.
+SimpleQA factuality and HarmBench safety metrics are stored in the same row
+shape but are not included in the model intelligence score because they require
+a judge.

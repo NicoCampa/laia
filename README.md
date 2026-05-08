@@ -173,25 +173,27 @@ The repository does not include synthetic benchmark rows or fake sample data.
 ## Model Intelligence Score
 
 Normalized rows include a weighted `model_intelligence_score` for a broad local
-model profile. Missing benchmark families count as zero in the score, and
-`model_intelligence_coverage` records how much of the weighted suite was actually
-run. `model_intelligence_available_score` is the weighted average over only the
-benchmarks present in that row.
+model profile based only on non-judge benchmarks. The stored value is normalized
+from 0 to 1, but the website and terminal leaderboard present it as points out
+of 100, not as a benchmark percentage. Missing benchmark families count as zero
+in the score, and `model_intelligence_coverage` records how much of the weighted
+suite was actually run. `model_intelligence_available_score` is the weighted
+average over only the benchmarks present in that row and is also presented as
+points.
 
 Default weights:
 
-- Global MMLU Lite: 15%
-- SimpleQA: 10%
-- IFBench: 15%
-- BFCL v4: 15%
-- OCRBench v2: 10%
-- MMMU: 15%
-- MBPP: 15%
+- Global MMLU Lite: 17%
+- IFBench: 17%
+- BFCL v4: 17%
+- OCRBench v2: 11%
+- MMMU: 17%
+- MBPP: 16%
 - RGB: 5%
 
-HarmBench is intentionally excluded from `model_intelligence_score`. It reports
-`harmbench_attack_success_rate` and `harmbench_refusal_rate` as separate safety
-metrics.
+SimpleQA and HarmBench are intentionally excluded from `model_intelligence_score`
+because they require a judge. They remain available as separate factuality and
+safety metrics.
 
 ## Reproducibility
 

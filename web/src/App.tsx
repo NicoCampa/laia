@@ -6,6 +6,8 @@ import {
   Database,
   FileJson,
   Info,
+  Lightbulb,
+  LightbulbOff,
   ListFilter,
   RotateCcw,
   Scale,
@@ -94,17 +96,57 @@ type Filters = {
   query: string;
   family: string;
   parameterSize: string;
-  quantization: string;
   backend: string;
   hardware: string;
   minQuality: string;
   maxRuntimeMinutes: string;
 };
 
+type QuantizationOption = {
+  key: string;
+  label: string;
+  row: LeaderboardRow;
+  score: number | null;
+  rank: number;
+};
+
+type QuantizationComparison = {
+  groupKey: string;
+  baseline: QuantizationOption;
+  selected: QuantizationOption;
+  options: QuantizationOption[];
+};
+
+type ReasoningOption = {
+  key: string;
+  label: string;
+  row: LeaderboardRow;
+  score: number | null;
+  rank: number;
+};
+
+type ReasoningComparison = {
+  groupKey: string;
+  baseline: ReasoningOption;
+  selected: ReasoningOption;
+  options: ReasoningOption[];
+};
+
+type ScoreBaseline = {
+  label: string;
+  row: LeaderboardRow;
+};
+
+type ComparableRow = LeaderboardRow & {
+  quantizationComparison?: QuantizationComparison;
+  reasoningComparison?: ReasoningComparison;
+  scoreBaseline?: ScoreBaseline;
+};
+
 type MetricColumn = {
   key: string;
   label: string;
-  render: (row: LeaderboardRow) => string;
+  render: (row: ComparableRow) => ReactNode;
   primary?: boolean;
 };
 
@@ -112,7 +154,6 @@ const emptyFilters: Filters = {
   query: "",
   family: "all",
   parameterSize: "all",
-  quantization: "all",
   backend: "all",
   hardware: "all",
   minQuality: "",
@@ -123,6 +164,8 @@ export function App() {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [selectedQuantizations, setSelectedQuantizations] = useState<Record<string, string>>({});
+  const [selectedReasoning, setSelectedReasoning] = useState<Record<string, string>>({});
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
   const [drawerRow, setDrawerRow] = useState<LeaderboardRow | null>(null);
 
@@ -139,7 +182,11 @@ export function App() {
     () => applyFilters(publishableRows, filters),
     [publishableRows, filters],
   );
-  const rankedRows = useMemo(() => rankRows(filteredRows), [filteredRows]);
+  const comparableRows = useMemo(
+    () => buildComparableRows(filteredRows, selectedQuantizations, selectedReasoning),
+    [filteredRows, selectedQuantizations, selectedReasoning],
+  );
+  const rankedRows = useMemo(() => rankRows(comparableRows), [comparableRows]);
   const activeRow =
     rankedRows.find((row) => row.variant_id === activeVariantId) ?? rankedRows[0] ?? null;
   const options = useMemo(() => optionSets(publishableRows), [publishableRows]);
@@ -148,6 +195,22 @@ export function App() {
   const bestQuality = bestRow(publishableRows, qualityValue);
   const fastestRun = minRow(publishableRows, (row) => row.benchmark_runtime_seconds);
   const topBackend = mostCommon(publishableRows.map((row) => row.backend_name ?? "unknown"));
+  const handleSelectQuantization = (
+    groupKey: string,
+    quantizationKey: string,
+    variantId: string,
+  ) => {
+    setSelectedQuantizations((current) => ({ ...current, [groupKey]: quantizationKey }));
+    setActiveVariantId(variantId);
+  };
+  const handleSelectReasoning = (
+    groupKey: string,
+    reasoningKey: string,
+    variantId: string,
+  ) => {
+    setSelectedReasoning((current) => ({ ...current, [groupKey]: reasoningKey }));
+    setActiveVariantId(variantId);
+  };
 
   if (error) {
     return (
@@ -187,11 +250,11 @@ export function App() {
             <span className="summary-bars">|| | || | |||</span>
             <span className="summary-label">Best row</span>
           </div>
-          <strong>{bestQuality?.variant_name ?? "No publishable result"}</strong>
+          <strong>{bestQuality ? displayModelName(bestQuality) : "No publishable result"}</strong>
           <dl>
             <div>
-              <dt>Quality</dt>
-              <dd>{formatPercent(bestQuality ? qualityValue(bestQuality) : null)}</dd>
+              <dt>Score</dt>
+              <dd>{formatQualityScore(bestQuality)}</dd>
             </div>
             <div>
               <dt>Runtime</dt>
@@ -209,15 +272,15 @@ export function App() {
           icon={<Database size={18} />}
         />
         <MetricCell
-          label="Top Quality"
-          value={formatPercent(bestQuality ? qualityValue(bestQuality) : null)}
+          label="Top Score"
+          value={formatQualityScore(bestQuality)}
           detail={bestQuality ? protocolLabel(bestQuality) : "No score"}
           icon={<Scale size={18} />}
         />
         <MetricCell
           label="Fastest Full Run"
           value={formatDuration(fastestRun?.benchmark_runtime_seconds)}
-          detail={fastestRun?.variant_name ?? "n/a"}
+          detail={fastestRun ? displayModelName(fastestRun) : "n/a"}
           icon={<Clock3 size={18} />}
         />
         <MetricCell
@@ -229,15 +292,6 @@ export function App() {
       </section>
 
       <section className="workspace-grid" id="leaderboard">
-        <FilterPanel
-          filters={filters}
-          options={options}
-          hiddenSyntheticCount={hiddenSyntheticCount}
-          hiddenSmokeCount={hiddenSmokeCount}
-          onChange={setFilters}
-          onReset={() => setFilters(emptyFilters)}
-        />
-
         <section className="leaderboard-panel" aria-labelledby="leaderboard-title">
           <div className="panel-heading">
             <div>
@@ -249,11 +303,22 @@ export function App() {
             </span>
           </div>
 
+          <FilterPanel
+            filters={filters}
+            options={options}
+            hiddenSyntheticCount={hiddenSyntheticCount}
+            hiddenSmokeCount={hiddenSmokeCount}
+            onChange={setFilters}
+            onReset={() => setFilters(emptyFilters)}
+          />
+
           <LeaderboardTable
             rows={rankedRows}
             activeVariantId={activeRow?.variant_id}
             onActivate={setActiveVariantId}
             onOpenRaw={setDrawerRow}
+            onSelectQuantization={handleSelectQuantization}
+            onSelectReasoning={handleSelectReasoning}
           />
         </section>
       </section>
@@ -357,7 +422,7 @@ function FilterPanel({
   onReset: () => void;
 }) {
   return (
-    <aside className="filter-panel" aria-label="Leaderboard controls">
+    <div className="filter-panel" aria-label="Leaderboard controls">
       <div className="filter-heading">
         <div>
           <p className="eyebrow">Controls</p>
@@ -391,12 +456,6 @@ function FilterPanel({
           value={filters.parameterSize}
           options={options.parameterSizes}
           onChange={(parameterSize) => onChange({ ...filters, parameterSize })}
-        />
-        <Select
-          label="Quantization"
-          value={filters.quantization}
-          options={options.quantizations}
-          onChange={(quantization) => onChange({ ...filters, quantization })}
         />
         <Select
           label="Backend"
@@ -434,7 +493,7 @@ function FilterPanel({
           {hiddenSmokeCount} smoke run(s).
         </span>
       </div>
-    </aside>
+    </div>
   );
 }
 
@@ -492,14 +551,18 @@ function LeaderboardTable({
   activeVariantId,
   onActivate,
   onOpenRaw,
+  onSelectQuantization,
+  onSelectReasoning,
 }: {
-  rows: LeaderboardRow[];
+  rows: ComparableRow[];
   activeVariantId?: string;
   onActivate: (variantId: string) => void;
   onOpenRaw: (row: LeaderboardRow) => void;
+  onSelectQuantization: (groupKey: string, quantizationKey: string, variantId: string) => void;
+  onSelectReasoning: (groupKey: string, reasoningKey: string, variantId: string) => void;
 }) {
   const metricColumns = metricColumnsFor(rows);
-  const columnCount = 5 + metricColumns.length;
+  const columnCount = 3 + metricColumns.length;
 
   return (
     <div className="table-shell">
@@ -508,8 +571,6 @@ function LeaderboardTable({
           <tr>
             <th className="rank-heading">#</th>
             <th>Model</th>
-            <th>Backend</th>
-            <th>Protocol</th>
             {metricColumns.map((column) => (
               <th className="numeric-heading" key={column.key}>
                 {column.label}
@@ -534,20 +595,24 @@ function LeaderboardTable({
             >
               <td className="rank-cell">{String(index + 1).padStart(2, "0")}</td>
               <td className="model-cell">
-                <strong>{row.variant_name}</strong>
-                <div className="model-subline">
-                  <span>
-                    {row.family} · {formatParameter(row.parameter_size_b)} · {row.quantization}
-                  </span>
-                  <span className={`modality-badge ${modalityClass(row)}`}>
-                    {modalityLabel(row)}
-                  </span>
+                <div className="model-title-row">
+                  <LabIcon row={row} />
+                  <div className="model-title-stack">
+                    <div className="model-title-line">
+                      <strong title={row.variant_name}>{displayModelName(row)}</strong>
+                    </div>
+                    <div className="model-subline">
+                      <span>
+                        {row.family} · {formatParameter(row.parameter_size_b)}
+                      </span>
+                    </div>
+                    <div className="model-option-stack">
+                      <QuantizationSwitch row={row} onSelect={onSelectQuantization} />
+                      <ReasoningSwitch row={row} onSelect={onSelectReasoning} />
+                    </div>
+                  </div>
                 </div>
               </td>
-              <td>
-                <span className="table-pill">{row.backend_name ?? "unknown"}</span>
-              </td>
-              <td>{protocolLabel(row)}</td>
               {metricColumns.map((column) => (
                 <td
                   className={`numeric-cell ${column.primary ? "primary-score" : ""}`}
@@ -577,11 +642,161 @@ function LeaderboardTable({
   );
 }
 
+function QuantizationSwitch({
+  row,
+  onSelect,
+}: {
+  row: ComparableRow;
+  onSelect: (groupKey: string, quantizationKey: string, variantId: string) => void;
+}) {
+  const comparison = row.quantizationComparison;
+  const options =
+    comparison?.options ?? [
+      {
+        key: quantizationKey(row),
+        label: quantizationLabel(row),
+        row,
+        score: qualityValue(row),
+        rank: quantizationRank(row),
+      },
+    ];
+  const activeKey = comparison?.selected.key ?? quantizationKey(row);
+  const baselineKey = comparison?.baseline.key ?? activeKey;
+
+  return (
+    <div className="quantization-switch" aria-label={`Quantizations for ${displayModelName(row)}`}>
+      {options.map((option) => (
+        <button
+          className={[
+            "quantization-chip",
+            option.key === activeKey ? "active" : "",
+            option.key === baselineKey ? "baseline" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          key={option.key}
+          type="button"
+          title={`${option.label}: ${formatQualityScore(option.row)}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (comparison) {
+              onSelect(comparison.groupKey, option.key, option.row.variant_id);
+            }
+          }}
+        >
+          <span>{option.label}</span>
+          <small>{formatQualityScore(option.row)}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReasoningSwitch({
+  row,
+  onSelect,
+}: {
+  row: ComparableRow;
+  onSelect: (groupKey: string, reasoningKey: string, variantId: string) => void;
+}) {
+  const comparison = row.reasoningComparison;
+  const options =
+    comparison?.options ?? [
+      {
+        key: reasoningKey(row),
+        label: reasoningLabel(row),
+        row,
+        score: qualityValue(row),
+        rank: reasoningRank(row),
+      },
+    ];
+  const activeKey = comparison?.selected.key ?? reasoningKey(row);
+  const baselineKey = comparison?.baseline.key ?? activeKey;
+
+  return (
+    <div className="reasoning-switch" aria-label={`Reasoning modes for ${displayModelName(row)}`}>
+      {options.map((option) => {
+        const enabled = reasoningKey(option.row) !== "off";
+        const Icon = enabled ? Lightbulb : LightbulbOff;
+        return (
+          <button
+            className={[
+              "reasoning-chip",
+              option.key === activeKey ? "active" : "",
+              option.key === baselineKey ? "baseline" : "",
+              enabled ? "on" : "off",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            key={option.key}
+            type="button"
+            title={`Reasoning ${option.label}: ${formatQualityScore(option.row)}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (comparison) {
+                onSelect(comparison.groupKey, option.key, option.row.variant_id);
+              }
+            }}
+          >
+            <Icon size={13} aria-hidden="true" />
+            <span>{option.label}</span>
+            <small>{formatQualityScore(option.row)}</small>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PointsWithDelta({ row }: { row: ComparableRow }) {
+  const value = numeric(row.model_intelligence_score);
+  const baseline = row.scoreBaseline;
+  const baselineValue = numeric(baseline?.row.model_intelligence_score);
+  const showDelta = baseline && !sameRun(baseline.row, row) && value !== null && baselineValue !== null;
+
+  if (!showDelta) {
+    return <span className="metric-stack">{formatPoints(value)}</span>;
+  }
+
+  const delta = value - baselineValue;
+  return (
+    <span className="metric-stack">
+      <span>{formatPoints(value)}</span>
+      <small>
+        <span>{baseline.label} {formatPoints(baselineValue)}</span>
+        <strong className={deltaClass(delta)}>{formatSignedPoints(delta)}</strong>
+      </small>
+    </span>
+  );
+}
+
+function LabIcon({ row }: { row: LeaderboardRow }) {
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const key = labKey(row);
+  const candidates = [`/labs/${key}.svg`, `/labs/${key}.png`, `/labs/${key}.jpg`, `/labs/${key}.webp`];
+  const src = candidates[candidateIndex];
+  const initials = labInitials(row);
+
+  if (!key || candidateIndex >= candidates.length) {
+    return <span className="lab-icon fallback" aria-hidden="true">{initials}</span>;
+  }
+
+  return (
+    <span className="lab-icon" aria-hidden="true">
+      <img
+        src={src}
+        alt=""
+        onError={() => setCandidateIndex((index) => index + 1)}
+      />
+    </span>
+  );
+}
+
 function SelectedRunPanel({
   row,
   onOpenRaw,
 }: {
-  row: LeaderboardRow | null;
+  row: ComparableRow | null;
   onOpenRaw: (row: LeaderboardRow) => void;
 }) {
   if (!row) {
@@ -600,21 +815,27 @@ function SelectedRunPanel({
     <section className="analysis-panel selected-run" aria-labelledby="selected-run-title">
       <div className="analysis-heading">
         <p className="eyebrow">Selected Run</p>
-        <h2 id="selected-run-title">{row.variant_name}</h2>
+        <h2 id="selected-run-title">{displayModelName(row)}</h2>
       </div>
 
       <div className="score-display">
-        <span>{protocolLabel(row)}</span>
-        <strong>{formatPercent(qualityValue(row))}</strong>
+        <span>
+          {protocolLabel(row)} · {quantizationLabel(row)} · Reasoning {reasoningLabel(row)}
+        </span>
+        <strong>{formatQualityScore(row)}</strong>
+        <ScoreComparison row={row} />
       </div>
 
       <dl className="detail-list">
         <DetailItem label="Runtime" value={formatDuration(row.benchmark_runtime_seconds)} />
+        <DetailItem label="Quantization" value={quantizationLabel(row)} />
+        <DetailItem label="Reasoning" value={reasoningLabel(row)} />
         <DetailItem label="Modality" value={modalityLabel(row)} />
         <DetailItem label="Suite coverage" value={formatPercent(row.model_intelligence_coverage)} />
-        <DetailItem label="Secondary score" value={formatPercent(secondaryQualityValue(row))} />
+        <DetailItem label="Secondary score" value={formatSecondaryScore(row)} />
         <DetailItem label="Backend" value={row.backend_name ?? "unknown"} />
         <DetailItem label="API model" value={apiModel(row) ?? row.base_model_name} />
+        <DetailItem label="Run label" value={row.variant_name} />
         <DetailItem label="Run UUID" value={shortId(row.run_uuid)} />
       </dl>
 
@@ -623,6 +844,24 @@ function SelectedRunPanel({
         <ArrowUpRight size={15} aria-hidden="true" />
       </button>
     </section>
+  );
+}
+
+function ScoreComparison({ row }: { row: ComparableRow }) {
+  const baseline = row.scoreBaseline;
+  if (!baseline || sameRun(baseline.row, row)) return null;
+  const selectedScore = numeric(row.model_intelligence_score);
+  const baselineScore = numeric(baseline.row.model_intelligence_score);
+  if (selectedScore === null || baselineScore === null) return null;
+  const delta = selectedScore - baselineScore;
+
+  return (
+    <small className="score-compare">
+      <span>
+        {baseline.label} baseline {formatPoints(baselineScore)}
+      </span>
+      <strong className={deltaClass(delta)}>{formatSignedPoints(delta)}</strong>
+    </small>
   );
 }
 
@@ -842,6 +1081,7 @@ function applyFilters(rows: LeaderboardRow[], filters: Filters) {
       row.base_model_name,
       row.family,
       row.quantization,
+      quantizationLabel(row),
       row.backend_name,
       row.hardware_accelerator,
     ]
@@ -853,7 +1093,6 @@ function applyFilters(rows: LeaderboardRow[], filters: Filters) {
       (!query || searchable.includes(query)) &&
       (filters.family === "all" || row.family === filters.family) &&
       (filters.parameterSize === "all" || String(row.parameter_size_b) === filters.parameterSize) &&
-      (filters.quantization === "all" || row.quantization === filters.quantization) &&
       (filters.backend === "all" || (row.backend_name ?? "unknown") === filters.backend) &&
       (filters.hardware === "all" ||
         (row.hardware_accelerator ?? "unknown") === filters.hardware) &&
@@ -868,9 +1107,184 @@ function optionSets(rows: LeaderboardRow[]) {
   return {
     families: unique(rows.map((row) => row.family)),
     parameterSizes: unique(rows.map((row) => String(row.parameter_size_b))),
-    quantizations: unique(rows.map((row) => row.quantization)),
     backends: unique(rows.map((row) => row.backend_name ?? "unknown")),
     hardware: unique(rows.map((row) => row.hardware_accelerator ?? "unknown")),
+  };
+}
+
+function buildComparableRows(
+  rows: LeaderboardRow[],
+  selectedQuantizations: Record<string, string>,
+  selectedReasoning: Record<string, string>,
+): ComparableRow[] {
+  const groups = new Map<string, LeaderboardRow[]>();
+  for (const row of rows) {
+    const key = quantizationGroupKey(row);
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+
+  return Array.from(groups.entries()).map(([groupKey, groupRows]) => {
+    const allQuantizationOptions = quantizationOptionsFor(groupRows);
+    const baselineQuantization = baselineQuantizationOption(allQuantizationOptions);
+    const selectedQuantizationKey = selectedQuantizations[groupKey] ?? baselineQuantization.key;
+    const currentQuantizationRows = rowsForQuantization(groupRows, selectedQuantizationKey);
+    const fallbackQuantizationRows = rowsForQuantization(groupRows, baselineQuantization.key);
+    const candidateRows = currentQuantizationRows.length
+      ? currentQuantizationRows
+      : fallbackQuantizationRows;
+    const reasoningOptions = reasoningOptionsFor(candidateRows.length ? candidateRows : groupRows);
+    const baselineReasoning = baselineReasoningOption(reasoningOptions);
+    const selectedReasoningOption =
+      reasoningOptions.find((option) => option.key === selectedReasoning[groupKey]) ??
+      baselineReasoning;
+    const quantizationOptions = quantizationOptionsFor(groupRows, selectedReasoningOption.key);
+    const selectedQuantization =
+      quantizationOptions.find((option) => option.key === selectedQuantizationKey) ??
+      baselineQuantization;
+    const selectedRows = rowsForQuantization(groupRows, selectedQuantization.key);
+    const selectedReasoningRows = selectedRows.filter(
+      (row) => reasoningKey(row) === selectedReasoningOption.key,
+    );
+    const selectedRow = bestComparableRun(
+      selectedReasoningRows.length ? selectedReasoningRows : selectedRows,
+    );
+    const scoreBaseline = scoreBaselineFor(groupRows, baselineQuantization.key);
+
+    return {
+      ...selectedRow,
+      quantizationComparison: {
+        groupKey,
+        baseline:
+          quantizationOptions.find((option) => option.key === baselineQuantization.key) ??
+          baselineQuantization,
+        selected: selectedQuantization,
+        options: quantizationOptions,
+      },
+      reasoningComparison: {
+        groupKey,
+        baseline: baselineReasoning,
+        selected:
+          reasoningOptions.find((option) => option.key === reasoningKey(selectedRow)) ??
+          selectedReasoningOption,
+        options: reasoningOptions,
+      },
+      scoreBaseline,
+    };
+  });
+}
+
+function quantizationOptionsFor(rows: LeaderboardRow[], preferredReasoningKey?: string) {
+  const byQuantization = new Map<string, QuantizationOption>();
+  const grouped = new Map<string, LeaderboardRow[]>();
+  for (const row of rows) {
+    const key = quantizationKey(row);
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+  }
+
+  for (const [key, quantizationRows] of grouped.entries()) {
+    const preferredRows = preferredReasoningKey
+      ? quantizationRows.filter((row) => reasoningKey(row) === preferredReasoningKey)
+      : [];
+    const row = bestComparableRun(preferredRows.length ? preferredRows : quantizationRows);
+    const option: QuantizationOption = {
+      key,
+      label: quantizationLabel(row),
+      row,
+      score: qualityValue(row),
+      rank: quantizationRank(row),
+    };
+    byQuantization.set(key, option);
+  }
+
+  return Array.from(byQuantization.values()).sort((a, b) => {
+    if (b.rank !== a.rank) return b.rank - a.rank;
+    return (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY);
+  });
+}
+
+function compareQuantizationOptions(a: QuantizationOption, b: QuantizationOption) {
+  const scoreDelta = (a.score ?? Number.NEGATIVE_INFINITY) - (b.score ?? Number.NEGATIVE_INFINITY);
+  if (scoreDelta !== 0) return scoreDelta;
+  const coverageDelta =
+    (numeric(a.row.model_intelligence_coverage) ?? Number.NEGATIVE_INFINITY) -
+    (numeric(b.row.model_intelligence_coverage) ?? Number.NEGATIVE_INFINITY);
+  if (coverageDelta !== 0) return coverageDelta;
+  return (
+    (numeric(b.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY) -
+    (numeric(a.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY)
+  );
+}
+
+function baselineQuantizationOption(options: QuantizationOption[]) {
+  const preferred = options.find((option) => option.rank === 160);
+  return preferred ?? options[0]!;
+}
+
+function reasoningOptionsFor(rows: LeaderboardRow[]) {
+  const byReasoning = new Map<string, ReasoningOption>();
+  for (const row of rows) {
+    const key = reasoningKey(row);
+    const option: ReasoningOption = {
+      key,
+      label: reasoningLabel(row),
+      row,
+      score: qualityValue(row),
+      rank: reasoningRank(row),
+    };
+    const current = byReasoning.get(key);
+    if (!current || compareReasoningOptions(option, current) > 0) {
+      byReasoning.set(key, option);
+    }
+  }
+
+  return Array.from(byReasoning.values()).sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    return (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY);
+  });
+}
+
+function compareReasoningOptions(a: ReasoningOption, b: ReasoningOption) {
+  const scoreDelta = (a.score ?? Number.NEGATIVE_INFINITY) - (b.score ?? Number.NEGATIVE_INFINITY);
+  if (scoreDelta !== 0) return scoreDelta;
+  return (
+    (numeric(b.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY) -
+    (numeric(a.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY)
+  );
+}
+
+function baselineReasoningOption(options: ReasoningOption[]) {
+  const preferred = options.find((option) => option.key === "off");
+  return preferred ?? options[0]!;
+}
+
+function rowsForQuantization(rows: LeaderboardRow[], key: string) {
+  return rows.filter((row) => quantizationKey(row) === key);
+}
+
+function bestComparableRun(rows: LeaderboardRow[]) {
+  return [...rows].sort((a, b) => {
+    const scoreDelta =
+      (qualityValue(b) ?? Number.NEGATIVE_INFINITY) -
+      (qualityValue(a) ?? Number.NEGATIVE_INFINITY);
+    if (scoreDelta !== 0) return scoreDelta;
+    const coverageDelta =
+      (numeric(b.model_intelligence_coverage) ?? Number.NEGATIVE_INFINITY) -
+      (numeric(a.model_intelligence_coverage) ?? Number.NEGATIVE_INFINITY);
+    if (coverageDelta !== 0) return coverageDelta;
+    return (
+      (numeric(a.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY) -
+      (numeric(b.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY)
+    );
+  })[0]!;
+}
+
+function scoreBaselineFor(rows: LeaderboardRow[], baselineQuantizationKey: string): ScoreBaseline {
+  const baselineRows = rowsForQuantization(rows, baselineQuantizationKey);
+  const reasoningOptions = reasoningOptionsFor(baselineRows.length ? baselineRows : rows);
+  const baselineReasoning = baselineReasoningOption(reasoningOptions);
+  return {
+    label: `${quantizationLabel(baselineReasoning.row)} ${baselineReasoning.label}`,
+    row: baselineReasoning.row,
   };
 }
 
@@ -880,8 +1294,8 @@ function metricColumnsFor(rows: LeaderboardRow[]): MetricColumn[] {
   if (hasMetric(rows, "model_intelligence_score")) {
     columns.push({
       key: "model_intelligence_score",
-      label: "Intelligence",
-      render: (row) => formatPercent(row.model_intelligence_score),
+      label: "Intel. pts",
+      render: (row) => <PointsWithDelta row={row} />,
       primary: true,
     });
   }
@@ -1104,7 +1518,7 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean))).sort();
 }
 
-function rankRows(rows: LeaderboardRow[]) {
+function rankRows<T extends LeaderboardRow>(rows: T[]) {
   return [...rows].sort((a, b) => scoreForRank(b) - scoreForRank(a));
 }
 
@@ -1136,6 +1550,23 @@ function numeric(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function sameRun(a: LeaderboardRow, b: LeaderboardRow) {
+  return rowIdentity(a) === rowIdentity(b);
+}
+
+function rowIdentity(row: LeaderboardRow) {
+  return (
+    row.normalized_result_id ??
+    [
+      row.variant_id,
+      row.run_uuid ?? "",
+      row.variant_name,
+      quantizationKey(row),
+      reasoningKey(row),
+    ].join("|")
+  );
+}
+
 function hasMetric(rows: LeaderboardRow[], key: keyof LeaderboardRow) {
   return rows.some((row) => numeric(row[key]) !== null);
 }
@@ -1155,6 +1586,17 @@ function qualityValue(row: LeaderboardRow) {
   );
 }
 
+function hasIntelligenceScore(row?: LeaderboardRow | null) {
+  return numeric(row?.model_intelligence_score) !== null;
+}
+
+function formatQualityScore(row?: LeaderboardRow | null) {
+  if (!row) return "n/a";
+  return hasIntelligenceScore(row)
+    ? formatPoints(row.model_intelligence_score)
+    : formatPercent(qualityValue(row));
+}
+
 function secondaryQualityValue(row: LeaderboardRow) {
   return (
     numeric(row.model_intelligence_available_score) ??
@@ -1171,6 +1613,12 @@ function secondaryQualityValue(row: LeaderboardRow) {
     numeric(row.harmbench_attack_success_rate) ??
     numeric(row.global_mmlu_lite_invalid_rate)
   );
+}
+
+function formatSecondaryScore(row: LeaderboardRow) {
+  return numeric(row.model_intelligence_available_score) !== null
+    ? formatPoints(row.model_intelligence_available_score)
+    : formatPercent(secondaryQualityValue(row));
 }
 
 function protocolLabel(row: LeaderboardRow) {
@@ -1224,6 +1672,159 @@ function apiModel(row: LeaderboardRow) {
   return typeof apiModelValue === "string" ? apiModelValue : null;
 }
 
+function displayModelName(row: LeaderboardRow) {
+  const apiName = apiModel(row);
+  if (apiName && shouldPreferApiModelName(row.base_model_name, apiName)) {
+    return formatModelName(apiName);
+  }
+  return formatModelName(row.base_model_name || apiName || row.variant_name);
+}
+
+function shouldPreferApiModelName(baseName: string, apiName: string) {
+  if (!baseName) return true;
+  const normalizedBase = baseName.toLowerCase();
+  const normalizedApi = apiName.toLowerCase();
+  if (normalizedApi.includes("gemma-4-e2b") && !normalizedBase.includes("gemma-4")) {
+    return true;
+  }
+  return false;
+}
+
+function labKey(row: LeaderboardRow) {
+  const source = `${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.variant_name}`.toLowerCase();
+  if (source.includes("qwen") || source.includes("alibaba")) return "qwen";
+  if (source.includes("gemma") || source.includes("google")) return "google";
+  if (source.includes("llama") || source.includes("meta")) return "meta";
+  if (source.includes("mistral") || source.includes("mixtral")) return "mistral";
+  if (source.includes("deepseek")) return "deepseek";
+  if (source.includes("phi") || source.includes("microsoft")) return "microsoft";
+  if (source.includes("granite") || source.includes("ibm")) return "ibm";
+  if (source.includes("openai") || source.includes("gpt-oss")) return "openai";
+  if (source.includes("cohere") || source.includes("aya")) return "cohere";
+  return slugForAsset(row.family || row.base_model_name || apiModel(row) || row.variant_name);
+}
+
+function labInitials(row: LeaderboardRow) {
+  const label = labKey(row) || row.family || row.base_model_name || "AI";
+  return label.slice(0, 2).toUpperCase();
+}
+
+function slugForAsset(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function quantizationGroupKey(row: LeaderboardRow) {
+  return [
+    formatModelName(row.base_model_name || apiModel(row) || row.variant_name).toLowerCase(),
+    row.family.toLowerCase(),
+    String(row.parameter_size_b),
+  ].join("|");
+}
+
+function quantizationKey(row: LeaderboardRow) {
+  return slugForAsset(quantizationLabel(row) || row.quantization || "default");
+}
+
+function quantizationLabel(row: LeaderboardRow) {
+  const source = `${row.quantization} ${row.variant_name} ${apiModel(row) ?? ""} ${row.file_name ?? ""}`.toLowerCase();
+  if (/\b(?:fp32|f32|32\s*bit|32b)\b/.test(source)) return "32 bit";
+  if (/\b(?:bf16|fp16|f16|16\s*bit|16b)\b/.test(source)) return "16 bit";
+  if (/\b(?:q8|8\s*bit|8b|8bit)\b/.test(source)) return "8 bit";
+  if (/\b(?:q6|6\s*bit|6b|6bit)\b/.test(source)) return "6 bit";
+  if (/\b(?:q5|5\s*bit|5b|5bit)\b/.test(source)) return "5 bit";
+  if (/\b(?:q4|4\s*bit|4b|4bit)\b/.test(source)) return "4 bit";
+  if (row.quantization && row.quantization.toUpperCase() !== "SERVER") {
+    return row.quantization.toUpperCase();
+  }
+  return "Server";
+}
+
+function quantizationRank(row: LeaderboardRow) {
+  const label = quantizationLabel(row).toLowerCase();
+  if (label.includes("32")) return 320;
+  if (label.includes("16")) return 160;
+  if (label.includes("8")) return 80;
+  if (label.includes("6")) return 60;
+  if (label.includes("5")) return 50;
+  if (label.includes("4")) return 40;
+  return 10;
+}
+
+function formatModelName(value: string) {
+  const lastSegment = value.split("/").pop() ?? value;
+  const withoutRunSuffix = lastSegment
+    .replace(/\b(?:ollama|lm studio|omlx|all languages|smoke|mbpp|full|test)\b/gi, " ")
+    .replace(/\breasoning\s+(?:none|off|on|low|medium|high|auto|unset)\b/gi, " ")
+    .replace(/\b(?:mlx|bf16|fp16|fp32|q\d+|gguf|4bit|8bit|it|instruct|chat)\b/gi, " ")
+    .replace(/[:_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const qwen = withoutRunSuffix.match(/\bqwen\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (qwen) return `Qwen ${qwen[1]} ${qwen[2]}B`;
+
+  const gemmaE2b = withoutRunSuffix.match(/\bgemma\s*(\d+(?:\.\d+)?)\s*e\s*2\s*b\b/i);
+  if (gemmaE2b) return `Gemma ${gemmaE2b[1]} E2B`;
+
+  const gemma = withoutRunSuffix.match(/\bgemma\s*(\d+(?:\.\d+)?)?.*?(\d+(?:\.\d+)?)\s*b\b/i);
+  if (gemma) {
+    const version = gemma[1] ? ` ${gemma[1]}` : "";
+    return `Gemma${version} ${gemma[2]}B`;
+  }
+
+  return titleCaseModelName(withoutRunSuffix || value);
+}
+
+function titleCaseModelName(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => {
+      if (/^\d+(?:\.\d+)?b$/i.test(part)) return part.toUpperCase();
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join(" ");
+}
+
+function reasoningLabel(row: LeaderboardRow) {
+  const value = reasoningValue(row);
+  if (value === "none" || value === "off" || value === "false" || value === "0" || value === "unset") {
+    return "Off";
+  }
+  if (value === "on" || value === "true" || value === "1") return "On";
+  return titleCaseModelName(value);
+}
+
+function reasoningKey(row: LeaderboardRow) {
+  const label = reasoningLabel(row).toLowerCase();
+  return label === "off" ? "off" : slugForAsset(label);
+}
+
+function reasoningRank(row: LeaderboardRow) {
+  const key = reasoningKey(row);
+  if (key === "off") return 0;
+  if (key === "low") return 1;
+  if (key === "medium") return 2;
+  if (key === "high") return 3;
+  if (key === "on" || key === "auto") return 4;
+  return 5;
+}
+
+function reasoningValue(row: LeaderboardRow) {
+  const explicit = variantConfigValue(row, "reasoning_effort");
+  if (typeof explicit === "string" && explicit.trim()) {
+    return explicit.trim().toLowerCase();
+  }
+  const variantName = variantConfigValue(row, "name");
+  const source = `${typeof variantName === "string" ? variantName : ""} ${row.variant_name}`;
+  const match = source.match(/\breasoning\s+([a-z0-9_-]+)/i);
+  return match?.[1]?.toLowerCase() ?? "none";
+}
+
 function modalityLabel(row: LeaderboardRow) {
   const explicit = variantConfigValue(row, "modality");
   if (typeof explicit === "string" && explicit.trim().toLowerCase() !== "auto") {
@@ -1240,10 +1841,6 @@ function modalityLabel(row: LeaderboardRow) {
 
   if (hasVisionMetric(row)) return "Multimodal";
   return "Text";
-}
-
-function modalityClass(row: LeaderboardRow) {
-  return modalityLabel(row).toLowerCase().replace(/\s+/g, "-");
 }
 
 function formatModality(value: string) {
@@ -1334,6 +1931,23 @@ function formatPercent(value?: number | null) {
   return value === null || value === undefined || Number.isNaN(value)
     ? "n/a"
     : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatPoints(value?: number | null) {
+  return value === null || value === undefined || Number.isNaN(value)
+    ? "n/a"
+    : `${(value * 100).toFixed(1)} pts`;
+}
+
+function formatSignedPoints(value: number) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${(value * 100).toFixed(1)} pts`;
+}
+
+function deltaClass(value: number) {
+  if (value > 0.00001) return "positive";
+  if (value < -0.00001) return "negative";
+  return "neutral";
 }
 
 function formatDuration(value?: number | null) {

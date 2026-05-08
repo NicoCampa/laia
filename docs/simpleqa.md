@@ -53,6 +53,9 @@ Leaderboard-facing metrics:
   or did not provide the reference answer without contradiction.
 - `simpleqa_accuracy_given_attempted`: correct divided by attempted answers.
 
+SimpleQA is intentionally excluded from `model_intelligence_score` because it
+requires a judge. Treat it as a separate factuality and hallucination diagnostic.
+
 Summary metrics are written to `results/simpleqa/<variant>/summary.json`.
 Per-sample records, including questions, gold answers, raw model outputs, grader
 outputs, runtime, and usage when available, are written to

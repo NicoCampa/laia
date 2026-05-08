@@ -861,7 +861,7 @@ def leaderboard(
     for column in [
         "Model",
         "Backend",
-        "Intel",
+        "Intel pts",
         "Cov.",
         "GMMLU Lite",
         "IFBench",
@@ -882,7 +882,7 @@ def leaderboard(
         table.add_row(
             str(row.get("variant_name") or ""),
             str(row.get("backend_name") or "n/a"),
-            _pct(row.get("model_intelligence_score")),
+            _points(row.get("model_intelligence_score")),
             _pct(row.get("model_intelligence_coverage")),
             _pct(row.get("global_mmlu_lite_pass_at_1")),
             _pct(row.get("ifbench_prompt_level_loose")),
@@ -955,6 +955,12 @@ def _pct(value: object) -> str:
     if value is None:
         return "n/a"
     return f"{float(value) * 100:.1f}%"
+
+
+def _points(value: object) -> str:
+    if value is None:
+        return "n/a"
+    return f"{float(value) * 100:.1f}"
 
 
 def _first_metric_value(*values: object) -> object:

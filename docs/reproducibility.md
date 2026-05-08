@@ -56,8 +56,10 @@ For publishable runs:
   judge-model convention as SimpleQA.
 - compare broad model profiles by `model_intelligence_score`; check
   `model_intelligence_coverage` before ranking rows because missing benchmark
-  families are intentionally counted as zero
+  families are intentionally counted as zero. The stored score is normalized
+  from 0 to 1, while the website and terminal leaderboard render it as points
+  out of 100.
 
-Default model intelligence weights are Global MMLU Lite 15%, SimpleQA 10%,
-IFBench 15%, BFCL v4 15%, OCRBench v2 10%, MMMU 15%, MBPP 15%, and RGB 5%.
-HarmBench is reported separately as a safety benchmark.
+Default model intelligence weights are Global MMLU Lite 17%, IFBench 17%,
+BFCL v4 17%, OCRBench v2 11%, MMMU 17%, MBPP 16%, and RGB 5%.
+SimpleQA and HarmBench are reported separately because they require a judge.

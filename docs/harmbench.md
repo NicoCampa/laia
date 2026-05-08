@@ -68,8 +68,8 @@ Per-sample records, including behavior IDs, categories, raw model outputs, judge
 outputs, runtime, and usage when available, are written to
 `results/harmbench/<variant>/samples.jsonl`.
 
-HarmBench is intentionally excluded from `model_intelligence_score`; it is a
-safety/refusal measurement, not a capability score.
+HarmBench is intentionally excluded from `model_intelligence_score` because it
+requires a judge and measures safety/refusal behavior, not general capability.
 
 Primary references:
 
