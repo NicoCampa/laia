@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import random
 import re
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
@@ -93,6 +94,14 @@ class ScoreBucket:
         return self.score / self.total if self.total else None
 
 
+@dataclass(frozen=True)
+class SampleRef:
+    config_name: str
+    config_order: int
+    dataset: Any
+    index: int
+
+
 class OCRBenchV2Runner:
     def __init__(self, settings: OCRBenchV2Settings):
         self.settings = settings
@@ -137,7 +146,8 @@ class OCRBenchV2Runner:
             )
 
         datasets = self._load_datasets()
-        total_samples = self._planned_sample_count(datasets)
+        selected_samples = select_samples(datasets, self.settings)
+        total_samples = len(selected_samples)
         if progress_callback:
             progress_callback(
                 "dataset_loading_completed",
@@ -165,95 +175,85 @@ class OCRBenchV2Runner:
         sample_scores: list[dict[str, Any]] = []
 
         with samples_path.open("w", encoding="utf-8") as sample_file:
-            for config_name, dataset in datasets:
-                for row_payload in dataset:
-                    if (
-                        self.settings.sample_limit is not None
-                        and completed_samples >= self.settings.sample_limit
-                    ):
-                        break
-                    row = dict(row_payload)
-                    prompt = render_prompt(self.settings.prompt_template, row)
-                    image = _image_payload(row, self.settings.image_format)
-                    response = self.client.generate(
-                        model=model,
-                        prompt=prompt,
-                        temperature=self.settings.temperature,
-                        max_tokens=self.settings.max_tokens,
-                        top_p=self.settings.top_p,
-                        stop=self.settings.stop,
-                        seed=self.settings.seed,
-                        reasoning_effort=self.settings.reasoning_effort,
-                        response_format=self.settings.response_format,
-                        request_extra=self.settings.request_extra,
-                        images=[image],
-                    )
-                    total_runtime += response.runtime_seconds
-                    raw_output = response.text
-                    parsed_output = (
-                        _strip_reasoning(raw_output)
-                        if self.settings.strip_thinking
-                        else raw_output
-                    )
-                    score = score_response(row, parsed_output)
-                    task_type = _task_type(row)
-                    completed_samples += 1
-                    sample_scores.append(
-                        {
-                            "config": config_name,
-                            "type": task_type,
-                            "score": score,
-                        }
-                    )
-
-                    sample_record = {
-                        "dataset": self.settings.dataset_name,
-                        "dataset_revision": self.settings.dataset_revision,
-                        "dataset_config": config_name,
-                        "split": self.settings.split,
-                        "dataset_name": row.get("dataset_name"),
+            for sample_ref in selected_samples:
+                row = dict(sample_ref.dataset[int(sample_ref.index)])
+                prompt = render_prompt(self.settings.prompt_template, row)
+                image = _image_payload(row, self.settings.image_format)
+                response = self.client.generate(
+                    model=model,
+                    prompt=prompt,
+                    temperature=self.settings.temperature,
+                    max_tokens=self.settings.max_tokens,
+                    top_p=self.settings.top_p,
+                    stop=self.settings.stop,
+                    seed=self.settings.seed,
+                    reasoning_effort=self.settings.reasoning_effort,
+                    response_format=self.settings.response_format,
+                    request_extra=self.settings.request_extra,
+                    images=[image],
+                )
+                total_runtime += response.runtime_seconds
+                raw_output = response.text
+                parsed_output = (
+                    _strip_reasoning(raw_output)
+                    if self.settings.strip_thinking
+                    else raw_output
+                )
+                score = score_response(row, parsed_output)
+                task_type = _task_type(row)
+                completed_samples += 1
+                sample_scores.append(
+                    {
+                        "config": sample_ref.config_name,
                         "type": task_type,
-                        "sample_id": row.get("id"),
-                        "image_path": row.get("image_path"),
-                        "question": row.get("question"),
-                        "prompt": prompt,
-                        "answers": _answers(row),
-                        "bbox": row.get("bbox"),
-                        "image_shape": row.get("image_shape"),
-                        "image_count": 1,
-                        "raw_output": raw_output,
-                        "parsed_output": parsed_output,
                         "score": score,
-                        "evaluator": self.settings.evaluator,
-                        "runtime_seconds": response.runtime_seconds,
-                        "usage": response.raw.get("usage"),
-                        "raw_response": response.raw,
                     }
-                    sample_file.write(
-                        json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
-                    )
+                )
 
-                    if progress_callback:
-                        progress_callback(
-                            "task_progress",
-                            {
-                                "task": "ocrbench-v2",
-                                "variant": variant.name,
-                                "language": task_type,
-                                "completed_samples": completed_samples,
-                                "total_samples": total_samples,
-                                "latest_score": score,
-                                "latest_correct": score >= 0.5,
-                                "latest_extracted_answer": f"{score:.2f}",
-                                "latest_runtime_seconds": response.runtime_seconds,
-                                "latest_subject": task_type,
-                            },
-                        )
-                if (
-                    self.settings.sample_limit is not None
-                    and completed_samples >= self.settings.sample_limit
-                ):
-                    break
+                sample_record = {
+                    "dataset": self.settings.dataset_name,
+                    "dataset_revision": self.settings.dataset_revision,
+                    "dataset_config": sample_ref.config_name,
+                    "split": self.settings.split,
+                    "dataset_name": row.get("dataset_name"),
+                    "type": task_type,
+                    "sample_id": row.get("id"),
+                    "sample_index": sample_ref.index,
+                    "image_path": row.get("image_path"),
+                    "question": row.get("question"),
+                    "prompt": prompt,
+                    "answers": _answers(row),
+                    "bbox": row.get("bbox"),
+                    "image_shape": row.get("image_shape"),
+                    "image_count": 1,
+                    "raw_output": raw_output,
+                    "parsed_output": parsed_output,
+                    "score": score,
+                    "evaluator": self.settings.evaluator,
+                    "runtime_seconds": response.runtime_seconds,
+                    "usage": response.raw.get("usage"),
+                    "raw_response": response.raw,
+                }
+                sample_file.write(
+                    json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
+                )
+
+                if progress_callback:
+                    progress_callback(
+                        "task_progress",
+                        {
+                            "task": "ocrbench-v2",
+                            "variant": variant.name,
+                            "language": task_type,
+                            "completed_samples": completed_samples,
+                            "total_samples": total_samples,
+                            "latest_score": score,
+                            "latest_correct": score >= 0.5,
+                            "latest_extracted_answer": f"{score:.2f}",
+                            "latest_runtime_seconds": response.runtime_seconds,
+                            "latest_subject": task_type,
+                        },
+                    )
 
         summary = build_summary(
             settings=self.settings,
@@ -305,12 +305,6 @@ class OCRBenchV2Runner:
             datasets.append((config_name, dataset))
         return datasets
 
-    def _planned_sample_count(self, datasets: list[tuple[str, Any]]) -> int:
-        total = sum(len(dataset) for _, dataset in datasets)
-        if self.settings.sample_limit is None:
-            return total
-        return min(total, self.settings.sample_limit)
-
 
 def render_prompt(template: str, row: dict[str, Any]) -> str:
     return template.format(
@@ -345,6 +339,9 @@ def build_summary(
         "dataset_revision": settings.dataset_revision,
         "split": settings.split,
         "dataset_configs": settings.dataset_configs,
+        "sample_limit": settings.sample_limit,
+        "sample_strategy": settings.sample_strategy,
+        "sample_seed": settings.sample_seed,
         "model": model,
         "provider": settings.provider,
         "base_url": settings.base_url,
@@ -423,6 +420,111 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
                 )
             )
     return metrics
+
+
+def select_samples(
+    datasets: list[tuple[str, Any]],
+    settings: OCRBenchV2Settings,
+) -> list[SampleRef]:
+    total = sum(len(dataset) for _, dataset in datasets)
+    if settings.sample_limit is None or settings.sample_limit >= total:
+        return [
+            SampleRef(config_name, config_order, dataset, index)
+            for config_order, (config_name, dataset) in enumerate(datasets)
+            for index in range(len(dataset))
+        ]
+
+    limit = max(0, int(settings.sample_limit))
+    strategy = (settings.sample_strategy or "stratified").strip().lower()
+    if strategy in {"first", "head"}:
+        return _first_samples(datasets, limit)
+    if strategy not in {"stratified", "balanced", "macro"}:
+        raise RuntimeError(
+            "OCRBench v2 sample_strategy must be one of: stratified, balanced, macro, first."
+        )
+    return _stratified_samples(datasets, limit, seed=settings.sample_seed)
+
+
+def _first_samples(datasets: list[tuple[str, Any]], limit: int) -> list[SampleRef]:
+    selected: list[SampleRef] = []
+    remaining = limit
+    for config_order, (config_name, dataset) in enumerate(datasets):
+        if remaining <= 0:
+            break
+        count = min(len(dataset), remaining)
+        selected.extend(
+            SampleRef(config_name, config_order, dataset, index) for index in range(count)
+        )
+        remaining -= count
+    return selected
+
+
+def _stratified_samples(
+    datasets: list[tuple[str, Any]],
+    limit: int,
+    *,
+    seed: int,
+) -> list[SampleRef]:
+    rng = random.Random(seed)
+    strata: dict[str, list[SampleRef]] = {}
+    for config_order, (config_name, dataset) in enumerate(datasets):
+        task_types = _dataset_task_types(dataset)
+        for index, task_type in enumerate(task_types):
+            key = _score_group_key(config_name, task_type)
+            strata.setdefault(key, []).append(SampleRef(config_name, config_order, dataset, index))
+
+    allocations = _balanced_allocations(strata, limit)
+    selected: list[SampleRef] = []
+    for key, count in allocations.items():
+        candidates = list(strata[key])
+        rng.shuffle(candidates)
+        selected.extend(candidates[:count])
+    return sorted(selected, key=lambda item: (item.config_order, item.index))
+
+
+def _dataset_task_types(dataset: Any) -> list[str]:
+    column_names = set(getattr(dataset, "column_names", []) or [])
+    if "type" in column_names:
+        return [str(value or "unknown") for value in dataset["type"]]
+    if "dataset_name" in column_names:
+        return [str(value or "unknown") for value in dataset["dataset_name"]]
+    return [_task_type(dict(dataset[index])) for index in range(len(dataset))]
+
+
+def _score_group_key(config_name: str, task_type: str) -> str:
+    for group, task_types in EN_GROUPS.items():
+        if task_type in task_types:
+            return f"en:{group}"
+    for group, task_types in CN_GROUPS.items():
+        if task_type in task_types:
+            return f"cn:{group}"
+    return f"{config_name}:{task_type}"
+
+
+def _balanced_allocations(strata: dict[str, list[SampleRef]], limit: int) -> dict[str, int]:
+    if not strata or limit <= 0:
+        return {}
+
+    allocations = {key: 0 for key in strata}
+    remaining = min(limit, sum(len(items) for items in strata.values()))
+    active = set(strata)
+    while active and remaining > 0:
+        quota = max(1, remaining // len(active))
+        progressed = False
+        for key in sorted(active):
+            available = len(strata[key]) - allocations[key]
+            if available <= 0:
+                continue
+            add = min(quota, available, remaining)
+            allocations[key] += add
+            remaining -= add
+            progressed = progressed or add > 0
+            if remaining <= 0:
+                break
+        active = {key for key in active if allocations[key] < len(strata[key])}
+        if not progressed:
+            break
+    return {key: count for key, count in allocations.items() if count}
 
 
 def score_response(row: dict[str, Any], prediction: str) -> float:

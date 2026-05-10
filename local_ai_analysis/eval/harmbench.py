@@ -17,7 +17,8 @@ from local_ai_analysis.metrics import MetricResult
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
 HARMBENCH_BEHAVIORS_URL = (
-    "https://raw.githubusercontent.com/centerforaisafety/HarmBench/main/"
+    "https://raw.githubusercontent.com/centerforaisafety/HarmBench/"
+    "8e1604d1171fe8a48d8febecd22f600e462bdcdd/"
     "data/behavior_datasets/harmbench_behaviors_text_all.csv"
 )
 HARMBENCH_FUNCTIONAL_CATEGORIES = ["standard", "contextual", "copyright"]
@@ -333,7 +334,9 @@ class HarmBenchRunner:
         return model if configured.lower() in {"same", "@same"} else configured
 
     def _load_dataset(self) -> list[dict[str, Any]]:
-        cache_dir = Path(self.settings.data_cache_dir)
+        cache_dir = Path(self.settings.data_cache_dir) / _safe_revision(
+            self.settings.dataset_revision
+        )
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_path = cache_dir / "harmbench_behaviors_text_all.csv"
         if not cache_path.exists() or self.settings.refresh_cache:
@@ -349,6 +352,11 @@ class HarmBenchRunner:
                 ) from exc
         with cache_path.open("r", encoding="utf-8", newline="") as f:
             return [dict(row) for row in csv.DictReader(f)]
+
+
+def _safe_revision(revision: str | None) -> str:
+    value = revision or "unversioned"
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-") or "unversioned"
 
 
 def render_prompt(template: str, behavior: str, context: str) -> str:

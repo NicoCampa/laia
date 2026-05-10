@@ -35,6 +35,13 @@ app = typer.Typer(
 console = Console()
 
 GLOBAL_MMLU_LITE_REVISION = "cbf2f73663ff201d4d56e891c8c2c18467aeea06"
+IFBENCH_REVISION = "2e8a48de45ff3bf41242f927254ca81b59ca3ae2"
+OCRBENCH_V2_REVISION = "458b55b5f62bfd6eba7b5080da34fbc9a68c2626"
+MMMU_REVISION = "4619a102cf5ad2da1abf7e220fde1258d2434cb7"
+MBPP_REVISION = "4bb6404fdc6cacfda99d4ac4205087b89d32030c"
+RGB_REVISION = "65ec39e40e7dc9abb50e9bf1b4f32be3f6f16615"
+SIMPLE_EVALS_REVISION = "652c89d0ca9df547706735883097e9537d40dc47"
+HARMBENCH_REVISION = "8e1604d1171fe8a48d8febecd22f600e462bdcdd"
 GLOBAL_MMLU_LITE_LANGUAGES = [
     "ar",
     "bn",
@@ -71,6 +78,7 @@ Answer:
 BFCL_V4_DEFAULT_CATEGORIES = "single_turn"
 OCRBENCH_V2_DEFAULT_CONFIGS = "EN,CN"
 OCRBENCH_V2_SMOKE_CONFIGS = "text recognition en"
+OCRBENCH_V2_DEFAULT_SAMPLE_LIMIT = 1000
 OCRBENCH_V2_PROMPT = "{question}\nAnswer directly. Do not explain."
 MMMU_DEFAULT_SUBJECTS = "all"
 MMMU_SMOKE_SUBJECTS = "Accounting"
@@ -87,8 +95,8 @@ MBPP_PROMPT = (
     "Your code should pass these tests:\n\n{tests}\n"
     "[BEGIN]\n"
 )
-RGB_DEFAULT_DATASET = "en_refine"
-RGB_DEFAULT_NOISE_RATE = 0.6
+RGB_DEFAULT_DATASET = "suite"
+RGB_DEFAULT_NOISE_RATE = 0.8
 RGB_DEFAULT_PASSAGE_NUM = 5
 RGB_DEFAULT_CORRECT_RATE = 0.0
 SIMPLEQA_DATASET_URL = (
@@ -96,7 +104,7 @@ SIMPLEQA_DATASET_URL = (
 )
 SIMPLEQA_PROMPT = "{question}"
 HARMBENCH_DATASET_URL = (
-    "https://raw.githubusercontent.com/centerforaisafety/HarmBench/main/"
+    f"https://raw.githubusercontent.com/centerforaisafety/HarmBench/{HARMBENCH_REVISION}/"
     "data/behavior_datasets/harmbench_behaviors_text_all.csv"
 )
 HARMBENCH_DEFAULT_CATEGORIES = "standard,contextual"
@@ -242,7 +250,7 @@ def run_ollama_shortcut(
         str,
         typer.Option(
             "--rgb-dataset",
-            help="RGB dataset: en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
+            help="RGB dataset: suite, en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
         ),
     ] = RGB_DEFAULT_DATASET,
     rgb_noise_rate: Annotated[
@@ -453,7 +461,7 @@ def run_lmstudio_shortcut(
         str,
         typer.Option(
             "--rgb-dataset",
-            help="RGB dataset: en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
+            help="RGB dataset: suite, en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
         ),
     ] = RGB_DEFAULT_DATASET,
     rgb_noise_rate: Annotated[
@@ -664,7 +672,7 @@ def run_omlx_shortcut(
         str,
         typer.Option(
             "--rgb-dataset",
-            help="RGB dataset: en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
+            help="RGB dataset: suite, en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
         ),
     ] = RGB_DEFAULT_DATASET,
     rgb_noise_rate: Annotated[
@@ -1079,7 +1087,13 @@ def _write_api_benchmark_config(
             _slug(f"{selected_mbpp_config}-{selected_mbpp_split}")
             if selected_benchmarks == ["mbpp"]
             else (
-                _slug(f"{selected_rgb_dataset}-noise-{rgb_noise_rate}-p{rgb_passage_num}")
+                (
+                    "suite"
+                    if selected_rgb_dataset == "suite"
+                    else _slug(
+                        f"{selected_rgb_dataset}-noise-{rgb_noise_rate}-p{rgb_passage_num}"
+                    )
+                )
                 if selected_benchmarks == ["rgb"]
                 else ("full" if all_languages_selected else _slug("-".join(selected_languages)))
             )
@@ -1133,7 +1147,7 @@ def _write_api_benchmark_config(
     ifbench: dict[str, Any] = {
         "enabled": "ifbench" in selected_benchmarks,
         "dataset_name": "allenai/IFBench_test",
-        "dataset_revision": None,
+        "dataset_revision": IFBENCH_REVISION,
         "split": "train",
         "sample_limit": sample_limit,
         "output_dir": "results/ifbench",
@@ -1141,7 +1155,7 @@ def _write_api_benchmark_config(
         "base_url": base_url,
         "api_key_env": api_key_env,
         "timeout_seconds": 240,
-        "temperature": 0.01,
+        "temperature": 0,
         "max_tokens": max_tokens if max_tokens is not None else 4096,
         "top_p": 0.95,
         "stop": None,
@@ -1178,10 +1192,12 @@ def _write_api_benchmark_config(
     ocrbench_v2: dict[str, Any] = {
         "enabled": "ocrbench-v2" in selected_benchmarks,
         "dataset_name": "morpheushoc/OCRBenchv2",
-        "dataset_revision": None,
+        "dataset_revision": OCRBENCH_V2_REVISION,
         "split": "test",
         "dataset_configs": selected_ocrbench_configs,
-        "sample_limit": sample_limit,
+        "sample_limit": sample_limit if smoke else OCRBENCH_V2_DEFAULT_SAMPLE_LIMIT,
+        "sample_strategy": "stratified",
+        "sample_seed": 42,
         "output_dir": "results/ocrbench_v2",
         "provider": provider_key,
         "base_url": base_url,
@@ -1203,7 +1219,7 @@ def _write_api_benchmark_config(
     mmmu: dict[str, Any] = {
         "enabled": "mmmu" in selected_benchmarks,
         "dataset_name": "MMMU/MMMU",
-        "dataset_revision": None,
+        "dataset_revision": MMMU_REVISION,
         "split": selected_mmmu_split,
         "subjects": selected_mmmu_subjects,
         "sample_limit": sample_limit,
@@ -1230,7 +1246,7 @@ def _write_api_benchmark_config(
         "enabled": "mbpp" in selected_benchmarks,
         "dataset_name": "google-research-datasets/mbpp",
         "dataset_config": selected_mbpp_config,
-        "dataset_revision": None,
+        "dataset_revision": MBPP_REVISION,
         "split": selected_mbpp_split,
         "sample_limit": sample_limit,
         "output_dir": "results/mbpp",
@@ -1256,7 +1272,7 @@ def _write_api_benchmark_config(
     rgb: dict[str, Any] = {
         "enabled": "rgb" in selected_benchmarks,
         "dataset_name": "chen700564/RGB",
-        "dataset_revision": "master",
+        "dataset_revision": RGB_REVISION,
         "dataset": selected_rgb_dataset,
         "sample_limit": sample_limit,
         "output_dir": "results/rgb",
@@ -1274,7 +1290,11 @@ def _write_api_benchmark_config(
         "noise_rate": rgb_noise_rate,
         "passage_num": rgb_passage_num,
         "correct_rate": rgb_correct_rate,
-        "evaluator": "rgb_official_lexical_v1",
+        "evaluator": (
+            "rgb_curated_suite_lexical_v1"
+            if selected_rgb_dataset == "suite"
+            else "rgb_official_lexical_v1"
+        ),
     }
     if resolved_reasoning_effort:
         rgb["reasoning_effort"] = resolved_reasoning_effort
@@ -1283,7 +1303,7 @@ def _write_api_benchmark_config(
         "enabled": "simpleqa" in selected_benchmarks,
         "dataset_name": "openai/simpleqa",
         "dataset_url": SIMPLEQA_DATASET_URL,
-        "dataset_revision": "simple-evals-main",
+        "dataset_revision": SIMPLE_EVALS_REVISION,
         "sample_limit": sample_limit,
         "output_dir": "results/simpleqa",
         "data_cache_dir": "results/simpleqa/cache",
@@ -1325,7 +1345,7 @@ def _write_api_benchmark_config(
         "enabled": "harmbench" in selected_benchmarks,
         "dataset_name": "centerforaisafety/HarmBench",
         "dataset_url": HARMBENCH_DATASET_URL,
-        "dataset_revision": "main",
+        "dataset_revision": HARMBENCH_REVISION,
         "functional_categories": selected_harmbench_categories,
         "sample_limit": sample_limit,
         "output_dir": "results/harmbench",
@@ -1553,6 +1573,8 @@ def _variant_suffix(
     if selected_benchmarks == ["mbpp"]:
         return f"MBPP {selected_mbpp_config} {selected_mbpp_split}"
     if selected_benchmarks == ["rgb"]:
+        if selected_rgb_dataset == "suite":
+            return "RGB Suite"
         return f"RGB {selected_rgb_dataset} noise {rgb_noise_rate:g}"
     if selected_benchmarks == ["simpleqa"]:
         return f"SimpleQA {selected_simpleqa_grader}"
@@ -1627,6 +1649,9 @@ def _parse_mbpp_split(value: str) -> str:
 def _parse_rgb_dataset(value: str) -> str:
     normalized = value.strip().lower().replace("-", "_")
     aliases = {
+        "default": "suite",
+        "curated": "suite",
+        "rgb_suite": "suite",
         "en_noise": "en_refine",
         "zh_noise": "zh_refine",
         "en_rejection": "en_refine",

@@ -6,6 +6,15 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+GLOBAL_MMLU_LITE_REVISION = "cbf2f73663ff201d4d56e891c8c2c18467aeea06"
+IFBENCH_REVISION = "2e8a48de45ff3bf41242f927254ca81b59ca3ae2"
+OCRBENCH_V2_REVISION = "458b55b5f62bfd6eba7b5080da34fbc9a68c2626"
+MMMU_REVISION = "4619a102cf5ad2da1abf7e220fde1258d2434cb7"
+MBPP_REVISION = "4bb6404fdc6cacfda99d4ac4205087b89d32030c"
+RGB_REVISION = "65ec39e40e7dc9abb50e9bf1b4f32be3f6f16615"
+SIMPLE_EVALS_REVISION = "652c89d0ca9df547706735883097e9537d40dc47"
+HARMBENCH_REVISION = "8e1604d1171fe8a48d8febecd22f600e462bdcdd"
+
 
 class RunSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -22,7 +31,7 @@ class GlobalMMLULiteSettings(BaseModel):
 
     enabled: bool = True
     dataset_name: str = "CohereLabs/Global-MMLU-Lite"
-    dataset_revision: str | None = None
+    dataset_revision: str | None = GLOBAL_MMLU_LITE_REVISION
     split: str = "test"
     languages: list[str] = Field(default_factory=lambda: ["en"])
     sample_limit_per_language: int | None = None
@@ -59,7 +68,7 @@ class IFBenchSettings(BaseModel):
 
     enabled: bool = False
     dataset_name: str = "allenai/IFBench_test"
-    dataset_revision: str | None = None
+    dataset_revision: str | None = IFBENCH_REVISION
     split: str = "train"
     sample_limit: int | None = None
     output_dir: str = "results/ifbench"
@@ -68,7 +77,7 @@ class IFBenchSettings(BaseModel):
     api_key: str | None = None
     api_key_env: str | None = None
     timeout_seconds: int = 120
-    temperature: float = 0.01
+    temperature: float = 0.0
     max_tokens: int = 4096
     top_p: float | None = 0.95
     stop: list[str] | None = None
@@ -112,10 +121,12 @@ class OCRBenchV2Settings(BaseModel):
 
     enabled: bool = False
     dataset_name: str = "morpheushoc/OCRBenchv2"
-    dataset_revision: str | None = None
+    dataset_revision: str | None = OCRBENCH_V2_REVISION
     split: str = "test"
     dataset_configs: list[str] = Field(default_factory=lambda: ["EN", "CN"])
-    sample_limit: int | None = None
+    sample_limit: int | None = 1000
+    sample_strategy: str = "stratified"
+    sample_seed: int = 42
     output_dir: str = "results/ocrbench_v2"
     provider: str = "ollama"
     base_url: str = "http://127.0.0.1:11434"
@@ -141,7 +152,7 @@ class MMMUSettings(BaseModel):
 
     enabled: bool = False
     dataset_name: str = "MMMU/MMMU"
-    dataset_revision: str | None = None
+    dataset_revision: str | None = MMMU_REVISION
     split: str = "validation"
     subjects: list[str] = Field(default_factory=list)
     sample_limit: int | None = None
@@ -177,7 +188,7 @@ class MBPPSettings(BaseModel):
     enabled: bool = False
     dataset_name: str = "google-research-datasets/mbpp"
     dataset_config: str = "full"
-    dataset_revision: str | None = None
+    dataset_revision: str | None = MBPP_REVISION
     split: str = "test"
     sample_limit: int | None = None
     output_dir: str = "results/mbpp"
@@ -211,8 +222,8 @@ class RGBSettings(BaseModel):
 
     enabled: bool = False
     dataset_name: str = "chen700564/RGB"
-    dataset_revision: str = "master"
-    dataset: str = "en_refine"
+    dataset_revision: str = RGB_REVISION
+    dataset: str = "suite"
     sample_limit: int | None = None
     output_dir: str = "results/rgb"
     data_cache_dir: str = "results/rgb/cache"
@@ -230,10 +241,10 @@ class RGBSettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
-    noise_rate: float = 0.6
+    noise_rate: float = 0.8
     passage_num: int = 5
     correct_rate: float = 0.0
-    evaluator: str = "rgb_official_lexical_v1"
+    evaluator: str = "rgb_curated_suite_lexical_v1"
     system_prompt_en: str = (
         "You are an accurate and reliable AI assistant that can answer questions with "
         "the help of external documents. Please note that external documents may "
@@ -263,7 +274,7 @@ class SimpleQASettings(BaseModel):
     dataset_url: str = (
         "https://openaipublic.blob.core.windows.net/simple-evals/simple_qa_test_set.csv"
     )
-    dataset_revision: str | None = "simple-evals-main"
+    dataset_revision: str | None = SIMPLE_EVALS_REVISION
     sample_limit: int | None = None
     output_dir: str = "results/simpleqa"
     data_cache_dir: str = "results/simpleqa/cache"
@@ -308,10 +319,10 @@ class HarmBenchSettings(BaseModel):
     enabled: bool = False
     dataset_name: str = "centerforaisafety/HarmBench"
     dataset_url: str = (
-        "https://raw.githubusercontent.com/centerforaisafety/HarmBench/main/"
-        "data/behavior_datasets/harmbench_behaviors_text_all.csv"
+        "https://raw.githubusercontent.com/centerforaisafety/HarmBench/"
+        f"{HARMBENCH_REVISION}/data/behavior_datasets/harmbench_behaviors_text_all.csv"
     )
-    dataset_revision: str | None = "main"
+    dataset_revision: str | None = HARMBENCH_REVISION
     functional_categories: list[str] = Field(
         default_factory=lambda: ["standard", "contextual"]
     )

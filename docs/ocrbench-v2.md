@@ -16,11 +16,19 @@ laia lmstudio exact-vision-model-id --benchmark ocrbench --smoke
 laia omlx exact-vision-model-id --benchmark ocrbench --smoke
 ```
 
-Full OCRBench v2 uses the official English and Chinese aggregate configs:
+Default full OCRBench v2 uses the official English and Chinese aggregate configs,
+but samples a deterministic 1,000-example subset instead of all 10,000 examples:
 
 ```bash
 laia omlx exact-vision-model-id --benchmark ocrbench --ocrbench-configs EN,CN
 ```
+
+The subset is stratified across the leaderboard-facing English and Chinese task
+groups with `sample_strategy=stratified` and `sample_seed=42`. This keeps the run
+much lighter while preserving coverage of OCR recognition, document parsing,
+visual text understanding, knowledge reasoning, and Chinese tasks. Set
+`ocrbench_v2.sample_limit: null` in an advanced config when you intentionally want
+the full 10,000-example OCRBench v2 run.
 
 Run only one subset:
 

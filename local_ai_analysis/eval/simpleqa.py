@@ -344,7 +344,9 @@ class SimpleQARunner:
         return model if configured.lower() in {"same", "@same"} else configured
 
     def _load_dataset(self) -> list[dict[str, Any]]:
-        cache_dir = Path(self.settings.data_cache_dir)
+        cache_dir = Path(self.settings.data_cache_dir) / _safe_revision(
+            self.settings.dataset_revision
+        )
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_path = cache_dir / "simple_qa_test_set.csv"
         if not cache_path.exists() or self.settings.refresh_cache:
@@ -360,6 +362,11 @@ class SimpleQARunner:
                 ) from exc
         with cache_path.open("r", encoding="utf-8", newline="") as f:
             return [dict(row) for row in csv.DictReader(f)]
+
+
+def _safe_revision(revision: str | None) -> str:
+    value = revision or "unversioned"
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-") or "unversioned"
 
 
 def render_prompt(template: str, question: str) -> str:

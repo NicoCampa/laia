@@ -1,20 +1,13 @@
 import {
   ArrowUpRight,
   CheckCircle2,
-  Clock3,
   Cpu,
-  Database,
-  FileJson,
-  Info,
   Lightbulb,
   LightbulbOff,
   ListFilter,
   RotateCcw,
-  Scale,
   Search,
-  Server,
   ShieldCheck,
-  SlidersHorizontal,
   X,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -33,6 +26,7 @@ type LeaderboardRow = {
   model_repo?: string | null;
   file_name?: string | null;
   checksum_sha256?: string | null;
+  file_size_bytes?: number | null;
   is_baseline?: boolean;
   backend_name?: string | null;
   backend_version?: string | null;
@@ -96,10 +90,7 @@ type Filters = {
   query: string;
   family: string;
   parameterSize: string;
-  backend: string;
-  hardware: string;
-  minQuality: string;
-  maxRuntimeMinutes: string;
+  maxModelSizeGb: string;
 };
 
 type QuantizationOption = {
@@ -154,10 +145,7 @@ const emptyFilters: Filters = {
   query: "",
   family: "all",
   parameterSize: "all",
-  backend: "all",
-  hardware: "all",
-  minQuality: "",
-  maxRuntimeMinutes: "",
+  maxModelSizeGb: "",
 };
 
 export function App() {
@@ -168,6 +156,7 @@ export function App() {
   const [selectedReasoning, setSelectedReasoning] = useState<Record<string, string>>({});
   const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
   const [drawerRow, setDrawerRow] = useState<LeaderboardRow | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadPayload()
@@ -190,11 +179,7 @@ export function App() {
   const activeRow =
     rankedRows.find((row) => row.variant_id === activeVariantId) ?? rankedRows[0] ?? null;
   const options = useMemo(() => optionSets(publishableRows), [publishableRows]);
-  const hiddenSyntheticCount = rawRows.length - realRows.length;
-  const hiddenSmokeCount = realRows.length - publishableRows.length;
   const bestQuality = bestRow(publishableRows, qualityValue);
-  const fastestRun = minRow(publishableRows, (row) => row.benchmark_runtime_seconds);
-  const topBackend = mostCommon(publishableRows.map((row) => row.backend_name ?? "unknown"));
   const handleSelectQuantization = (
     groupKey: string,
     quantizationKey: string,
@@ -237,11 +222,11 @@ export function App() {
 
       <section className="console-hero" id="overview">
         <div className="title-stack">
-          <p className="eyebrow">Local benchmark console</p>
-          <h1>Local AI Analysis</h1>
+          <p className="eyebrow">Local model ranking</p>
+          <h1>Local AI Leaderboard</h1>
           <p>
-            Reproducible benchmark runs for local models served through Ollama, LM Studio,
-            and oMLX. Smoke checks stay out of the public ranking.
+            Compare local models by LAIA Index, speed, tool use, coding, vision, RAG,
+            factuality, and safety.
           </p>
         </div>
 
@@ -253,7 +238,7 @@ export function App() {
           <strong>{bestQuality ? displayModelName(bestQuality) : "No publishable result"}</strong>
           <dl>
             <div>
-              <dt>Score</dt>
+              <dt>LAIA Index</dt>
               <dd>{formatQualityScore(bestQuality)}</dd>
             </div>
             <div>
@@ -264,59 +249,32 @@ export function App() {
         </div>
       </section>
 
-      <section className="metric-strip" aria-label="Benchmark status">
-        <MetricCell
-          label="Publishable Rows"
-          value={String(publishableRows.length)}
-          detail={`${hiddenSyntheticCount + hiddenSmokeCount} hidden`}
-          icon={<Database size={18} />}
-        />
-        <MetricCell
-          label="Top Score"
-          value={formatQualityScore(bestQuality)}
-          detail={bestQuality ? protocolLabel(bestQuality) : "No score"}
-          icon={<Scale size={18} />}
-        />
-        <MetricCell
-          label="Fastest Full Run"
-          value={formatDuration(fastestRun?.benchmark_runtime_seconds)}
-          detail={fastestRun ? displayModelName(fastestRun) : "n/a"}
-          icon={<Clock3 size={18} />}
-        />
-        <MetricCell
-          label="Primary Backend"
-          value={topBackend ?? "n/a"}
-          detail={`${countUnique(publishableRows, "backend_name")} backend(s)`}
-          icon={<Server size={18} />}
-        />
-      </section>
-
       <section className="workspace-grid" id="leaderboard">
         <section className="leaderboard-panel" aria-labelledby="leaderboard-title">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Leaderboard</p>
-              <h2 id="leaderboard-title">Real benchmark results</h2>
+              <h2 id="leaderboard-title">Capability leaderboard</h2>
             </div>
-            <span className="row-count">
-              {rankedRows.length} of {publishableRows.length}
-            </span>
+            <button className="text-button" type="button" onClick={() => setShowFilters(!showFilters)}>
+              <ListFilter size={15} aria-hidden="true" />
+              {showFilters ? "Hide filters" : "Show filters"}
+            </button>
           </div>
 
-          <FilterPanel
-            filters={filters}
-            options={options}
-            hiddenSyntheticCount={hiddenSyntheticCount}
-            hiddenSmokeCount={hiddenSmokeCount}
-            onChange={setFilters}
-            onReset={() => setFilters(emptyFilters)}
-          />
+          {showFilters && (
+            <FilterPanel
+              filters={filters}
+              options={options}
+              onChange={setFilters}
+              onReset={() => setFilters(emptyFilters)}
+            />
+          )}
 
           <LeaderboardTable
             rows={rankedRows}
             activeVariantId={activeRow?.variant_id}
             onActivate={setActiveVariantId}
-            onOpenRaw={setDrawerRow}
             onSelectQuantization={handleSelectQuantization}
             onSelectReasoning={handleSelectReasoning}
           />
@@ -325,13 +283,7 @@ export function App() {
 
       <section className="analysis-grid" id="analysis">
         <SelectedRunPanel row={activeRow} onOpenRaw={setDrawerRow} />
-        <MetricCoveragePanel rows={publishableRows} />
-        <DataStatusPanel
-          generatedAt={payload.generated_at}
-          hiddenSyntheticCount={hiddenSyntheticCount}
-          hiddenSmokeCount={hiddenSmokeCount}
-          totalRows={rawRows.length}
-        />
+        <CapabilityBreakdownPanel row={activeRow} />
       </section>
 
       <section className="methodology-band" id="methodology">
@@ -342,18 +294,18 @@ export function App() {
         <div className="method-rows">
           <MethodRow
             icon={<CheckCircle2 size={18} />}
-            title="Quality"
-            text="Global MMLU Lite, IFBench, BFCL v4, OCRBench v2, MMMU, MBPP, and RGB are the publishable quality protocols for the current workflow."
+            title="Capability"
+            text="Knowledge, instructions, tool calling, coding, vision, OCR, and RAG feed the LAIA Index."
           />
           <MethodRow
             icon={<Cpu size={18} />}
-            title="Runtime"
-            text="Runtime, backend, hardware, model IDs, and raw run metadata stay attached to each row."
+            title="Traceability"
+            text="Exact benchmark names, runtime, backend, hardware, model IDs, and raw metadata stay attached to each row."
           />
           <MethodRow
             icon={<ShieldCheck size={18} />}
-            title="Publishing"
-            text="The website only renders full, publishable rows in the public leaderboard."
+            title="Judged checks"
+            text="Factuality and safety are reported separately because they require judge-based evaluation."
           />
         </div>
       </section>
@@ -377,7 +329,7 @@ function SiteHeader({ generatedAt }: { generatedAt: string }) {
       </a>
       <nav aria-label="Primary navigation">
         <a href="#leaderboard">Leaderboard</a>
-        <a href="#analysis">Analysis</a>
+        <a href="#analysis">Details</a>
         <a href="#methodology">Methodology</a>
       </nav>
       <time dateTime={generatedAt}>Updated {formatDate(generatedAt)}</time>
@@ -385,60 +337,27 @@ function SiteHeader({ generatedAt }: { generatedAt: string }) {
   );
 }
 
-function MetricCell({
-  label,
-  value,
-  detail,
-  icon,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="metric-cell">
-      <span className="metric-icon">{icon}</span>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{detail}</small>
-    </div>
-  );
-}
-
 function FilterPanel({
   filters,
   options,
-  hiddenSyntheticCount,
-  hiddenSmokeCount,
   onChange,
   onReset,
 }: {
   filters: Filters;
   options: ReturnType<typeof optionSets>;
-  hiddenSyntheticCount: number;
-  hiddenSmokeCount: number;
   onChange: (filters: Filters) => void;
   onReset: () => void;
 }) {
   return (
     <div className="filter-panel" aria-label="Leaderboard controls">
-      <div className="filter-heading">
-        <div>
-          <p className="eyebrow">Controls</p>
-          <h2>Filter runs</h2>
-        </div>
-        <ListFilter size={18} aria-hidden="true" />
-      </div>
-
       <label className="search-field">
-        <span>Search</span>
+        <span>Text</span>
         <div>
           <Search size={16} aria-hidden="true" />
           <input
             type="search"
             value={filters.query}
-            placeholder="Model, family, backend"
+            placeholder="Model, family, quantization"
             onChange={(event) => onChange({ ...filters, query: event.target.value })}
           />
         </div>
@@ -452,32 +371,15 @@ function FilterPanel({
           onChange={(family) => onChange({ ...filters, family })}
         />
         <Select
-          label="Parameters"
+          label="Size"
           value={filters.parameterSize}
           options={options.parameterSizes}
           onChange={(parameterSize) => onChange({ ...filters, parameterSize })}
         />
-        <Select
-          label="Backend"
-          value={filters.backend}
-          options={options.backends}
-          onChange={(backend) => onChange({ ...filters, backend })}
-        />
-        <Select
-          label="Hardware"
-          value={filters.hardware}
-          options={options.hardware}
-          onChange={(hardware) => onChange({ ...filters, hardware })}
-        />
         <NumberInput
-          label="Min quality %"
-          value={filters.minQuality}
-          onChange={(minQuality) => onChange({ ...filters, minQuality })}
-        />
-        <NumberInput
-          label="Max runtime min"
-          value={filters.maxRuntimeMinutes}
-          onChange={(maxRuntimeMinutes) => onChange({ ...filters, maxRuntimeMinutes })}
+          label="Max GB"
+          value={filters.maxModelSizeGb}
+          onChange={(maxModelSizeGb) => onChange({ ...filters, maxModelSizeGb })}
         />
       </div>
 
@@ -486,13 +388,6 @@ function FilterPanel({
         Reset filters
       </button>
 
-      <div className="filter-note">
-        <SlidersHorizontal size={16} aria-hidden="true" />
-        <span>
-          Hidden from public view: {hiddenSyntheticCount} non-publishable row(s),{" "}
-          {hiddenSmokeCount} smoke run(s).
-        </span>
-      </div>
     </div>
   );
 }
@@ -550,19 +445,17 @@ function LeaderboardTable({
   rows,
   activeVariantId,
   onActivate,
-  onOpenRaw,
   onSelectQuantization,
   onSelectReasoning,
 }: {
   rows: ComparableRow[];
   activeVariantId?: string;
   onActivate: (variantId: string) => void;
-  onOpenRaw: (row: LeaderboardRow) => void;
   onSelectQuantization: (groupKey: string, quantizationKey: string, variantId: string) => void;
   onSelectReasoning: (groupKey: string, reasoningKey: string, variantId: string) => void;
 }) {
   const metricColumns = metricColumnsFor(rows);
-  const columnCount = 3 + metricColumns.length;
+  const columnCount = 2 + metricColumns.length;
 
   return (
     <div className="table-shell">
@@ -576,7 +469,6 @@ function LeaderboardTable({
                 {column.label}
               </th>
             ))}
-            <th className="action-heading">Raw</th>
           </tr>
         </thead>
         <tbody>
@@ -621,19 +513,6 @@ function LeaderboardTable({
                   {column.render(row)}
                 </td>
               ))}
-              <td className="action-cell">
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label={`Open raw metadata for ${row.variant_name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenRaw(row);
-                  }}
-                >
-                  <FileJson size={16} aria-hidden="true" />
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>
@@ -828,11 +707,12 @@ function SelectedRunPanel({
 
       <dl className="detail-list">
         <DetailItem label="Runtime" value={formatDuration(row.benchmark_runtime_seconds)} />
+        <DetailItem label="Model size" value={formatModelSize(row)} />
         <DetailItem label="Quantization" value={quantizationLabel(row)} />
         <DetailItem label="Reasoning" value={reasoningLabel(row)} />
         <DetailItem label="Modality" value={modalityLabel(row)} />
         <DetailItem label="Suite coverage" value={formatPercent(row.model_intelligence_coverage)} />
-        <DetailItem label="Secondary score" value={formatSecondaryScore(row)} />
+        <DetailItem label="Available index" value={formatSecondaryScore(row)} />
         <DetailItem label="Backend" value={row.backend_name ?? "unknown"} />
         <DetailItem label="API model" value={apiModel(row) ?? row.base_model_name} />
         <DetailItem label="Run label" value={row.variant_name} />
@@ -865,67 +745,27 @@ function ScoreComparison({ row }: { row: ComparableRow }) {
   );
 }
 
-function MetricCoveragePanel({ rows }: { rows: LeaderboardRow[] }) {
-  const metrics = [
-    ["GMMLU Lite", hasMetric(rows, "global_mmlu_lite_pass_at_1")],
-    ["IFBench", hasMetric(rows, "ifbench_prompt_level_loose")],
-    ["BFCL v4", hasMetric(rows, "bfcl_v4_selected_accuracy")],
-    ["OCRBench v2", hasMetric(rows, "ocrbench_v2_score")],
-    ["MMMU", hasMetric(rows, "mmmu_accuracy")],
-    ["MBPP", hasMetric(rows, "mbpp_pass_at_1")],
-    ["RGB", hasMetric(rows, "rgb_all_rate")],
-    ["SimpleQA", hasMetric(rows, "simpleqa_f1")],
-    ["HarmBench", hasMetric(rows, "harmbench_refusal_rate")],
-    ["Intelligence score", hasMetric(rows, "model_intelligence_score")],
-    ["Micro average", hasMetric(rows, "global_mmlu_lite_micro_pass_at_1")],
-    ["Invalid rate", hasMetric(rows, "global_mmlu_lite_invalid_rate")],
-    ["Runtime", hasMetric(rows, "benchmark_runtime_seconds")],
-  ] as const;
-
+function CapabilityBreakdownPanel({ row }: { row: ComparableRow | null }) {
   return (
-    <section className="analysis-panel" aria-labelledby="coverage-title">
+    <section className="analysis-panel capability-panel" aria-labelledby="capability-title">
       <div className="analysis-heading">
-        <p className="eyebrow">Metrics</p>
-        <h2 id="coverage-title">Available fields</h2>
+        <p className="eyebrow">Breakdown</p>
+        <h2 id="capability-title">Capability profile</h2>
       </div>
-      <div className="coverage-grid">
-        {metrics.map(([label, available]) => (
-          <span className={available ? "coverage-pill available" : "coverage-pill"} key={label}>
-            {available ? <CheckCircle2 size={14} /> : <Info size={14} />}
-            {label}
-          </span>
+      <div className="capability-list">
+        {capabilityRows(row).map((capability) => (
+          <div className="capability-row" key={capability.label}>
+            <div>
+              <strong>{capability.label}</strong>
+              <span>{capability.source}</span>
+            </div>
+            <div className="capability-meter" aria-hidden="true">
+              <span style={{ width: capability.value === null ? "0%" : `${capability.value * 100}%` }} />
+            </div>
+            <em>{formatPercent(capability.value)}</em>
+          </div>
         ))}
       </div>
-      <p className="muted">
-        The website only surfaces metrics produced by the current API benchmark path.
-      </p>
-    </section>
-  );
-}
-
-function DataStatusPanel({
-  generatedAt,
-  hiddenSyntheticCount,
-  hiddenSmokeCount,
-  totalRows,
-}: {
-  generatedAt: string;
-  hiddenSyntheticCount: number;
-  hiddenSmokeCount: number;
-  totalRows: number;
-}) {
-  return (
-    <section className="analysis-panel" aria-labelledby="data-status-title">
-      <div className="analysis-heading">
-        <p className="eyebrow">Data Status</p>
-        <h2 id="data-status-title">Website export</h2>
-      </div>
-      <dl className="detail-list">
-        <DetailItem label="Exported" value={formatDateTime(generatedAt)} />
-        <DetailItem label="Total rows" value={String(totalRows)} />
-        <DetailItem label="Non-publishable rows hidden" value={String(hiddenSyntheticCount)} />
-        <DetailItem label="Smoke runs hidden" value={String(hiddenSmokeCount)} />
-      </dl>
     </section>
   );
 }
@@ -979,6 +819,8 @@ function MetadataDrawer({ row, onClose }: { row: LeaderboardRow; onClose: () => 
     model_repo: row.model_repo,
     file_name: row.file_name,
     checksum_sha256: row.checksum_sha256,
+    file_size_bytes: row.file_size_bytes,
+    model_size_display: formatModelSize(row),
     quantization: row.quantization,
     backend: {
       name: row.backend_name,
@@ -1072,8 +914,7 @@ async function loadPayload(): Promise<Payload> {
 
 function applyFilters(rows: LeaderboardRow[], filters: Filters) {
   const query = filters.query.trim().toLowerCase();
-  const minQuality = parseNumber(filters.minQuality);
-  const maxRuntimeSeconds = parseNumber(filters.maxRuntimeMinutes);
+  const maxModelSizeGb = parseNumber(filters.maxModelSizeGb);
 
   return rows.filter((row) => {
     const searchable = [
@@ -1082,23 +923,19 @@ function applyFilters(rows: LeaderboardRow[], filters: Filters) {
       row.family,
       row.quantization,
       quantizationLabel(row),
-      row.backend_name,
-      row.hardware_accelerator,
+      formatParameter(row.parameter_size_b),
+      formatModelSize(row),
     ]
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
+    const sizeGb = modelSizeGb(row);
 
     return (
       (!query || searchable.includes(query)) &&
       (filters.family === "all" || row.family === filters.family) &&
       (filters.parameterSize === "all" || String(row.parameter_size_b) === filters.parameterSize) &&
-      (filters.backend === "all" || (row.backend_name ?? "unknown") === filters.backend) &&
-      (filters.hardware === "all" ||
-        (row.hardware_accelerator ?? "unknown") === filters.hardware) &&
-      (minQuality === null || meetsMinimum(qualityValue(row), minQuality / 100)) &&
-      (maxRuntimeSeconds === null ||
-        meetsMaximum(row.benchmark_runtime_seconds, maxRuntimeSeconds * 60))
+      (maxModelSizeGb === null || meetsMaximum(sizeGb, maxModelSizeGb))
     );
   });
 }
@@ -1107,8 +944,6 @@ function optionSets(rows: LeaderboardRow[]) {
   return {
     families: unique(rows.map((row) => row.family)),
     parameterSizes: unique(rows.map((row) => String(row.parameter_size_b))),
-    backends: unique(rows.map((row) => row.backend_name ?? "unknown")),
-    hardware: unique(rows.map((row) => row.hardware_accelerator ?? "unknown")),
   };
 }
 
@@ -1291,25 +1126,24 @@ function scoreBaselineFor(rows: LeaderboardRow[], baselineQuantizationKey: strin
 function metricColumnsFor(rows: LeaderboardRow[]): MetricColumn[] {
   const columns: MetricColumn[] = [];
 
+  columns.push({
+    key: "model_size_gb",
+    label: "GB",
+    render: (row) => formatModelSize(row),
+  });
+
   if (hasMetric(rows, "model_intelligence_score")) {
     columns.push({
       key: "model_intelligence_score",
-      label: "Intel. pts",
+      label: "LAIA Index",
       render: (row) => <PointsWithDelta row={row} />,
       primary: true,
-    });
-  }
-  if (hasMetric(rows, "model_intelligence_coverage")) {
-    columns.push({
-      key: "model_intelligence_coverage",
-      label: "Coverage",
-      render: (row) => formatPercent(row.model_intelligence_coverage),
     });
   }
   if (hasMetric(rows, "global_mmlu_lite_pass_at_1")) {
     columns.push({
       key: "global_mmlu_lite_pass_at_1",
-      label: "GMMLU Lite",
+      label: "Knowledge",
       render: (row) => formatPercent(row.global_mmlu_lite_pass_at_1),
       primary: !hasMetric(rows, "model_intelligence_score"),
     });
@@ -1317,133 +1151,69 @@ function metricColumnsFor(rows: LeaderboardRow[]): MetricColumn[] {
   if (hasMetric(rows, "ifbench_prompt_level_loose")) {
     columns.push({
       key: "ifbench_prompt_level_loose",
-      label: "IFBench",
+      label: "Instructions",
       render: (row) => formatPercent(row.ifbench_prompt_level_loose),
       primary: !hasMetric(rows, "global_mmlu_lite_pass_at_1"),
-    });
-  }
-  if (hasMetric(rows, "ifbench_instruction_level_loose")) {
-    columns.push({
-      key: "ifbench_instruction_level_loose",
-      label: "IF Inst.",
-      render: (row) => formatPercent(row.ifbench_instruction_level_loose),
     });
   }
   if (hasMetric(rows, "bfcl_v4_selected_accuracy")) {
     columns.push({
       key: "bfcl_v4_selected_accuracy",
-      label: "BFCL v4",
+      label: "Tool calling",
       render: (row) => formatPercent(row.bfcl_v4_selected_accuracy),
       primary:
         !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
         !hasMetric(rows, "ifbench_prompt_level_loose"),
     });
   }
-  if (hasMetric(rows, "bfcl_v4_invalid_rate")) {
+  if (hasAnyMetric(rows, ["mmmu_accuracy", "ocrbench_v2_score"])) {
     columns.push({
-      key: "bfcl_v4_invalid_rate",
-      label: "BFCL Invalid",
-      render: (row) => formatPercent(row.bfcl_v4_invalid_rate),
-    });
-  }
-  if (hasMetric(rows, "ocrbench_v2_score")) {
-    columns.push({
-      key: "ocrbench_v2_score",
-      label: "OCRBench v2",
-      render: (row) => formatPercent(row.ocrbench_v2_score),
+      key: "vision",
+      label: "Vision",
+      render: (row) => formatPercent(averageMetric(row, ["mmmu_accuracy", "ocrbench_v2_score"])),
       primary:
         !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
         !hasMetric(rows, "ifbench_prompt_level_loose") &&
         !hasMetric(rows, "bfcl_v4_selected_accuracy"),
     });
   }
-  if (hasMetric(rows, "ocrbench_v2_micro_score")) {
-    columns.push({
-      key: "ocrbench_v2_micro_score",
-      label: "OCR Micro",
-      render: (row) => formatPercent(row.ocrbench_v2_micro_score),
-    });
-  }
-  if (hasMetric(rows, "mmmu_accuracy")) {
-    columns.push({
-      key: "mmmu_accuracy",
-      label: "MMMU",
-      render: (row) => formatPercent(row.mmmu_accuracy),
-      primary:
-        !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
-        !hasMetric(rows, "ifbench_prompt_level_loose") &&
-        !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
-        !hasMetric(rows, "ocrbench_v2_score"),
-    });
-  }
-  if (hasMetric(rows, "mmmu_invalid_rate")) {
-    columns.push({
-      key: "mmmu_invalid_rate",
-      label: "MMMU Invalid",
-      render: (row) => formatPercent(row.mmmu_invalid_rate),
-    });
-  }
   if (hasMetric(rows, "mbpp_pass_at_1")) {
     columns.push({
       key: "mbpp_pass_at_1",
-      label: "MBPP",
+      label: "Coding",
       render: (row) => formatPercent(row.mbpp_pass_at_1),
       primary:
         !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
         !hasMetric(rows, "ifbench_prompt_level_loose") &&
         !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
-        !hasMetric(rows, "ocrbench_v2_score") &&
-        !hasMetric(rows, "mmmu_accuracy"),
-    });
-  }
-  if (hasMetric(rows, "mbpp_invalid_rate")) {
-    columns.push({
-      key: "mbpp_invalid_rate",
-      label: "MBPP Invalid",
-      render: (row) => formatPercent(row.mbpp_invalid_rate),
+        !hasAnyMetric(rows, ["mmmu_accuracy", "ocrbench_v2_score"]),
     });
   }
   if (hasMetric(rows, "rgb_all_rate")) {
     columns.push({
       key: "rgb_all_rate",
-      label: "RGB",
+      label: "RAG",
       render: (row) => formatPercent(row.rgb_all_rate),
       primary:
         !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
         !hasMetric(rows, "ifbench_prompt_level_loose") &&
         !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
-        !hasMetric(rows, "ocrbench_v2_score") &&
-        !hasMetric(rows, "mmmu_accuracy") &&
+        !hasAnyMetric(rows, ["mmmu_accuracy", "ocrbench_v2_score"]) &&
         !hasMetric(rows, "mbpp_pass_at_1"),
-    });
-  }
-  if (hasMetric(rows, "rgb_rejection_rate")) {
-    columns.push({
-      key: "rgb_rejection_rate",
-      label: "RGB Rej.",
-      render: (row) => formatPercent(row.rgb_rejection_rate),
     });
   }
   if (hasMetric(rows, "simpleqa_f1")) {
     columns.push({
       key: "simpleqa_f1",
-      label: "SimpleQA",
+      label: "Factuality",
       render: (row) => formatPercent(row.simpleqa_f1),
       primary:
         !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
         !hasMetric(rows, "ifbench_prompt_level_loose") &&
         !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
-        !hasMetric(rows, "ocrbench_v2_score") &&
-        !hasMetric(rows, "mmmu_accuracy") &&
+        !hasAnyMetric(rows, ["mmmu_accuracy", "ocrbench_v2_score"]) &&
         !hasMetric(rows, "mbpp_pass_at_1") &&
         !hasMetric(rows, "rgb_all_rate"),
-    });
-  }
-  if (hasMetric(rows, "simpleqa_hallucination_rate")) {
-    columns.push({
-      key: "simpleqa_hallucination_rate",
-      label: "SQA Wrong",
-      render: (row) => formatPercent(row.simpleqa_hallucination_rate),
     });
   }
   if (hasMetric(rows, "harmbench_refusal_rate")) {
@@ -1455,42 +1225,12 @@ function metricColumnsFor(rows: LeaderboardRow[]): MetricColumn[] {
         !hasMetric(rows, "global_mmlu_lite_pass_at_1") &&
         !hasMetric(rows, "ifbench_prompt_level_loose") &&
         !hasMetric(rows, "bfcl_v4_selected_accuracy") &&
-        !hasMetric(rows, "ocrbench_v2_score") &&
-        !hasMetric(rows, "mmmu_accuracy") &&
+        !hasAnyMetric(rows, ["mmmu_accuracy", "ocrbench_v2_score"]) &&
         !hasMetric(rows, "mbpp_pass_at_1") &&
         !hasMetric(rows, "rgb_all_rate") &&
         !hasMetric(rows, "simpleqa_f1"),
     });
   }
-  if (hasMetric(rows, "harmbench_attack_success_rate")) {
-    columns.push({
-      key: "harmbench_attack_success_rate",
-      label: "Harm ASR",
-      render: (row) => formatPercent(row.harmbench_attack_success_rate),
-    });
-  }
-  if (hasMetric(rows, "global_mmlu_lite_micro_pass_at_1")) {
-    columns.push({
-      key: "global_mmlu_lite_micro_pass_at_1",
-      label: "Micro",
-      render: (row) => formatPercent(row.global_mmlu_lite_micro_pass_at_1),
-    });
-  }
-  if (hasMetric(rows, "global_mmlu_lite_invalid_rate")) {
-    columns.push({
-      key: "global_mmlu_lite_invalid_rate",
-      label: "Invalid",
-      render: (row) => formatPercent(row.global_mmlu_lite_invalid_rate),
-    });
-  }
-  if (hasMetric(rows, "benchmark_runtime_seconds")) {
-    columns.push({
-      key: "benchmark_runtime_seconds",
-      label: "Runtime",
-      render: (row) => formatDuration(row.benchmark_runtime_seconds),
-    });
-  }
-
   return columns;
 }
 
@@ -1535,15 +1275,6 @@ function bestRow(rows: LeaderboardRow[], selector: (row: LeaderboardRow) => numb
   }, null);
 }
 
-function minRow(rows: LeaderboardRow[], selector: (row: LeaderboardRow) => number | null | undefined) {
-  return rows.reduce<LeaderboardRow | null>((best, row) => {
-    const value = numeric(selector(row));
-    if (value === null) return best;
-    if (!best || value < (numeric(selector(best)) ?? Number.POSITIVE_INFINITY)) return row;
-    return best;
-  }, null);
-}
-
 function numeric(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
@@ -1569,6 +1300,68 @@ function rowIdentity(row: LeaderboardRow) {
 
 function hasMetric(rows: LeaderboardRow[], key: keyof LeaderboardRow) {
   return rows.some((row) => numeric(row[key]) !== null);
+}
+
+function hasAnyMetric(rows: LeaderboardRow[], keys: Array<keyof LeaderboardRow>) {
+  return keys.some((key) => hasMetric(rows, key));
+}
+
+function averageMetric(row: LeaderboardRow, keys: Array<keyof LeaderboardRow>) {
+  const values = keys
+    .map((key) => numeric(row[key]))
+    .filter((value): value is number => value !== null);
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function capabilityRows(row: LeaderboardRow | null) {
+  return [
+    {
+      label: "Knowledge",
+      source: "Global MMLU Lite",
+      value: row ? numeric(row.global_mmlu_lite_pass_at_1) : null,
+    },
+    {
+      label: "Instructions",
+      source: "IFBench",
+      value: row ? numeric(row.ifbench_prompt_level_loose) : null,
+    },
+    {
+      label: "Tool calling",
+      source: "BFCL v4",
+      value: row ? numeric(row.bfcl_v4_selected_accuracy) : null,
+    },
+    {
+      label: "Vision reasoning",
+      source: "MMMU",
+      value: row ? numeric(row.mmmu_accuracy) : null,
+    },
+    {
+      label: "OCR",
+      source: "OCRBench v2",
+      value: row ? numeric(row.ocrbench_v2_score) : null,
+    },
+    {
+      label: "Coding",
+      source: "MBPP",
+      value: row ? numeric(row.mbpp_pass_at_1) : null,
+    },
+    {
+      label: "RAG",
+      source: "RGB",
+      value: row ? numeric(row.rgb_all_rate) : null,
+    },
+    {
+      label: "Factuality",
+      source: "SimpleQA",
+      value: row ? numeric(row.simpleqa_f1) : null,
+    },
+    {
+      label: "Safety",
+      source: "HarmBench",
+      value: row ? numeric(row.harmbench_refusal_rate) : null,
+    },
+  ];
 }
 
 function qualityValue(row: LeaderboardRow) {
@@ -1626,34 +1419,34 @@ function protocolLabel(row: LeaderboardRow) {
     row.model_intelligence_score !== null &&
     row.model_intelligence_score !== undefined
   ) {
-    return "Model Intelligence";
+    return "LAIA Index";
   }
   if (row.global_mmlu_lite_pass_at_1 !== null && row.global_mmlu_lite_pass_at_1 !== undefined) {
-    return "Global MMLU Lite";
+    return "Knowledge";
   }
   if (row.ifbench_prompt_level_loose !== null && row.ifbench_prompt_level_loose !== undefined) {
-    return "IFBench";
+    return "Instructions";
   }
   if (row.bfcl_v4_selected_accuracy !== null && row.bfcl_v4_selected_accuracy !== undefined) {
-    return "BFCL v4";
+    return "Tool calling";
   }
   if (row.ocrbench_v2_score !== null && row.ocrbench_v2_score !== undefined) {
-    return "OCRBench v2";
+    return "OCR";
   }
   if (row.mmmu_accuracy !== null && row.mmmu_accuracy !== undefined) {
-    return "MMMU";
+    return "Vision reasoning";
   }
   if (row.mbpp_pass_at_1 !== null && row.mbpp_pass_at_1 !== undefined) {
-    return "MBPP";
+    return "Coding";
   }
   if (row.rgb_all_rate !== null && row.rgb_all_rate !== undefined) {
-    return "RGB";
+    return "RAG";
   }
   if (row.simpleqa_f1 !== null && row.simpleqa_f1 !== undefined) {
-    return "SimpleQA";
+    return "Factuality";
   }
   if (row.harmbench_refusal_rate !== null && row.harmbench_refusal_rate !== undefined) {
-    return "HarmBench Safety";
+    return "Safety";
   }
   return "Unscored";
 }
@@ -1733,10 +1526,10 @@ function quantizationLabel(row: LeaderboardRow) {
   const source = `${row.quantization} ${row.variant_name} ${apiModel(row) ?? ""} ${row.file_name ?? ""}`.toLowerCase();
   if (/\b(?:fp32|f32|32\s*bit|32b)\b/.test(source)) return "32 bit";
   if (/\b(?:bf16|fp16|f16|16\s*bit|16b)\b/.test(source)) return "16 bit";
-  if (/\b(?:q8|8\s*bit|8b|8bit)\b/.test(source)) return "8 bit";
-  if (/\b(?:q6|6\s*bit|6b|6bit)\b/.test(source)) return "6 bit";
-  if (/\b(?:q5|5\s*bit|5b|5bit)\b/.test(source)) return "5 bit";
-  if (/\b(?:q4|4\s*bit|4b|4bit)\b/.test(source)) return "4 bit";
+  if (/\b(?:q8|int8|8\s*bit|8bit)\b/.test(source)) return "8 bit";
+  if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return "6 bit";
+  if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return "5 bit";
+  if (/\b(?:q4|4\s*bit|4bit)\b/.test(source)) return "4 bit";
   if (row.quantization && row.quantization.toUpperCase() !== "SERVER") {
     return row.quantization.toUpperCase();
   }
@@ -1879,22 +1672,6 @@ function variantConfigValue(row: LeaderboardRow, key: string) {
   return (variantConfig as Record<string, unknown>)[key] ?? null;
 }
 
-function countUnique(rows: LeaderboardRow[], key: keyof LeaderboardRow) {
-  return new Set(rows.map((row) => row[key]).filter(Boolean)).size;
-}
-
-function mostCommon(values: string[]) {
-  const counts = new Map<string, number>();
-  for (const value of values.filter(Boolean)) {
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-}
-
-function meetsMinimum(value: number | null | undefined, minimum: number) {
-  return value !== null && value !== undefined && Number.isFinite(value) && value >= minimum;
-}
-
 function meetsMaximum(value: number | null | undefined, maximum: number) {
   return value !== null && value !== undefined && Number.isFinite(value) && value <= maximum;
 }
@@ -1913,18 +1690,65 @@ function formatDate(value: string) {
   });
 }
 
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function formatParameter(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
   return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}B`;
+}
+
+function formatModelSize(row: LeaderboardRow) {
+  const sizeGb = modelSizeGb(row);
+  if (sizeGb === null) return "n/a";
+  const prefix = fileSizeBytes(row) === null ? "~" : "";
+  const decimals = sizeGb < 10 ? 1 : 0;
+  return `${prefix}${sizeGb.toFixed(decimals)} GB`;
+}
+
+function modelSizeGb(row: LeaderboardRow) {
+  const bytes = fileSizeBytes(row);
+  if (bytes !== null) return bytes / 1024 ** 3;
+  return estimatedModelSizeGb(row);
+}
+
+function fileSizeBytes(row: LeaderboardRow) {
+  const topLevelSize = numeric(row.file_size_bytes);
+  if (topLevelSize !== null) return topLevelSize;
+
+  const metadata = safeMetadata(row);
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const modelFile = (metadata as { model_file?: unknown }).model_file;
+  if (!modelFile || typeof modelFile !== "object" || Array.isArray(modelFile)) return null;
+  return numeric((modelFile as { size_bytes?: unknown }).size_bytes);
+}
+
+function estimatedModelSizeGb(row: LeaderboardRow) {
+  const parameterSize = numeric(row.parameter_size_b);
+  const bytesPerParameter = estimatedBytesPerParameter(row);
+  if (parameterSize === null || bytesPerParameter === null) return null;
+  return (parameterSize * 1_000_000_000 * bytesPerParameter) / 1024 ** 3;
+}
+
+function estimatedBytesPerParameter(row: LeaderboardRow) {
+  const source = [
+    row.quantization,
+    row.precision,
+    row.variant_name,
+    row.base_model_name,
+    apiModel(row),
+    row.file_name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/\b(?:fp32|f32|32\s*bit|32b)\b/.test(source)) return 4;
+  if (/\b(?:bf16|fp16|f16|16\s*bit|16b)\b/.test(source)) return 2;
+  if (/\b(?:q8|int8|8\s*bit|8bit)\b/.test(source)) return 1;
+  if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return 0.75;
+  if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return 0.625;
+  if (/\b(?:q4|4\s*bit|4bit)\b/.test(source)) return 0.5;
+  if (/\b(?:q3|3\s*bit|3bit)\b/.test(source)) return 0.375;
+  if (/\b(?:q2|2\s*bit|2bit)\b/.test(source)) return 0.25;
+  return null;
 }
 
 function formatPercent(value?: number | null) {

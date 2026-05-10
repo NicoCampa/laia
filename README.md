@@ -78,6 +78,7 @@ laia ollama qwen3-vl:8b --benchmark ocrbench --smoke
 laia ollama qwen3-vl:8b --benchmark mmmu --smoke
 laia omlx Qwen3.5-9B-4bit --benchmark bfcl --bfcl-categories non_live
 laia omlx Qwen3.5-9B-4bit --benchmark mbpp --mbpp-config sanitized
+laia omlx Qwen3.5-9B-4bit --benchmark rgb
 laia omlx Qwen3.5-9B-4bit --benchmark rgb --rgb-dataset en_int
 laia omlx Qwen3.5-9B-4bit --benchmark simpleqa --simpleqa-grader-model same
 laia omlx Qwen3.5-9B-4bit --benchmark harmbench --harmbench-judge-model same
@@ -136,6 +137,12 @@ benchmark tasks are Global MMLU Lite generation pass@1, IFBench instruction foll
 BFCL v4 prompt-mode function calling, OCRBench v2 visual OCR, MMMU multimodal
 reasoning, MBPP Python code generation, RGB retrieval-augmented generation,
 SimpleQA short-form factuality, and HarmBench safety refusal.
+
+RGB defaults to a curated English/Chinese suite: 80% noise robustness, negative
+rejection, 60% noisy information integration, and factual error detection.
+OCRBench v2 shortcut runs default to a deterministic 1,000-sample stratified
+subset of the English and Chinese aggregate configs, instead of the full 10,000
+image-question set.
 
 Benchmark suite aliases:
 

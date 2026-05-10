@@ -261,7 +261,7 @@ class LMStudioNativeClient(NativeClient):
     ) -> GenerationResponse:
         input_payload: str | list[dict[str, Any]]
         if images:
-            input_payload = [{"type": "message", "content": prompt}]
+            input_payload = [{"type": "text", "content": prompt}]
             input_payload.extend(
                 {"type": "image", "data_url": _image_data_url(image)} for image in images
             )

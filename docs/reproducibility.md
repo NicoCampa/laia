@@ -27,6 +27,21 @@ Every run records:
 - per-question runtime and API usage when available
 - backend profile, hardware profile, command arguments, and run UUID
 
+Shortcut-generated configs pin dataset sources to explicit upstream revisions:
+
+- Global MMLU Lite: `cbf2f73663ff201d4d56e891c8c2c18467aeea06`
+- IFBench: `2e8a48de45ff3bf41242f927254ca81b59ca3ae2`
+- OCRBench v2: `458b55b5f62bfd6eba7b5080da34fbc9a68c2626`
+- MMMU: `4619a102cf5ad2da1abf7e220fde1258d2434cb7`
+- MBPP: `4bb6404fdc6cacfda99d4ac4205087b89d32030c`
+- RGB: `65ec39e40e7dc9abb50e9bf1b4f32be3f6f16615`
+- SimpleQA reference implementation: `652c89d0ca9df547706735883097e9537d40dc47`
+- HarmBench: `8e1604d1171fe8a48d8febecd22f600e462bdcdd`
+
+For SimpleQA, the official dataset is distributed from OpenAI public blob storage;
+the run records the pinned `simple-evals` reference revision and caches the CSV
+under a revision-scoped cache directory.
+
 For publishable runs:
 
 - pin the model id instead of relying on `auto`
@@ -40,13 +55,15 @@ For publishable runs:
 - compare BFCL v4 rows by `bfcl_v4_selected_accuracy`, and record the selected
   BFCL category set because smoke, single-turn, and all-scoring runs are not equivalent
 - compare OCRBench v2 rows by `ocrbench_v2_score`, and only compare rows that use
-  the same evaluator version and dataset config set
+  the same evaluator version, dataset config set, sample limit, sample strategy,
+  and sample seed. Shortcut-generated full runs use a deterministic 1,000-sample
+  stratified subset by default.
 - compare MMMU rows by `mmmu_accuracy`, and record the split and subject list
 - compare MBPP rows by `mbpp_pass_at_1`, and record whether the run used the
   `full` or `sanitized` config and whether challenge tests were enabled
-- compare RGB rows by `rgb_all_rate`, and record the RGB dataset, noise rate,
-  passage count, correct rate, and whether the row is noise robustness,
-  negative rejection, information integration, or counterfactual robustness
+- compare RGB rows by `rgb_all_rate`; default generated configs use the curated
+  English/Chinese RGB suite, while single-dataset runs should record the RGB
+  dataset, noise rate, passage count, correct rate, and task mode
 - compare SimpleQA rows by `simpleqa_f1`, and record whether the grader was an
   LLM judge or the deterministic heuristic. For publishable rows, use a stronger
   pinned judge model instead of an unpinned `same` grader.

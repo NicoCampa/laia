@@ -4,6 +4,13 @@ BFCL v4 is Berkeley's function-calling benchmark. Local AI Analysis runs it in
 prompt mode through the same native Ollama, LM Studio, and oMLX clients used by
 the other benchmarks.
 
+This is the standard BFCL scoring path for local/chat endpoints: the model is
+given the function schemas and the benchmark checks whether the emitted function
+call name and arguments match the expected call. LAIA does not execute arbitrary
+tools or run a full agent loop for the default BFCL score. BFCL's heavier
+multi-turn and agentic categories can involve state, memory, and web-search style
+tasks, but they still require explicit category selection and more upstream setup.
+
 ## Install
 
 The upstream `bfcl-eval` package currently pins `numpy==1.26.4`, which is not a

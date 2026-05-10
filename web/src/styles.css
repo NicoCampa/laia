@@ -166,7 +166,6 @@ dd {
 }
 
 .console-hero,
-.metric-strip,
 .workspace-grid,
 .analysis-grid,
 .footer {
@@ -223,7 +222,7 @@ dd {
   min-width: 0;
   border: 2px solid var(--line);
   background: var(--surface);
-  padding: 22px;
+  padding: 32px;
   box-shadow: var(--shadow-hard);
   animation: rise-in 420ms ease both;
 }
@@ -291,35 +290,6 @@ dd {
   font-variant-numeric: tabular-nums;
 }
 
-.metric-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-  overflow: visible;
-  border: 0;
-  background: transparent;
-}
-
-.metric-cell {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
-  gap: 8px 12px;
-  min-height: 136px;
-  border: 2px solid var(--line);
-  background: var(--surface);
-  padding: 18px;
-  animation: rise-in 420ms ease both;
-}
-
-.metric-cell:nth-child(2) {
-  background: var(--accent);
-}
-
-.metric-cell:nth-child(3) {
-  background: var(--blue);
-}
-
 .metric-icon {
   display: inline-flex;
   align-items: center;
@@ -329,41 +299,6 @@ dd {
   border: 2px solid var(--line);
   background: var(--surface);
   color: var(--ink);
-}
-
-.metric-cell > span:not(.metric-icon) {
-  align-self: center;
-  min-width: 0;
-  color: var(--ink);
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.75rem;
-  font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.metric-cell strong,
-.metric-cell small {
-  grid-column: 1 / -1;
-}
-
-.metric-cell strong {
-  align-self: end;
-  margin-top: 8px;
-  overflow-wrap: anywhere;
-  font-size: 1.78rem;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
-.metric-cell small {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--quiet);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .workspace-grid {
@@ -452,7 +387,7 @@ dd {
 
 .field-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  grid-template-columns: repeat(3, minmax(130px, 1fr));
   gap: 12px;
 }
 
@@ -526,18 +461,6 @@ input:focus,
   box-shadow: -5px 5px 0 var(--ink);
 }
 
-.filter-note {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 10px;
-  border-top: 2px solid var(--line);
-  padding-top: 14px;
-  color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.45;
-}
-
 .leaderboard-panel {
   min-width: 0;
   overflow: hidden;
@@ -546,18 +469,7 @@ input:focus,
 .panel-heading {
   min-height: 86px;
   border-bottom: 2px solid var(--line);
-  padding: 18px;
-}
-
-.row-count {
-  border: 2px solid var(--line);
-  background: var(--accent);
-  padding: 7px 10px;
-  color: var(--ink);
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.82rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  padding: 24px;
 }
 
 .table-shell {
@@ -573,7 +485,7 @@ table {
 th,
 td {
   border-bottom: 2px solid var(--line);
-  padding: 14px 13px;
+  padding: 20px 16px;
   text-align: left;
   vertical-align: middle;
   white-space: nowrap;
@@ -678,23 +590,6 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
-.reasoning-indicator {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 25px;
-  height: 25px;
-  border: 2px solid var(--line);
-  background: var(--surface);
-  color: var(--quiet);
-}
-
-.reasoning-indicator.on {
-  background: var(--accent);
-  color: var(--ink);
-}
-
 .model-subline {
   display: flex;
   align-items: center;
@@ -719,8 +614,8 @@ tbody tr:last-child td {
 .reasoning-switch {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  max-width: 420px;
+  gap: 8px;
+  max-width: 460px;
 }
 
 .quantization-chip,
@@ -864,12 +759,6 @@ tbody tr:last-child td {
   background: var(--surface-soft);
 }
 
-.action-heading,
-.action-cell {
-  width: 58px;
-  text-align: center;
-}
-
 .icon-button {
   width: 34px;
   min-height: 34px;
@@ -884,14 +773,14 @@ tbody tr:last-child td {
 
 .analysis-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
   gap: 18px;
   padding-top: 18px;
 }
 
 .analysis-panel {
   min-width: 0;
-  padding: 18px;
+  padding: 24px;
 }
 
 .selected-run {
@@ -929,6 +818,72 @@ tbody tr:last-child td {
   gap: 8px;
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.capability-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.capability-list {
+  display: grid;
+  gap: 0;
+  border: 2px solid var(--line);
+  background: var(--line);
+}
+
+.capability-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1.6fr) 74px;
+  gap: 14px;
+  align-items: center;
+  border-bottom: 2px solid var(--line);
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.capability-row:last-child {
+  border-bottom: 0;
+}
+
+.capability-row div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.capability-row strong {
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.capability-row span {
+  color: var(--quiet);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.capability-meter {
+  height: 14px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.capability-meter span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.capability-row em {
+  color: var(--ink);
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .detail-list {
@@ -983,8 +938,8 @@ tbody tr:last-child td {
   display: grid;
   grid-template-columns: minmax(260px, 0.6fr) minmax(0, 1fr);
   gap: 48px;
-  margin-top: 26px;
-  padding: 42px max(28px, calc((100vw - 1480px) / 2));
+  margin-top: 36px;
+  padding: 64px max(28px, calc((100vw - 1480px) / 2));
   border-top: 2px solid var(--line);
   border-bottom: 2px solid var(--line);
   background: #111111;
@@ -1117,9 +1072,6 @@ pre {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .metric-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 760px) {
@@ -1138,7 +1090,6 @@ pre {
   }
 
   .console-hero,
-  .metric-strip,
   .workspace-grid,
   .analysis-grid,
   .footer {
@@ -1162,13 +1113,8 @@ pre {
     font-size: 1.2rem;
   }
 
-  .metric-strip,
   .field-grid {
     grid-template-columns: 1fr;
-  }
-
-  .metric-cell {
-    min-height: 112px;
   }
 
   .panel-heading,

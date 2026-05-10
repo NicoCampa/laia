@@ -17,7 +17,8 @@ from local_ai_analysis.metrics import MetricResult
 
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
-RGB_DATASETS = [
+RGB_SUITE_DATASET = "suite"
+RGB_DATASET_FILES = [
     "en_refine",
     "zh_refine",
     "en",
@@ -27,6 +28,14 @@ RGB_DATASETS = [
     "en_fact",
     "zh_fact",
 ]
+RGB_DATASETS = [RGB_SUITE_DATASET, *RGB_DATASET_FILES]
+RGB_SUITE_VERSION = "rgb_curated_en_zh_v1"
+RGB_SUITE_COMPONENT_WEIGHTS = {
+    "noise_robustness": 0.30,
+    "negative_rejection": 0.25,
+    "information_integration": 0.25,
+    "error_detection": 0.20,
+}
 
 THINKING_BLOCK_RE = re.compile(
     r"<(?:think|thinking|reasoning)>.*?</(?:think|thinking|reasoning)>",
@@ -36,6 +45,67 @@ OPEN_THINKING_BLOCK_RE = re.compile(
     r"<(?:think|thinking|reasoning)>.*",
     flags=re.IGNORECASE | re.DOTALL,
 )
+EN_REJECTION_PATTERNS = [
+    re.compile(pattern, flags=re.IGNORECASE)
+    for pattern in [
+        r"\binsufficient information\b",
+        r"\bnot enough information\b",
+        r"\bnot enough evidence\b",
+        r"\binsufficient context\b",
+        r"\bnot enough context\b",
+        r"\bcannot answer\b",
+        r"\bcan not answer\b",
+        r"\bcan't answer\b",
+        r"\bunable to answer\b",
+        r"\bcannot determine\b",
+        r"\bcan not determine\b",
+        r"\bcan't determine\b",
+        r"\bunable to determine\b",
+        r"\bnot possible to determine\b",
+        r"\bcannot be determined\b",
+        r"\bcan not be determined\b",
+        r"\bnot provided in (?:the )?(?:document|documents|context|provided information)\b",
+        r"\bnot found in (?:the )?(?:document|documents|context|provided information)\b",
+        r"\bnot stated in (?:the )?(?:document|documents|context|provided information)\b",
+        r"\bnot mentioned in (?:the )?(?:document|documents|context|provided information)\b",
+        r"\b(?:document|documents|context|provided information) (?:do|does) not (?:contain|provide|include)\b",
+        r"\b(?:document|documents|context|provided information) (?:do|does) not state\b",
+        r"\b(?:document|documents|context|provided information) (?:do|does) not mention\b",
+        r"\b(?:document|documents|context|provided information) (?:do|does)n't (?:contain|provide|include|state|mention)\b",
+        r"\bno (?:relevant|sufficient|supporting) (?:information|evidence|context)\b",
+        r"\bno (?:(?:relevant|sufficient|supporting)\s+){0,3}(?:information|evidence|context)\b",
+        r"\bno answer (?:can be )?found in (?:the )?(?:document|documents|context|provided information)\b",
+        r"\banswer is not in (?:the )?(?:document|documents|context|provided information)\b",
+        r"\bwithout enough (?:information|evidence|context)\b",
+        r"\bnot possible to answer\b",
+        r"\bnot possible to infer\b",
+        r"\bcannot infer\b",
+        r"\bcan not infer\b",
+        r"\bcan't infer\b",
+        r"\bunable to infer\b",
+        r"\bunknown from (?:the )?(?:document|documents|context|provided information)\b",
+    ]
+]
+ZH_REJECTION_MARKERS = [
+    "信息不足",
+    "资料不足",
+    "证据不足",
+    "上下文不足",
+    "无法回答",
+    "不能回答",
+    "无法确定",
+    "不能确定",
+    "无法判断",
+    "不能判断",
+    "文档中没有",
+    "文档未提供",
+    "资料中没有",
+    "没有足够",
+    "未提及",
+    "没有提到",
+    "无法推断",
+    "不能推断",
+]
 
 
 @dataclass(frozen=True)
@@ -45,6 +115,28 @@ class ScoredRGBResponse:
     rejected: bool
     fact_detected: bool
     fact_corrected: bool
+
+
+@dataclass(frozen=True)
+class RGBSuiteCase:
+    key: str
+    component: str
+    dataset: str
+    noise_rate: float
+    passage_num: int = 5
+    correct_rate: float = 0.0
+
+
+RGB_SUITE_CASES = [
+    RGBSuiteCase("noise_robustness_en_refine_80", "noise_robustness", "en_refine", 0.8),
+    RGBSuiteCase("noise_robustness_zh_refine_80", "noise_robustness", "zh_refine", 0.8),
+    RGBSuiteCase("negative_rejection_en_refine", "negative_rejection", "en_refine", 1.0),
+    RGBSuiteCase("negative_rejection_zh_refine", "negative_rejection", "zh_refine", 1.0),
+    RGBSuiteCase("information_integration_en_60", "information_integration", "en_int", 0.6),
+    RGBSuiteCase("information_integration_zh_60", "information_integration", "zh_int", 0.6),
+    RGBSuiteCase("error_detection_en", "error_detection", "en_fact", 0.2),
+    RGBSuiteCase("error_detection_zh", "error_detection", "zh_fact", 0.2),
+]
 
 
 class RGBRunner:
@@ -60,6 +152,12 @@ class RGBRunner:
 
     def planned_command(self, variant: VariantConfig) -> str:
         model = self._configured_model_name(variant)
+        if self.settings.dataset == RGB_SUITE_DATASET:
+            return (
+                f"POST {self.client.planned_endpoint()} model={model} "
+                f"dataset={self.settings.dataset_name}/{RGB_SUITE_DATASET} "
+                f"suite={RGB_SUITE_VERSION} cases={len(RGB_SUITE_CASES)}"
+            )
         return (
             f"POST {self.client.planned_endpoint()} model={model} "
             f"dataset={self.settings.dataset_name}/{self.settings.dataset} "
@@ -67,6 +165,15 @@ class RGBRunner:
         )
 
     def run(
+        self,
+        variant: VariantConfig,
+        progress_callback: ProgressCallback | None = None,
+    ) -> list[MetricResult]:
+        if self.settings.dataset == RGB_SUITE_DATASET:
+            return self._run_suite(variant, progress_callback=progress_callback)
+        return self._run_single(variant, progress_callback=progress_callback)
+
+    def _run_single(
         self,
         variant: VariantConfig,
         progress_callback: ProgressCallback | None = None,
@@ -216,6 +323,43 @@ class RGBRunner:
         with summary_path.open("w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2, ensure_ascii=False, sort_keys=True, default=str)
 
+        return metrics_from_summary(summary)
+
+    def _run_suite(
+        self,
+        variant: VariantConfig,
+        progress_callback: ProgressCallback | None = None,
+    ) -> list[MetricResult]:
+        suite_out_dir = Path(self.settings.output_dir) / _safe_name(variant.name)
+        suite_out_dir.mkdir(parents=True, exist_ok=True)
+        case_records: list[dict[str, Any]] = []
+
+        for suite_case in RGB_SUITE_CASES:
+            case_settings = self.settings.model_copy(
+                update={
+                    "dataset": suite_case.dataset,
+                    "noise_rate": suite_case.noise_rate,
+                    "passage_num": suite_case.passage_num,
+                    "correct_rate": suite_case.correct_rate,
+                    "output_dir": str(Path(self.settings.output_dir) / suite_case.key),
+                    "evaluator": "rgb_curated_suite_lexical_v1",
+                }
+            )
+            case_metrics = RGBRunner(case_settings).run(
+                variant,
+                progress_callback=progress_callback,
+            )
+            case_summary = _summary_from_metrics(case_metrics)
+            case_records.append(_suite_case_record(suite_case, case_summary))
+
+        summary = build_suite_summary(
+            settings=self.settings,
+            variant=variant,
+            case_records=case_records,
+        )
+        summary_path = suite_out_dir / "summary.json"
+        with summary_path.open("w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False, sort_keys=True, default=str)
         return metrics_from_summary(summary)
 
     def _model_name(self, variant: VariantConfig) -> str:
@@ -417,6 +561,74 @@ def build_summary(
     }
 
 
+def build_suite_summary(
+    *,
+    settings: RGBSettings,
+    variant: VariantConfig,
+    case_records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    component_scores = _component_scores(case_records)
+    weighted_score = _weighted_score(component_scores, RGB_SUITE_COMPONENT_WEIGHTS)
+    total = sum(int(record.get("total") or 0) for record in case_records)
+    runtime_seconds = sum(
+        float(record.get("runtime_seconds") or 0.0) for record in case_records
+    )
+    model = case_records[0].get("model") if case_records else variant.api_model
+    correction_rates = [
+        record.get("rgb_error_correction_rate")
+        for record in case_records
+        if record.get("component") == "error_detection"
+    ]
+    rgb_error_correction_rate = _mean(
+        float(rate) for rate in correction_rates if rate is not None
+    )
+    rgb_accuracy = _mean(
+        score
+        for component, score in component_scores.items()
+        if component in {"noise_robustness", "information_integration"}
+        and score is not None
+    )
+
+    return {
+        "task": "rgb",
+        "dataset": settings.dataset_name,
+        "dataset_revision": settings.dataset_revision,
+        "rgb_dataset": RGB_SUITE_DATASET,
+        "task_mode": "curated_suite",
+        "suite_version": RGB_SUITE_VERSION,
+        "suite_weights": RGB_SUITE_COMPONENT_WEIGHTS,
+        "suite_cases": case_records,
+        "component_scores": component_scores,
+        "model": model,
+        "provider": settings.provider,
+        "base_url": settings.base_url,
+        "temperature": settings.temperature,
+        "max_tokens": settings.max_tokens,
+        "top_p": settings.top_p,
+        "stop": settings.stop,
+        "seed": settings.seed,
+        "reasoning_effort": settings.reasoning_effort,
+        "response_format": settings.response_format,
+        "request_extra": settings.request_extra,
+        "noise_rate": None,
+        "passage_num": settings.passage_num,
+        "correct_rate": settings.correct_rate,
+        "evaluator": "rgb_curated_suite_lexical_v1",
+        "total": total,
+        "correct": None,
+        "rejected": None,
+        "fact_detected": None,
+        "fact_corrected": None,
+        "rgb_all_rate": weighted_score,
+        "rgb_accuracy": rgb_accuracy,
+        "rgb_rejection_rate": component_scores.get("negative_rejection"),
+        "rgb_fact_check_rate": component_scores.get("error_detection"),
+        "rgb_error_correction_rate": rgb_error_correction_rate,
+        "runtime_seconds": runtime_seconds,
+        "samples_path": None,
+    }
+
+
 def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
     raw = {"summary": summary}
     metrics = [
@@ -451,13 +663,87 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
     return metrics
 
 
+def _summary_from_metrics(metrics: list[MetricResult]) -> dict[str, Any]:
+    for metric in metrics:
+        summary = metric.raw.get("summary") if isinstance(metric.raw, dict) else None
+        if isinstance(summary, dict):
+            return summary
+    raise RuntimeError("RGB sub-run did not return a summary payload")
+
+
+def _suite_case_record(suite_case: RGBSuiteCase, summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "key": suite_case.key,
+        "component": suite_case.component,
+        "dataset": suite_case.dataset,
+        "language": _language(suite_case.dataset),
+        "noise_rate": suite_case.noise_rate,
+        "passage_num": suite_case.passage_num,
+        "correct_rate": suite_case.correct_rate,
+        "task_mode": summary.get("task_mode"),
+        "score": _suite_case_score(suite_case, summary),
+        "model": summary.get("model"),
+        "total": summary.get("total"),
+        "runtime_seconds": summary.get("runtime_seconds"),
+        "rgb_all_rate": summary.get("rgb_all_rate"),
+        "rgb_accuracy": summary.get("rgb_accuracy"),
+        "rgb_rejection_rate": summary.get("rgb_rejection_rate"),
+        "rgb_fact_check_rate": summary.get("rgb_fact_check_rate"),
+        "rgb_error_correction_rate": summary.get("rgb_error_correction_rate"),
+        "samples_path": summary.get("samples_path"),
+    }
+
+
+def _suite_case_score(suite_case: RGBSuiteCase, summary: dict[str, Any]) -> float | None:
+    if suite_case.component == "negative_rejection":
+        return _as_float(summary.get("rgb_rejection_rate"))
+    if suite_case.component == "error_detection":
+        return _as_float(summary.get("rgb_fact_check_rate"))
+    return _as_float(summary.get("rgb_all_rate"))
+
+
+def _component_scores(case_records: list[dict[str, Any]]) -> dict[str, float | None]:
+    return {
+        component: _mean(
+            _as_float(record.get("score"))
+            for record in case_records
+            if record.get("component") == component
+        )
+        for component in RGB_SUITE_COMPONENT_WEIGHTS
+    }
+
+
+def _weighted_score(
+    component_scores: dict[str, float | None],
+    weights: dict[str, float],
+) -> float | None:
+    weighted_sum = 0.0
+    covered_weight = 0.0
+    for component, weight in weights.items():
+        score = component_scores.get(component)
+        if score is None:
+            continue
+        weighted_sum += score * weight
+        covered_weight += weight
+    if covered_weight <= 0:
+        return None
+    return weighted_sum / covered_weight
+
+
+def _mean(values: Any) -> float | None:
+    numbers = [value for value in values if value is not None]
+    if not numbers:
+        return None
+    return sum(numbers) / len(numbers)
+
+
 def _dataset_cache_path(settings: RGBSettings) -> Path:
     revision = _safe_name(settings.dataset_revision)
     return Path(settings.data_cache_dir) / revision / f"{settings.dataset}.json"
 
 
 def _download_dataset(settings: RGBSettings, path: Path) -> None:
-    if settings.dataset not in RGB_DATASETS:
+    if settings.dataset not in RGB_DATASET_FILES:
         raise RuntimeError(
             f"Unsupported RGB dataset: {settings.dataset}. Supported: {', '.join(RGB_DATASETS)}"
         )
@@ -491,7 +777,9 @@ def _language(dataset: str) -> str:
 
 def _is_rejection(prediction: str) -> bool:
     lowered = prediction.lower()
-    return "信息不足" in prediction or "insufficient information" in lowered
+    return any(marker in prediction for marker in ZH_REJECTION_MARKERS) or any(
+        pattern.search(lowered) for pattern in EN_REJECTION_PATTERNS
+    )
 
 
 def _has_factual_error_marker(prediction: str) -> bool:

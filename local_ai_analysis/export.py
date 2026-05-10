@@ -84,6 +84,7 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
         "model_repo",
         "file_name",
         "checksum_sha256",
+        "file_size_bytes",
         "is_baseline",
         "backend_name",
         "backend_version",

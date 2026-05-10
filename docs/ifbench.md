@@ -17,10 +17,11 @@ load_dataset("allenai/IFBench_test", split="train")
 
 The full set contains 300 prompts. Smoke mode evaluates the first 5 prompts.
 
-Generation defaults follow the vanilla IFBench harness:
+Generation defaults follow the deterministic IFBench/Artificial Analysis-aligned
+setup:
 
 ```text
-temperature = 0.01
+temperature = 0.0
 top_p = 0.95
 max_tokens = 4096
 ```

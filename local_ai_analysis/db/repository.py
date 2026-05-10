@@ -428,6 +428,7 @@ class LocalAIAnalysisDB:
                 mv.model_repo,
                 mv.file_name,
                 mv.checksum_sha256,
+                mv.file_size_bytes,
                 mv.is_baseline,
                 bp.backend_name,
                 bp.backend_version,
