@@ -95,7 +95,9 @@ class BFCLV4Settings(BaseModel):
     enabled: bool = False
     version: str = "BFCL_v4"
     categories: list[str] = Field(default_factory=lambda: ["single_turn"])
-    sample_limit: int | None = None
+    sample_limit: int | None = 1000
+    sample_strategy: str = "stratified"
+    sample_seed: int = 42
     output_dir: str = "results/bfcl_v4"
     provider: str = "ollama"
     base_url: str = "http://127.0.0.1:11434"
@@ -224,7 +226,8 @@ class RGBSettings(BaseModel):
     dataset_name: str = "chen700564/RGB"
     dataset_revision: str = RGB_REVISION
     dataset: str = "suite"
-    sample_limit: int | None = None
+    sample_limit: int | None = 100
+    sample_strategy: str = "random"
     output_dir: str = "results/rgb"
     data_cache_dir: str = "results/rgb/cache"
     provider: str = "ollama"
@@ -275,7 +278,9 @@ class SimpleQASettings(BaseModel):
         "https://openaipublic.blob.core.windows.net/simple-evals/simple_qa_test_set.csv"
     )
     dataset_revision: str | None = SIMPLE_EVALS_REVISION
-    sample_limit: int | None = None
+    sample_limit: int | None = 500
+    sample_strategy: str = "stratified"
+    sample_seed: int = 42
     output_dir: str = "results/simpleqa"
     data_cache_dir: str = "results/simpleqa/cache"
     refresh_cache: bool = False

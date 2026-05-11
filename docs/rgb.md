@@ -25,7 +25,10 @@ and Chinese across:
 The leaderboard-facing `rgb_all_rate` is a weighted RGB robustness index:
 30% noise robustness, 25% negative rejection, 25% information integration, and
 20% factual error detection. Refined datasets are used where RGB provides them.
-In smoke mode this means 5 samples per slice, 40 RGB samples total.
+Shortcut-generated full RGB suite runs use 100 seeded random rows per slice,
+800 RGB calls total. In smoke mode this means 5 samples per slice, 40 RGB
+samples total. Set `rgb.sample_limit: null` in an advanced config when you
+intentionally want every row in each selected RGB dataset.
 
 Noise robustness, using the refined English set:
 

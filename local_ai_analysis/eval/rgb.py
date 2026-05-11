@@ -198,9 +198,7 @@ class RGBRunner:
                 },
             )
 
-        rows = self._load_dataset()
-        if self.settings.sample_limit is not None:
-            rows = rows[: self.settings.sample_limit]
+        rows = _select_rows(self._load_dataset(), self.settings)
         total_samples = len(rows)
 
         if progress_callback:
@@ -391,6 +389,28 @@ class RGBRunner:
         return rows
 
 
+def _select_rows(rows: list[dict[str, Any]], settings: RGBSettings) -> list[dict[str, Any]]:
+    if settings.sample_limit is None or settings.sample_limit >= len(rows):
+        return rows
+    sample_limit = max(0, int(settings.sample_limit))
+    if sample_limit == 0:
+        return []
+    strategy = (settings.sample_strategy or "random").strip().lower().replace("-", "_")
+    if strategy in {"first", "head"}:
+        return rows[:sample_limit]
+    if strategy not in {"random", "seeded"}:
+        raise ValueError("rgb.sample_strategy must be one of random, seeded, first, or head")
+
+    rng = random.Random(
+        f"{settings.seed}:{settings.dataset}:{settings.noise_rate}:"
+        f"{settings.passage_num}:{settings.correct_rate}"
+    )
+    indexes = list(range(len(rows)))
+    rng.shuffle(indexes)
+    selected_indexes = sorted(indexes[:sample_limit])
+    return [rows[index] for index in selected_indexes]
+
+
 def process_data(instance: dict[str, Any], settings: RGBSettings) -> tuple[str, Any, list[str]]:
     rng = random.Random(settings.seed if settings.seed is not None else 2333)
     query = str(instance["query"])
@@ -533,6 +553,8 @@ def build_summary(
         "top_p": settings.top_p,
         "stop": settings.stop,
         "seed": settings.seed,
+        "sample_limit": settings.sample_limit,
+        "sample_strategy": settings.sample_strategy,
         "reasoning_effort": settings.reasoning_effort,
         "response_format": settings.response_format,
         "request_extra": settings.request_extra,
@@ -607,6 +629,8 @@ def build_suite_summary(
         "top_p": settings.top_p,
         "stop": settings.stop,
         "seed": settings.seed,
+        "sample_limit": settings.sample_limit,
+        "sample_strategy": settings.sample_strategy,
         "reasoning_effort": settings.reasoning_effort,
         "response_format": settings.response_format,
         "request_extra": settings.request_extra,

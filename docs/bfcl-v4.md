@@ -38,6 +38,11 @@ Run the default local BFCL set:
 laia omlx Qwen3.5-9B-4bit --benchmark bfcl
 ```
 
+Shortcut-generated full BFCL runs use 1,000 deterministic stratified samples
+across the resolved BFCL categories (`sample_strategy=stratified`,
+`sample_seed=42`). Set `bfcl_v4.sample_limit: null` in an advanced config when
+you intentionally want every selected BFCL prompt.
+
 Select BFCL categories:
 
 ```bash

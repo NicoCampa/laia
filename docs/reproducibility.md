@@ -18,9 +18,10 @@ Every run records:
 - provider name and native API base URL
 - exact model tag or model id
 - model/run modality metadata and benchmark input modalities
-- dataset name, revision, split, languages, OCRBench configs, MMMU subjects,
-  MBPP config/split, RGB dataset/noise/passage settings, SimpleQA grader,
-  HarmBench judge/category settings, and BFCL categories
+- dataset name, revision, split, languages, sample limit/strategy/seed,
+  OCRBench configs, MMMU subjects, MBPP config/split, RGB dataset/noise/passage
+  settings, SimpleQA grader, HarmBench judge/category settings, and BFCL
+  categories
 - prompt template and parser version
 - temperature, max tokens, seed, stop, top-p, and reasoning effort
 - raw prompt, raw output, extracted answer, gold answer, and correctness per question
@@ -53,7 +54,9 @@ For publishable runs:
 - compare IFBench with IFBench prompt-level loose accuracy unless you explicitly need
   strict or instruction-level metrics
 - compare BFCL v4 rows by `bfcl_v4_selected_accuracy`, and record the selected
-  BFCL category set because smoke, single-turn, and all-scoring runs are not equivalent
+  BFCL category set, sample limit, strategy, and seed because smoke,
+  single-turn, sampled, and all-scoring runs are not equivalent. Shortcut-generated
+  full runs use 1,000 seeded stratified samples by default.
 - compare OCRBench v2 rows by `ocrbench_v2_score`, and only compare rows that use
   the same evaluator version, dataset config set, sample limit, sample strategy,
   and sample seed. Shortcut-generated full runs use a deterministic 1,000-sample
@@ -63,10 +66,13 @@ For publishable runs:
   `full` or `sanitized` config and whether challenge tests were enabled
 - compare RGB rows by `rgb_all_rate`; default generated configs use the curated
   English/Chinese RGB suite, while single-dataset runs should record the RGB
-  dataset, noise rate, passage count, correct rate, and task mode
+  dataset, noise rate, passage count, correct rate, task mode, sample limit, and
+  sample strategy. Shortcut-generated full RGB suite runs use 100 seeded random
+  rows per suite slice, for 800 RGB calls total.
 - compare SimpleQA rows by `simpleqa_f1`, and record whether the grader was an
   LLM judge or the deterministic heuristic. For publishable rows, use a stronger
-  pinned judge model instead of an unpinned `same` grader.
+  pinned judge model instead of an unpinned `same` grader. Shortcut-generated
+  full runs use 500 seeded stratified questions by default.
 - compare HarmBench rows by `harmbench_attack_success_rate` for attack success
   or `harmbench_refusal_rate` for safety. Record the selected functional
   categories and judge model. Default generated configs reuse the same local

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import random
 import re
 import sys
 import types
@@ -85,7 +86,7 @@ class BFCLV4Runner:
                 },
             )
         category_entries = _load_category_entries(self.settings, modules)
-        selected_entries = _limit_entries(category_entries, self.settings.sample_limit)
+        selected_entries = _select_entries(category_entries, self.settings)
         total_samples = sum(len(entries) for entries in selected_entries.values())
         if progress_callback:
             progress_callback(
@@ -251,6 +252,8 @@ def build_summary(
         "categories": settings.categories,
         "resolved_categories": list(category_scores),
         "sample_limit": settings.sample_limit,
+        "sample_strategy": settings.sample_strategy,
+        "sample_seed": settings.sample_seed,
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
         "top_p": settings.top_p,
@@ -588,6 +591,100 @@ def _limit_entries(
     return {category: entries for category, entries in limited.items() if entries}
 
 
+def _select_entries(
+    category_entries: dict[str, list[dict[str, Any]]],
+    settings: BFCLV4Settings,
+) -> dict[str, list[dict[str, Any]]]:
+    if settings.sample_limit is None:
+        return category_entries
+    sample_limit = max(0, int(settings.sample_limit))
+    if sample_limit == 0:
+        return {}
+    strategy = _sample_strategy(settings.sample_strategy)
+    if strategy in {"first", "head"}:
+        return _limit_entries(category_entries, sample_limit)
+    if strategy == "random":
+        return _random_entries(category_entries, sample_limit, settings.sample_seed)
+
+    allocations = _balanced_category_allocations(category_entries, sample_limit)
+    rng = random.Random(settings.sample_seed)
+    selected: dict[str, list[dict[str, Any]]] = {}
+    for category, entries in category_entries.items():
+        count = allocations.get(category, 0)
+        if count <= 0:
+            continue
+        indexes = list(range(len(entries)))
+        rng.shuffle(indexes)
+        selected_indexes = sorted(indexes[:count])
+        selected[category] = [entries[index] for index in selected_indexes]
+    return selected
+
+
+def _random_entries(
+    category_entries: dict[str, list[dict[str, Any]]],
+    sample_limit: int,
+    sample_seed: int,
+) -> dict[str, list[dict[str, Any]]]:
+    indexed: list[tuple[str, int]] = []
+    for category, entries in category_entries.items():
+        indexed.extend((category, index) for index in range(len(entries)))
+    rng = random.Random(sample_seed)
+    rng.shuffle(indexed)
+    selected_indexes_by_category: dict[str, list[int]] = {}
+    for category, index in indexed[:sample_limit]:
+        selected_indexes_by_category.setdefault(category, []).append(index)
+
+    selected: dict[str, list[dict[str, Any]]] = {}
+    for category in category_entries:
+        indexes = selected_indexes_by_category.get(category)
+        if indexes:
+            selected[category] = [category_entries[category][index] for index in sorted(indexes)]
+    return selected
+
+
+def _sample_strategy(value: str | None) -> str:
+    strategy = (value or "stratified").strip().lower().replace("-", "_")
+    if strategy in {"stratified", "balanced", "random", "first", "head"}:
+        return strategy
+    raise ValueError(
+        "bfcl_v4.sample_strategy must be one of stratified, balanced, random, first, or head"
+    )
+
+
+def _balanced_category_allocations(
+    category_entries: dict[str, list[dict[str, Any]]],
+    sample_limit: int,
+) -> dict[str, int]:
+    total_available = sum(len(entries) for entries in category_entries.values())
+    remaining = min(sample_limit, total_available)
+    allocations = {category: 0 for category in category_entries}
+    active = [
+        category
+        for category, entries in category_entries.items()
+        if entries
+    ]
+
+    while active and remaining > 0:
+        quota = max(1, remaining // len(active))
+        progressed = False
+        for category in list(active):
+            capacity = len(category_entries[category]) - allocations[category]
+            if capacity <= 0:
+                active.remove(category)
+                continue
+            add = min(quota, capacity, remaining)
+            allocations[category] += add
+            remaining -= add
+            progressed = True
+            if allocations[category] >= len(category_entries[category]):
+                active.remove(category)
+            if remaining == 0:
+                break
+        if not progressed:
+            break
+    return allocations
+
+
 def _ground_truth_by_id(category: str, modules: dict[str, Any]) -> dict[str, Any]:
     if modules["is_relevance_or_irrelevance"](category):
         return {}
@@ -713,15 +810,43 @@ def _score_ast(
             "model_result_decoded": decoded,
         }
 
-    result = modules["ast_checker"](
-        entry["function"],
-        decoded,
-        ground_truth,
-        language,
-        effective_category,
-        BFCL_REGISTRY_NAME,
+    function_description = (
+        _normalize_java_function_schema(entry["function"])
+        if language == Language.JAVA
+        else entry["function"]
     )
+    try:
+        result = modules["ast_checker"](
+            function_description,
+            decoded,
+            ground_truth,
+            language,
+            effective_category,
+            BFCL_REGISTRY_NAME,
+        )
+    except Exception as exc:
+        return {
+            "valid": False,
+            "error": [f"BFCL AST checker failed: {exc}"],
+            "error_type": f"ast_checker:{type(exc).__name__}",
+            "model_result_decoded": decoded,
+        }
     return result if not result.get("valid") else {"valid": True}
+
+
+def _normalize_java_function_schema(functions: Any) -> Any:
+    normalized = copy.deepcopy(functions)
+    for function in normalized if isinstance(normalized, list) else []:
+        parameters = function.get("parameters") if isinstance(function, dict) else None
+        properties = parameters.get("properties") if isinstance(parameters, dict) else None
+        if not isinstance(properties, dict):
+            continue
+        for property_schema in properties.values():
+            if not isinstance(property_schema, dict):
+                continue
+            if property_schema.get("type") == "string":
+                property_schema["type"] = "String"
+    return normalized
 
 
 def _score_multi_turn(

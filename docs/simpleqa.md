@@ -20,6 +20,12 @@ Full run:
 laia ollama qwen3.5:0.8b-mlx-bf16 --benchmark simpleqa
 ```
 
+Shortcut-generated full SimpleQA runs use 500 deterministic stratified questions
+by topic and answer type (`sample_strategy=stratified`, `sample_seed=42`). Each
+question still makes one model call and one grader call when `--simpleqa-grader`
+is `llm`. Set `simpleqa.sample_limit: null` in an advanced config when you
+intentionally want the full SimpleQA CSV.
+
 By default, SimpleQA uses an LLM judge with the same local model:
 
 ```bash

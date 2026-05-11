@@ -140,6 +140,11 @@ SimpleQA short-form factuality, and HarmBench safety refusal.
 
 RGB defaults to a curated English/Chinese suite: 80% noise robustness, negative
 rejection, 60% noisy information integration, and factual error detection.
+Shortcut-generated full runs keep Global MMLU Lite complete, while capping the
+largest supporting benchmarks deterministically: BFCL v4 uses 1,000 stratified
+prompt-mode samples, RGB uses 100 sampled rows per curated slice, OCRBench v2
+uses 1,000 stratified image-question samples, and SimpleQA uses 500 stratified
+questions.
 OCRBench v2 shortcut runs default to a deterministic 1,000-sample stratified
 subset of the English and Chinese aggregate configs, instead of the full 10,000
 image-question set.
@@ -152,7 +157,8 @@ Benchmark suite aliases:
   Use this only with a vision-capable served model.
 - `--benchmark judge`: LLM-as-judge benchmarks: SimpleQA and HarmBench.
 - `--benchmark suite`: `text` plus `vision`, without judge-based benchmarks.
-- `--benchmark full`: everything, including judge-based benchmarks.
+- `--benchmark recommended` or `--benchmark full`: everything, including
+  judge-based benchmarks, with the deterministic default caps above.
 
 You can still pass an individual benchmark or a comma-separated list.
 Backward-compatible aliases are kept: `core` maps to `text`, `all` maps to

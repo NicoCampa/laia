@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import csv
 import json
+import random
 import re
 import urllib.error
 import urllib.request
@@ -151,9 +152,7 @@ class SimpleQARunner:
                     "dataset_revision": self.settings.dataset_revision,
                 },
             )
-        rows = self._load_dataset()
-        if self.settings.sample_limit is not None:
-            rows = rows[: self.settings.sample_limit]
+        rows = _select_rows(self._load_dataset(), self.settings)
         total_samples = len(rows)
         if progress_callback:
             progress_callback(
@@ -364,6 +363,92 @@ class SimpleQARunner:
             return [dict(row) for row in csv.DictReader(f)]
 
 
+def _select_rows(
+    rows: list[dict[str, Any]],
+    settings: SimpleQASettings,
+) -> list[dict[str, Any]]:
+    if settings.sample_limit is None or settings.sample_limit >= len(rows):
+        return rows
+    sample_limit = max(0, int(settings.sample_limit))
+    if sample_limit == 0:
+        return []
+
+    strategy = (settings.sample_strategy or "stratified").strip().lower().replace("-", "_")
+    if strategy in {"first", "head"}:
+        return rows[:sample_limit]
+    if strategy in {"random", "seeded"}:
+        return _random_sample_rows(rows, sample_limit, settings.sample_seed)
+    if strategy not in {"stratified", "balanced"}:
+        raise ValueError(
+            "simpleqa.sample_strategy must be one of stratified, balanced, random, first, or head"
+        )
+
+    strata: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        strata.setdefault(_sample_stratum(row), []).append(index)
+
+    allocations = _balanced_allocations(strata, sample_limit)
+    rng = random.Random(settings.sample_seed)
+    selected_indexes: list[int] = []
+    for stratum, indexes in strata.items():
+        count = allocations.get(stratum, 0)
+        if count <= 0:
+            continue
+        shuffled = list(indexes)
+        rng.shuffle(shuffled)
+        selected_indexes.extend(shuffled[:count])
+    return [rows[index] for index in sorted(selected_indexes)]
+
+
+def _random_sample_rows(
+    rows: list[dict[str, Any]],
+    sample_limit: int,
+    sample_seed: int,
+) -> list[dict[str, Any]]:
+    rng = random.Random(sample_seed)
+    indexes = list(range(len(rows)))
+    rng.shuffle(indexes)
+    selected_indexes = sorted(indexes[:sample_limit])
+    return [rows[index] for index in selected_indexes]
+
+
+def _sample_stratum(row: dict[str, Any]) -> str:
+    metadata = _metadata(row.get("metadata"))
+    topic = str(metadata.get("topic") or "unknown").strip()
+    answer_type = str(metadata.get("answer_type") or "unknown").strip()
+    return f"{topic or 'unknown'}::{answer_type or 'unknown'}"
+
+
+def _balanced_allocations(
+    strata: dict[str, list[int]],
+    sample_limit: int,
+) -> dict[str, int]:
+    total_available = sum(len(indexes) for indexes in strata.values())
+    remaining = min(sample_limit, total_available)
+    allocations = {stratum: 0 for stratum in strata}
+    active = [stratum for stratum, indexes in strata.items() if indexes]
+
+    while active and remaining > 0:
+        quota = max(1, remaining // len(active))
+        progressed = False
+        for stratum in list(active):
+            capacity = len(strata[stratum]) - allocations[stratum]
+            if capacity <= 0:
+                active.remove(stratum)
+                continue
+            add = min(quota, capacity, remaining)
+            allocations[stratum] += add
+            remaining -= add
+            progressed = True
+            if allocations[stratum] >= len(strata[stratum]):
+                active.remove(stratum)
+            if remaining == 0:
+                break
+        if not progressed:
+            break
+    return allocations
+
+
 def _safe_revision(revision: str | None) -> str:
     value = revision or "unversioned"
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-") or "unversioned"
@@ -435,6 +520,9 @@ def build_summary(
         "dataset": settings.dataset_name,
         "dataset_url": settings.dataset_url,
         "dataset_revision": settings.dataset_revision,
+        "sample_limit": settings.sample_limit,
+        "sample_strategy": settings.sample_strategy,
+        "sample_seed": settings.sample_seed,
         "model": model,
         "grader": settings.grader,
         "grader_model": grader_model,

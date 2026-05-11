@@ -76,6 +76,7 @@ Do not explain. Do not use thinking tags. Reply with only one letter: A, B, C, o
 Answer:
 """
 BFCL_V4_DEFAULT_CATEGORIES = "single_turn"
+BFCL_V4_DEFAULT_SAMPLE_LIMIT = 1000
 OCRBENCH_V2_DEFAULT_CONFIGS = "EN,CN"
 OCRBENCH_V2_SMOKE_CONFIGS = "text recognition en"
 OCRBENCH_V2_DEFAULT_SAMPLE_LIMIT = 1000
@@ -96,12 +97,14 @@ MBPP_PROMPT = (
     "[BEGIN]\n"
 )
 RGB_DEFAULT_DATASET = "suite"
+RGB_DEFAULT_SAMPLE_LIMIT = 100
 RGB_DEFAULT_NOISE_RATE = 0.8
 RGB_DEFAULT_PASSAGE_NUM = 5
 RGB_DEFAULT_CORRECT_RATE = 0.0
 SIMPLEQA_DATASET_URL = (
     "https://openaipublic.blob.core.windows.net/simple-evals/simple_qa_test_set.csv"
 )
+SIMPLEQA_DEFAULT_SAMPLE_LIMIT = 500
 SIMPLEQA_PROMPT = "{question}"
 HARMBENCH_DATASET_URL = (
     f"https://raw.githubusercontent.com/centerforaisafety/HarmBench/{HARMBENCH_REVISION}/"
@@ -197,7 +200,7 @@ def run_ollama_shortcut(
             help=(
                 "Benchmark or suite to run. Suites: text = text-only non-judge; "
                 "vision = multimodal non-judge; judge = LLM-as-judge; "
-                "suite = text + vision; full = everything. "
+                "suite = text + vision; recommended/full = everything. "
                 "Individual names include global-mmlu-lite, ifbench, bfcl, ocrbench, "
                 "mmmu, mbpp, rgb, simpleqa, and harmbench."
             ),
@@ -408,7 +411,7 @@ def run_lmstudio_shortcut(
             help=(
                 "Benchmark or suite to run. Suites: text = text-only non-judge; "
                 "vision = multimodal non-judge; judge = LLM-as-judge; "
-                "suite = text + vision; full = everything. "
+                "suite = text + vision; recommended/full = everything. "
                 "Individual names include global-mmlu-lite, ifbench, bfcl, ocrbench, "
                 "mmmu, mbpp, rgb, simpleqa, and harmbench."
             ),
@@ -619,7 +622,7 @@ def run_omlx_shortcut(
             help=(
                 "Benchmark or suite to run. Suites: text = text-only non-judge; "
                 "vision = multimodal non-judge; judge = LLM-as-judge; "
-                "suite = text + vision; full = everything. "
+                "suite = text + vision; recommended/full = everything. "
                 "Individual names include global-mmlu-lite, ifbench, bfcl, ocrbench, "
                 "mmmu, mbpp, rgb, simpleqa, and harmbench."
             ),
@@ -1170,7 +1173,9 @@ def _write_api_benchmark_config(
         "enabled": "bfcl-v4" in selected_benchmarks,
         "version": "BFCL_v4",
         "categories": _parse_bfcl_categories(bfcl_categories),
-        "sample_limit": sample_limit,
+        "sample_limit": sample_limit if smoke else BFCL_V4_DEFAULT_SAMPLE_LIMIT,
+        "sample_strategy": "stratified",
+        "sample_seed": 42,
         "output_dir": "results/bfcl_v4",
         "provider": provider_key,
         "base_url": base_url,
@@ -1274,7 +1279,8 @@ def _write_api_benchmark_config(
         "dataset_name": "chen700564/RGB",
         "dataset_revision": RGB_REVISION,
         "dataset": selected_rgb_dataset,
-        "sample_limit": sample_limit,
+        "sample_limit": sample_limit if smoke else RGB_DEFAULT_SAMPLE_LIMIT,
+        "sample_strategy": "random",
         "output_dir": "results/rgb",
         "data_cache_dir": "results/rgb/cache",
         "provider": provider_key,
@@ -1304,7 +1310,9 @@ def _write_api_benchmark_config(
         "dataset_name": "openai/simpleqa",
         "dataset_url": SIMPLEQA_DATASET_URL,
         "dataset_revision": SIMPLE_EVALS_REVISION,
-        "sample_limit": sample_limit,
+        "sample_limit": sample_limit if smoke else SIMPLEQA_DEFAULT_SAMPLE_LIMIT,
+        "sample_strategy": "stratified",
+        "sample_seed": 42,
         "output_dir": "results/simpleqa",
         "data_cache_dir": "results/simpleqa/cache",
         "refresh_cache": False,
@@ -1505,6 +1513,8 @@ def _parse_benchmarks(value: str) -> list[str]:
         "judged": JUDGED_BENCHMARKS,
         "llm-judge": JUDGED_BENCHMARKS,
         "judge-required": JUDGED_BENCHMARKS,
+        "recommended": FULL_SUITE_BENCHMARKS,
+        "recommended-suite": FULL_SUITE_BENCHMARKS,
         "full": FULL_SUITE_BENCHMARKS,
         "everything": FULL_SUITE_BENCHMARKS,
         "complete": FULL_SUITE_BENCHMARKS,
@@ -1536,12 +1546,12 @@ def _parse_benchmarks(value: str) -> list[str]:
     if unknown:
         raise typer.BadParameter(
             f"Unsupported benchmark(s): {', '.join(unknown)}. "
-            "Use text, vision, judge, suite, full, an individual benchmark, "
+            "Use text, vision, judge, suite, recommended, full, an individual benchmark, "
             "or a comma-separated list."
         )
     if not selected:
         raise typer.BadParameter(
-            "--benchmark must be text, vision, judge, suite, full, an individual benchmark, or a comma-separated list"
+            "--benchmark must be text, vision, judge, suite, recommended, full, an individual benchmark, or a comma-separated list"
         )
     return selected
 
