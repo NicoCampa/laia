@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import IFBenchSettings, VariantConfig
+from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -270,7 +271,7 @@ def build_summary(
 
 def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
     raw = {"summary": summary}
-    return [
+    metrics = [
         MetricResult(
             "ifbench_prompt_level_loose",
             _as_float(summary.get("ifbench_prompt_level_loose")),
@@ -303,6 +304,8 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
             raw,
         ),
     ]
+    metrics.extend(efficiency_metrics_from_summary(summary))
+    return metrics
 
 
 def _score_response(row: dict[str, Any], response: str) -> tuple[Any, Any]:

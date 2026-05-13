@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from local_ai_analysis.adapters.native import GenerationResponse, create_native_client
 from local_ai_analysis.config import BFCLV4Settings, VariantConfig
+from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -281,7 +282,7 @@ def build_summary(
 
 def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
     raw = {"summary": summary}
-    return [
+    metrics = [
         MetricResult(
             "bfcl_v4_selected_accuracy",
             _as_float(summary.get("bfcl_v4_selected_accuracy")),
@@ -326,6 +327,8 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
             raw,
         ),
     ]
+    metrics.extend(efficiency_metrics_from_summary(summary))
+    return metrics
 
 
 class _LocalPromptBFCLHandler:

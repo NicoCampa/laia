@@ -25,6 +25,12 @@ from local_ai_analysis.utils.metadata import collect_hardware_metadata
 ProgressCallback = Callable[[str, dict[str, Any]], None]
 
 
+class BenchmarkRunError(RuntimeError):
+    def __init__(self, message: str, result: dict[str, Any]):
+        super().__init__(message)
+        self.result = result
+
+
 class BenchmarkRunner:
     def __init__(
         self,
@@ -105,6 +111,7 @@ class BenchmarkRunner:
 
         variants_seen = 0
         metrics_written = 0
+        self._metrics_written = 0
         try:
             for base_model in cfg.models:
                 base_model_id = self._upsert_base_model(base_model)
@@ -139,40 +146,24 @@ class BenchmarkRunner:
                         )
                         continue
 
-                    metrics = self._run_variant_metrics(variant)
-                    for metric in metrics:
-                        task_id = self._task_for_metric(metric)
-                        self.db.insert_result(
-                            run_id=run_id,
-                            variant_id=variant_id,
-                            task_id=task_id,
-                            metric_name=metric.metric_name,
-                            metric_value=metric.metric_value,
-                            unit=metric.unit,
-                            raw=metric.raw,
-                        )
-                        self.events.write(
-                            "metric_recorded",
-                            {
-                                "run_id": run_id,
-                                "variant_id": variant_id,
-                                "metric_name": metric.metric_name,
-                                "metric_value": metric.metric_value,
-                                "unit": metric.unit,
-                            },
-                        )
-                        metrics_written += 1
+                    variant_metrics_written = self._run_variant_metrics(
+                        variant,
+                        run_id=run_id,
+                        variant_id=variant_id,
+                    )
+                    metrics_written += variant_metrics_written
                     self._progress(
                         "variant_completed",
                         {
                             "index": variants_seen,
                             "total": variants_total,
                             "variant": variant.name,
-                            "metrics_written": len(metrics),
+                            "metrics_written": variant_metrics_written,
                         },
                     )
             self._progress("normalization_started", {})
             normalized_rows = refresh_normalized_results(self.db)
+            metrics_written = self._metrics_written
             self._progress("normalization_completed", {"normalized_rows": normalized_rows})
             self.db.complete_run(
                 run_id,
@@ -210,10 +201,22 @@ class BenchmarkRunner:
                 "raw_jsonl": cfg.run.raw_jsonl,
             }
         except Exception as exc:
-            self.db.complete_run(run_id, {"status": "failed", "error": str(exc)})
-            self.events.write("run_failed", {"run_id": run_id, "error": str(exc)})
-            self._progress("run_failed", {"run_id": run_id, "error": str(exc)})
-            raise
+            normalized_rows = refresh_normalized_results(self.db)
+            metrics_written = self._metrics_written
+            result = {
+                "run_id": run_id,
+                "variants_seen": variants_seen,
+                "metrics_written": metrics_written,
+                "normalized_rows": normalized_rows,
+                "db_path": cfg.run.output_db,
+                "raw_jsonl": cfg.run.raw_jsonl,
+                "status": "failed",
+                "error": str(exc),
+            }
+            self.db.complete_run(run_id, result)
+            self.events.write("run_failed", result)
+            self._progress("run_failed", result)
+            raise BenchmarkRunError(str(exc), result) from exc
 
     def _dry_run_only(self) -> dict[str, Any]:
         variants_total = self._variant_count()
@@ -372,94 +375,194 @@ class BenchmarkRunner:
             )
         return planned
 
-    def _run_variant_metrics(self, variant: VariantConfig) -> list[MetricResult]:
-        metrics: list[MetricResult] = []
+    def _record_metrics(
+        self,
+        *,
+        run_id: str,
+        variant_id: str,
+        metrics: list[MetricResult],
+    ) -> int:
+        for metric in metrics:
+            task_id = self._task_for_metric(metric)
+            self.db.insert_result(
+                run_id=run_id,
+                variant_id=variant_id,
+                task_id=task_id,
+                metric_name=metric.metric_name,
+                metric_value=metric.metric_value,
+                unit=metric.unit,
+                raw=metric.raw,
+            )
+            self.events.write(
+                "metric_recorded",
+                {
+                    "run_id": run_id,
+                    "variant_id": variant_id,
+                    "metric_name": metric.metric_name,
+                    "metric_value": metric.metric_value,
+                    "unit": metric.unit,
+                },
+            )
+        metrics_written = len(metrics)
+        self._metrics_written += metrics_written
+        return metrics_written
+
+    def _run_variant_metrics(
+        self,
+        variant: VariantConfig,
+        *,
+        run_id: str,
+        variant_id: str,
+    ) -> int:
+        metrics_written = 0
         if self.config.global_mmlu_lite.enabled:
             self._progress("task_started", {"task": "global-mmlu-lite", "variant": variant.name})
-            metrics.extend(
-                GlobalMMLULiteRunner(self.config.global_mmlu_lite).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = GlobalMMLULiteRunner(self.config.global_mmlu_lite).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress(
                 "task_completed", {"task": "global-mmlu-lite", "variant": variant.name}
             )
         if self.config.ifbench.enabled:
             self._progress("task_started", {"task": "ifbench", "variant": variant.name})
-            metrics.extend(
-                IFBenchRunner(self.config.ifbench).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = IFBenchRunner(self.config.ifbench).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "ifbench", "variant": variant.name})
         if self.config.bfcl_v4.enabled:
             self._progress("task_started", {"task": "bfcl-v4", "variant": variant.name})
-            metrics.extend(
-                BFCLV4Runner(self.config.bfcl_v4).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = BFCLV4Runner(self.config.bfcl_v4).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "bfcl-v4", "variant": variant.name})
         if self.config.ocrbench_v2.enabled:
             self._progress("task_started", {"task": "ocrbench-v2", "variant": variant.name})
-            metrics.extend(
-                OCRBenchV2Runner(self.config.ocrbench_v2).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = OCRBenchV2Runner(self.config.ocrbench_v2).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "ocrbench-v2", "variant": variant.name})
         if self.config.mmmu.enabled:
             self._progress("task_started", {"task": "mmmu", "variant": variant.name})
-            metrics.extend(
-                MMMURunner(self.config.mmmu).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = MMMURunner(self.config.mmmu).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "mmmu", "variant": variant.name})
         if self.config.mbpp.enabled:
             self._progress("task_started", {"task": "mbpp", "variant": variant.name})
-            metrics.extend(
-                MBPPRunner(self.config.mbpp).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = MBPPRunner(self.config.mbpp).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "mbpp", "variant": variant.name})
         if self.config.rgb.enabled:
             self._progress("task_started", {"task": "rgb", "variant": variant.name})
-            metrics.extend(
-                RGBRunner(self.config.rgb).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = RGBRunner(self.config.rgb).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "rgb", "variant": variant.name})
         if self.config.simpleqa.enabled:
             self._progress("task_started", {"task": "simpleqa", "variant": variant.name})
-            metrics.extend(
-                SimpleQARunner(self.config.simpleqa).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = SimpleQARunner(self.config.simpleqa).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "simpleqa", "variant": variant.name})
         if self.config.harmbench.enabled:
             self._progress("task_started", {"task": "harmbench", "variant": variant.name})
-            metrics.extend(
-                HarmBenchRunner(self.config.harmbench).run(
-                    variant,
-                    progress_callback=self._progress,
-                )
+            metrics = HarmBenchRunner(self.config.harmbench).run(
+                variant,
+                progress_callback=self._progress,
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id, variant_id=variant_id, metrics=metrics
             )
             self._progress("task_completed", {"task": "harmbench", "variant": variant.name})
-        return metrics
+        return metrics_written
 
     def _task_for_metric(self, metric: MetricResult) -> str:
+        if metric.metric_name.startswith("benchmark_"):
+            task_name = str((metric.raw.get("summary") or {}).get("task") or "")
+            if task_name.startswith("global_mmlu_lite"):
+                task_version = self.config.global_mmlu_lite.dataset_name
+                prompt_template = self.config.global_mmlu_lite.prompt_template
+                task_type = "generation_quality"
+            elif task_name.startswith("ifbench"):
+                task_version = self.config.ifbench.dataset_name
+                prompt_template = None
+                task_type = "instruction_following"
+            elif task_name.startswith("bfcl"):
+                task_version = self.config.bfcl_v4.version
+                prompt_template = None
+                task_type = "function_calling"
+            elif task_name.startswith("ocrbench"):
+                task_version = self.config.ocrbench_v2.dataset_name
+                prompt_template = self.config.ocrbench_v2.prompt_template
+                task_type = "vision_ocr"
+            elif task_name.startswith("mmmu"):
+                task_version = self.config.mmmu.dataset_name
+                prompt_template = self.config.mmmu.multiple_choice_prompt_template
+                task_type = "vision_reasoning"
+            elif task_name.startswith("mbpp"):
+                task_version = self.config.mbpp.dataset_name
+                prompt_template = self.config.mbpp.prompt_template
+                task_type = "code_generation"
+            elif task_name.startswith("rgb"):
+                task_version = self.config.rgb.dataset_name
+                prompt_template = self.config.rgb.instruction_template_en
+                task_type = "rag_generation"
+            elif task_name.startswith("simpleqa"):
+                task_version = self.config.simpleqa.dataset_name
+                prompt_template = self.config.simpleqa.prompt_template
+                task_type = "short_form_factuality"
+            elif task_name.startswith("harmbench"):
+                task_version = self.config.harmbench.dataset_name
+                prompt_template = self.config.harmbench.prompt_template
+                task_type = "safety_red_team"
+            else:
+                task_version = "efficiency"
+                prompt_template = None
+                task_type = "operational_efficiency"
+            return self.db.get_or_create_task(
+                {
+                    "name": task_name or "benchmark-efficiency",
+                    "task_type": task_type,
+                    "task_version": task_version,
+                    "few_shot": 0,
+                    "prompt_template": prompt_template,
+                    "decoding": {"source": "sample_jsonl_efficiency_v1"},
+                    "metric_name": metric.metric_name,
+                }
+            )
         if metric.metric_name.startswith("harmbench_"):
             return self.db.get_or_create_task(
                 {

@@ -66,6 +66,29 @@ class VariantMetrics:
     model_intelligence_coverage: float | None = None
     model_intelligence_available_score: float | None = None
     benchmark_runtime_seconds: float | None = None
+    benchmark_samples: float | None = None
+    benchmark_correct_count: float | None = None
+    benchmark_prompt_tokens: float | None = None
+    benchmark_completion_tokens: float | None = None
+    benchmark_total_tokens: float | None = None
+    benchmark_reasoning_tokens: float | None = None
+    benchmark_output_tokens_per_second: float | None = None
+    benchmark_total_tokens_per_second: float | None = None
+    benchmark_avg_latency_seconds: float | None = None
+    benchmark_p50_latency_seconds: float | None = None
+    benchmark_p95_latency_seconds: float | None = None
+    benchmark_truncated_count: float | None = None
+    benchmark_truncated_rate: float | None = None
+    benchmark_tokens_per_correct_answer: float | None = None
+    benchmark_seconds_per_correct_answer: float | None = None
+    benchmark_time_to_first_token_seconds: float | None = None
+    benchmark_inter_token_latency_seconds: float | None = None
+    benchmark_end_to_end_latency_seconds: float | None = None
+    benchmark_system_output_throughput_tokens_per_second: float | None = None
+    benchmark_input_cost_usd: float | None = None
+    benchmark_output_cost_usd: float | None = None
+    benchmark_total_cost_usd: float | None = None
+    benchmark_cost_per_correct_answer_usd: float | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -101,8 +124,27 @@ def refresh_normalized_results(db: LocalAIAnalysisDB) -> int:
                  harmbench_attack_success_rate, harmbench_refusal_rate,
                  model_intelligence_score, model_intelligence_coverage,
                  model_intelligence_available_score,
-                 benchmark_runtime_seconds, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 benchmark_runtime_seconds,
+                 benchmark_samples, benchmark_correct_count,
+                 benchmark_prompt_tokens, benchmark_completion_tokens,
+                 benchmark_total_tokens, benchmark_reasoning_tokens,
+                 benchmark_output_tokens_per_second,
+                 benchmark_total_tokens_per_second,
+                 benchmark_avg_latency_seconds,
+                 benchmark_p50_latency_seconds,
+                 benchmark_p95_latency_seconds,
+                 benchmark_truncated_count, benchmark_truncated_rate,
+                 benchmark_tokens_per_correct_answer,
+                 benchmark_seconds_per_correct_answer,
+                 benchmark_time_to_first_token_seconds,
+                 benchmark_inter_token_latency_seconds,
+                 benchmark_end_to_end_latency_seconds,
+                 benchmark_system_output_throughput_tokens_per_second,
+                 benchmark_input_cost_usd, benchmark_output_cost_usd,
+                 benchmark_total_cost_usd,
+                 benchmark_cost_per_correct_answer_usd,
+                 metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     str(uuid.uuid4()),
@@ -151,6 +193,29 @@ def refresh_normalized_results(db: LocalAIAnalysisDB) -> int:
                     variant.model_intelligence_coverage,
                     variant.model_intelligence_available_score,
                     variant.benchmark_runtime_seconds,
+                    variant.benchmark_samples,
+                    variant.benchmark_correct_count,
+                    variant.benchmark_prompt_tokens,
+                    variant.benchmark_completion_tokens,
+                    variant.benchmark_total_tokens,
+                    variant.benchmark_reasoning_tokens,
+                    variant.benchmark_output_tokens_per_second,
+                    variant.benchmark_total_tokens_per_second,
+                    variant.benchmark_avg_latency_seconds,
+                    variant.benchmark_p50_latency_seconds,
+                    variant.benchmark_p95_latency_seconds,
+                    variant.benchmark_truncated_count,
+                    variant.benchmark_truncated_rate,
+                    variant.benchmark_tokens_per_correct_answer,
+                    variant.benchmark_seconds_per_correct_answer,
+                    variant.benchmark_time_to_first_token_seconds,
+                    variant.benchmark_inter_token_latency_seconds,
+                    variant.benchmark_end_to_end_latency_seconds,
+                    variant.benchmark_system_output_throughput_tokens_per_second,
+                    variant.benchmark_input_cost_usd,
+                    variant.benchmark_output_cost_usd,
+                    variant.benchmark_total_cost_usd,
+                    variant.benchmark_cost_per_correct_answer_usd,
                     json.dumps(variant.metadata or {}, sort_keys=True, default=str),
                 ],
             )
@@ -204,7 +269,30 @@ def _load_variant_metrics(db: LocalAIAnalysisDB) -> list[VariantMetrics]:
             max(CASE WHEN r.metric_name = 'simpleqa_accuracy_given_attempted' THEN r.metric_value END) AS simpleqa_accuracy_given_attempted,
             max(CASE WHEN r.metric_name = 'harmbench_attack_success_rate' THEN r.metric_value END) AS harmbench_attack_success_rate,
             max(CASE WHEN r.metric_name = 'harmbench_refusal_rate' THEN r.metric_value END) AS harmbench_refusal_rate,
-            max(CASE WHEN r.metric_name IN ('global_mmlu_lite_runtime_seconds', 'ifbench_runtime_seconds', 'bfcl_v4_runtime_seconds', 'ocrbench_v2_runtime_seconds', 'mmmu_runtime_seconds', 'mbpp_runtime_seconds', 'rgb_runtime_seconds', 'simpleqa_runtime_seconds', 'harmbench_runtime_seconds') THEN r.metric_value END) AS benchmark_runtime_seconds
+            sum(CASE WHEN r.metric_name IN ('global_mmlu_lite_runtime_seconds', 'ifbench_runtime_seconds', 'bfcl_v4_runtime_seconds', 'ocrbench_v2_runtime_seconds', 'mmmu_runtime_seconds', 'mbpp_runtime_seconds', 'rgb_runtime_seconds', 'simpleqa_runtime_seconds', 'harmbench_runtime_seconds') THEN r.metric_value ELSE 0 END) AS benchmark_runtime_seconds,
+            sum(CASE WHEN r.metric_name = 'benchmark_samples' THEN r.metric_value ELSE 0 END) AS benchmark_samples,
+            sum(CASE WHEN r.metric_name = 'benchmark_correct_count' THEN r.metric_value ELSE 0 END) AS benchmark_correct_count,
+            sum(CASE WHEN r.metric_name = 'benchmark_prompt_tokens' THEN r.metric_value ELSE 0 END) AS benchmark_prompt_tokens,
+            sum(CASE WHEN r.metric_name = 'benchmark_completion_tokens' THEN r.metric_value ELSE 0 END) AS benchmark_completion_tokens,
+            sum(CASE WHEN r.metric_name = 'benchmark_total_tokens' THEN r.metric_value ELSE 0 END) AS benchmark_total_tokens,
+            sum(CASE WHEN r.metric_name = 'benchmark_reasoning_tokens' THEN r.metric_value ELSE 0 END) AS benchmark_reasoning_tokens,
+            sum(CASE WHEN r.metric_name = 'benchmark_completion_tokens' THEN r.metric_value ELSE 0 END) / nullif(sum(CASE WHEN r.metric_name IN ('global_mmlu_lite_runtime_seconds', 'ifbench_runtime_seconds', 'bfcl_v4_runtime_seconds', 'ocrbench_v2_runtime_seconds', 'mmmu_runtime_seconds', 'mbpp_runtime_seconds', 'rgb_runtime_seconds', 'simpleqa_runtime_seconds', 'harmbench_runtime_seconds') THEN r.metric_value ELSE 0 END), 0) AS benchmark_output_tokens_per_second,
+            sum(CASE WHEN r.metric_name = 'benchmark_total_tokens' THEN r.metric_value ELSE 0 END) / nullif(sum(CASE WHEN r.metric_name IN ('global_mmlu_lite_runtime_seconds', 'ifbench_runtime_seconds', 'bfcl_v4_runtime_seconds', 'ocrbench_v2_runtime_seconds', 'mmmu_runtime_seconds', 'mbpp_runtime_seconds', 'rgb_runtime_seconds', 'simpleqa_runtime_seconds', 'harmbench_runtime_seconds') THEN r.metric_value ELSE 0 END), 0) AS benchmark_total_tokens_per_second,
+            sum(CASE WHEN r.metric_name IN ('global_mmlu_lite_runtime_seconds', 'ifbench_runtime_seconds', 'bfcl_v4_runtime_seconds', 'ocrbench_v2_runtime_seconds', 'mmmu_runtime_seconds', 'mbpp_runtime_seconds', 'rgb_runtime_seconds', 'simpleqa_runtime_seconds', 'harmbench_runtime_seconds') THEN r.metric_value ELSE 0 END) / nullif(sum(CASE WHEN r.metric_name = 'benchmark_samples' THEN r.metric_value ELSE 0 END), 0) AS benchmark_avg_latency_seconds,
+            max(CASE WHEN r.metric_name = 'benchmark_p50_latency_seconds' THEN r.metric_value END) AS benchmark_p50_latency_seconds,
+            max(CASE WHEN r.metric_name = 'benchmark_p95_latency_seconds' THEN r.metric_value END) AS benchmark_p95_latency_seconds,
+            sum(CASE WHEN r.metric_name = 'benchmark_truncated_count' THEN r.metric_value ELSE 0 END) AS benchmark_truncated_count,
+            sum(CASE WHEN r.metric_name = 'benchmark_truncated_count' THEN r.metric_value ELSE 0 END) / nullif(sum(CASE WHEN r.metric_name = 'benchmark_samples' THEN r.metric_value ELSE 0 END), 0) AS benchmark_truncated_rate,
+            sum(CASE WHEN r.metric_name = 'benchmark_total_tokens' THEN r.metric_value ELSE 0 END) / nullif(sum(CASE WHEN r.metric_name = 'benchmark_correct_count' THEN r.metric_value ELSE 0 END), 0) AS benchmark_tokens_per_correct_answer,
+            sum(CASE WHEN r.metric_name IN ('global_mmlu_lite_runtime_seconds', 'ifbench_runtime_seconds', 'bfcl_v4_runtime_seconds', 'ocrbench_v2_runtime_seconds', 'mmmu_runtime_seconds', 'mbpp_runtime_seconds', 'rgb_runtime_seconds', 'simpleqa_runtime_seconds', 'harmbench_runtime_seconds') THEN r.metric_value ELSE 0 END) / nullif(sum(CASE WHEN r.metric_name = 'benchmark_correct_count' THEN r.metric_value ELSE 0 END), 0) AS benchmark_seconds_per_correct_answer,
+            max(CASE WHEN r.metric_name = 'benchmark_time_to_first_token_seconds' THEN r.metric_value END) AS benchmark_time_to_first_token_seconds,
+            max(CASE WHEN r.metric_name = 'benchmark_inter_token_latency_seconds' THEN r.metric_value END) AS benchmark_inter_token_latency_seconds,
+            max(CASE WHEN r.metric_name = 'benchmark_end_to_end_latency_seconds' THEN r.metric_value END) AS benchmark_end_to_end_latency_seconds,
+            max(CASE WHEN r.metric_name = 'benchmark_system_output_throughput_tokens_per_second' THEN r.metric_value END) AS benchmark_system_output_throughput_tokens_per_second,
+            sum(CASE WHEN r.metric_name = 'benchmark_input_cost_usd' THEN r.metric_value ELSE 0 END) AS benchmark_input_cost_usd,
+            sum(CASE WHEN r.metric_name = 'benchmark_output_cost_usd' THEN r.metric_value ELSE 0 END) AS benchmark_output_cost_usd,
+            sum(CASE WHEN r.metric_name = 'benchmark_total_cost_usd' THEN r.metric_value ELSE 0 END) AS benchmark_total_cost_usd,
+            sum(CASE WHEN r.metric_name = 'benchmark_cost_per_correct_answer_usd' THEN r.metric_value ELSE 0 END) AS benchmark_cost_per_correct_answer_usd
         FROM model_variant mv
         LEFT JOIN benchmark_result r ON r.variant_id = mv.id
         LEFT JOIN benchmark_run br ON r.run_id = br.id
@@ -277,6 +365,55 @@ def _load_variant_metrics(db: LocalAIAnalysisDB) -> list[VariantMetrics]:
                 model_intelligence_coverage=intelligence["coverage"],
                 model_intelligence_available_score=intelligence["available_score"],
                 benchmark_runtime_seconds=_to_float(payload["benchmark_runtime_seconds"]),
+                benchmark_samples=_to_float(payload["benchmark_samples"]),
+                benchmark_correct_count=_to_float(payload["benchmark_correct_count"]),
+                benchmark_prompt_tokens=_none_if_zero(payload["benchmark_prompt_tokens"]),
+                benchmark_completion_tokens=_none_if_zero(
+                    payload["benchmark_completion_tokens"]
+                ),
+                benchmark_total_tokens=_none_if_zero(payload["benchmark_total_tokens"]),
+                benchmark_reasoning_tokens=_none_if_zero(payload["benchmark_reasoning_tokens"]),
+                benchmark_output_tokens_per_second=_to_float(
+                    payload["benchmark_output_tokens_per_second"]
+                ),
+                benchmark_total_tokens_per_second=_to_float(
+                    payload["benchmark_total_tokens_per_second"]
+                ),
+                benchmark_avg_latency_seconds=_to_float(
+                    payload["benchmark_avg_latency_seconds"]
+                ),
+                benchmark_p50_latency_seconds=_to_float(
+                    payload["benchmark_p50_latency_seconds"]
+                ),
+                benchmark_p95_latency_seconds=_to_float(
+                    payload["benchmark_p95_latency_seconds"]
+                ),
+                benchmark_truncated_count=_to_float(payload["benchmark_truncated_count"]),
+                benchmark_truncated_rate=_to_float(payload["benchmark_truncated_rate"]),
+                benchmark_tokens_per_correct_answer=_to_float(
+                    payload["benchmark_tokens_per_correct_answer"]
+                ),
+                benchmark_seconds_per_correct_answer=_to_float(
+                    payload["benchmark_seconds_per_correct_answer"]
+                ),
+                benchmark_time_to_first_token_seconds=_to_float(
+                    payload["benchmark_time_to_first_token_seconds"]
+                ),
+                benchmark_inter_token_latency_seconds=_to_float(
+                    payload["benchmark_inter_token_latency_seconds"]
+                ),
+                benchmark_end_to_end_latency_seconds=_to_float(
+                    payload["benchmark_end_to_end_latency_seconds"]
+                ),
+                benchmark_system_output_throughput_tokens_per_second=_to_float(
+                    payload["benchmark_system_output_throughput_tokens_per_second"]
+                ),
+                benchmark_input_cost_usd=_none_if_zero(payload["benchmark_input_cost_usd"]),
+                benchmark_output_cost_usd=_none_if_zero(payload["benchmark_output_cost_usd"]),
+                benchmark_total_cost_usd=_none_if_zero(payload["benchmark_total_cost_usd"]),
+                benchmark_cost_per_correct_answer_usd=_none_if_zero(
+                    payload["benchmark_cost_per_correct_answer_usd"]
+                ),
                 metadata=json.loads(payload["metadata_json"] or "{}"),
             )
         )
@@ -302,6 +439,13 @@ def _to_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _none_if_zero(value: Any) -> float | None:
+    numeric = _to_float(value)
+    if numeric == 0:
+        return None
+    return numeric
 
 
 def _model_intelligence_values(payload: dict[str, Any]) -> dict[str, float | None]:

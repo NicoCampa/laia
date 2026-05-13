@@ -87,9 +87,11 @@ laia omlx vision-model-id --benchmark mmmu --mmmu-split validation
 laia omlx Qwen3.5-9B-4bit --benchmark ifbench
 laia lmstudio exact-model-id --benchmark text
 laia ollama qwen3.5:0.8b-mlx-bf16 --reasoning-effort high
+laia ollama qwen3.5:0.8b-mlx-bf16 --context-length 8192
 laia ollama qwen3.5:0.8b-mlx-bf16 --dry-run --no-auto-export
 laia lmstudio exact-model-id --base-url http://127.0.0.1:1234
 laia lmstudio exact-model-id --reasoning-effort high
+laia lmstudio exact-model-id --context-length 8192
 laia omlx exact-model-id --base-url http://127.0.0.1:8000
 laia omlx exact-model-id --api-key-env OMLX_API_KEY
 laia ollama qwen3-vl:8b --benchmark vision --modality multimodal
@@ -215,6 +217,11 @@ Shortcut commands default to `--reasoning-effort none`. Ollama maps that to nati
 reasoning controls; oMLX maps it to `chat_template_kwargs.enable_thinking=false`.
 Override it with `--reasoning-effort low`, `medium`, `high`, or `auto`.
 
+Shortcut commands also default to `--context-length 8192` for Ollama and
+LM Studio. Ollama receives `options.num_ctx=8192`; LM Studio receives
+`context_length=8192`. Override it with `--context-length N` when a model or
+server profile needs a different window.
+
 Every run records:
 
 - provider and native API base URL
@@ -223,7 +230,8 @@ Every run records:
 - dataset name, revision, split, language list, OCRBench configs, MMMU subjects,
   MBPP config/split, RGB dataset/noise settings, SimpleQA grader, HarmBench judge
   and categories, and BFCL categories
-- prompt template, parser version, decoding parameters, seed, and reasoning control
+- prompt template, parser version, decoding parameters, seed, reasoning control,
+  and requested context length
 - raw prompt/output JSONL with per-question runtime and API usage when available
 - backend, hardware, command arguments, and run UUID
 

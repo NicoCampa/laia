@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import HarmBenchSettings, VariantConfig
+from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -481,11 +482,13 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
         ),
         ("harmbench_judge_total_tokens", summary.get("harmbench_judge_total_tokens"), "tokens"),
     ]
-    return [
+    result = [
         MetricResult(name, _as_float(value), unit, raw)
         for name, value, unit in metrics
         if value is not None
     ]
+    result.extend(efficiency_metrics_from_summary(summary))
+    return result
 
 
 def _selected_functional_categories(settings: HarmBenchSettings) -> list[str]:

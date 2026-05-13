@@ -23,10 +23,25 @@ Every run records:
   settings, SimpleQA grader, HarmBench judge/category settings, and BFCL
   categories
 - prompt template and parser version
-- temperature, max tokens, seed, stop, top-p, and reasoning effort
+- temperature, max tokens, seed, stop, top-p, reasoning effort, and requested
+  context length
 - raw prompt, raw output, extracted answer, gold answer, and correctness per question
 - per-question runtime and API usage when available
 - backend profile, hardware profile, command arguments, and run UUID
+- aggregate efficiency metrics derived from per-question logs: input/output/total
+  tokens, reasoning tokens when exposed, output tokens per second, average/P50/P95
+  latency, truncation rate, tokens per correct answer, and seconds per correct
+  answer
+- Artificial Analysis-style streaming fields for time to first token,
+  inter-token latency, end-to-end latency, and system output throughput. These
+  are present in the schema but remain empty until a streaming speed run is used.
+- Artificial Analysis-style cost fields for input, output, total, and
+  per-correct-answer cost. These remain empty for local runs unless a pricing
+  profile is attached.
+
+Completed benchmark metrics are written as soon as each benchmark finishes. If a
+later benchmark fails, the run is marked `failed`, but the already completed
+benchmark metrics are kept, normalized, and available for website export.
 
 Shortcut-generated configs pin dataset sources to explicit upstream revisions:
 

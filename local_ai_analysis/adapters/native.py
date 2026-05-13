@@ -93,6 +93,13 @@ class NativeClient:
     ) -> GenerationResponse:
         raise NotImplementedError
 
+    def reset_model_runtime(
+        self,
+        model: str,
+        request_extra: dict[str, Any] | None = None,
+    ) -> str | None:
+        return None
+
     def _request_json(
         self,
         url: str,
@@ -295,6 +302,42 @@ class LMStudioNativeClient(NativeClient):
         if usage:
             raw.setdefault("usage", usage)
         return GenerationResponse(text=text, raw=raw, runtime_seconds=runtime)
+
+    def reset_model_runtime(
+        self,
+        model: str,
+        request_extra: dict[str, Any] | None = None,
+    ) -> str | None:
+        self._models_payload = None
+        instance_id = None
+        for item in self._model_payloads():
+            if model not in _lmstudio_model_ids(item):
+                continue
+            for instance in item.get("loaded_instances") or []:
+                if isinstance(instance, dict) and instance.get("id"):
+                    instance_id = str(instance["id"])
+                    break
+            if instance_id:
+                break
+        if not instance_id:
+            return None
+        self._request_json(
+            f"{self.base_url}/api/v1/models/unload",
+            method="POST",
+            payload={"instance_id": instance_id},
+            headers=self._headers(),
+        )
+        load_payload: dict[str, Any] = {"model": model}
+        if request_extra:
+            load_payload.update(request_extra)
+        self._request_json(
+            f"{self.base_url}/api/v1/models/load",
+            method="POST",
+            payload=load_payload,
+            headers=self._headers(),
+        )
+        self._models_payload = None
+        return instance_id
 
     def _model_payloads(self) -> list[dict[str, Any]]:
         if self._models_payload is None:

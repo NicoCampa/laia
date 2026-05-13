@@ -84,6 +84,30 @@ class LocalAIAnalysisDB:
             "model_intelligence_score": "DOUBLE",
             "model_intelligence_coverage": "DOUBLE",
             "model_intelligence_available_score": "DOUBLE",
+            "benchmark_runtime_seconds": "DOUBLE",
+            "benchmark_samples": "DOUBLE",
+            "benchmark_correct_count": "DOUBLE",
+            "benchmark_prompt_tokens": "DOUBLE",
+            "benchmark_completion_tokens": "DOUBLE",
+            "benchmark_total_tokens": "DOUBLE",
+            "benchmark_reasoning_tokens": "DOUBLE",
+            "benchmark_output_tokens_per_second": "DOUBLE",
+            "benchmark_total_tokens_per_second": "DOUBLE",
+            "benchmark_avg_latency_seconds": "DOUBLE",
+            "benchmark_p50_latency_seconds": "DOUBLE",
+            "benchmark_p95_latency_seconds": "DOUBLE",
+            "benchmark_truncated_count": "DOUBLE",
+            "benchmark_truncated_rate": "DOUBLE",
+            "benchmark_tokens_per_correct_answer": "DOUBLE",
+            "benchmark_seconds_per_correct_answer": "DOUBLE",
+            "benchmark_time_to_first_token_seconds": "DOUBLE",
+            "benchmark_inter_token_latency_seconds": "DOUBLE",
+            "benchmark_end_to_end_latency_seconds": "DOUBLE",
+            "benchmark_system_output_throughput_tokens_per_second": "DOUBLE",
+            "benchmark_input_cost_usd": "DOUBLE",
+            "benchmark_output_cost_usd": "DOUBLE",
+            "benchmark_total_cost_usd": "DOUBLE",
+            "benchmark_cost_per_correct_answer_usd": "DOUBLE",
         }
         for column_name, column_type in columns.items():
             existing = self.conn.execute(
@@ -162,9 +186,9 @@ class LocalAIAnalysisDB:
         existing = self.conn.execute(
             """
             SELECT id FROM model_variant
-            WHERE base_model_id = ? AND variant_name = ?
+            WHERE base_model_id = ? AND variant_name = ? AND quantization_id = ?
             """,
-            [payload["base_model_id"], payload["variant_name"]],
+            [payload["base_model_id"], payload["variant_name"], payload["quantization_id"]],
         ).fetchone()
         metadata = _json(payload.get("metadata", {}))
         if existing:
@@ -480,6 +504,29 @@ class LocalAIAnalysisDB:
                 nr.model_intelligence_coverage,
                 nr.model_intelligence_available_score,
                 nr.benchmark_runtime_seconds,
+                nr.benchmark_samples,
+                nr.benchmark_correct_count,
+                nr.benchmark_prompt_tokens,
+                nr.benchmark_completion_tokens,
+                nr.benchmark_total_tokens,
+                nr.benchmark_reasoning_tokens,
+                nr.benchmark_output_tokens_per_second,
+                nr.benchmark_total_tokens_per_second,
+                nr.benchmark_avg_latency_seconds,
+                nr.benchmark_p50_latency_seconds,
+                nr.benchmark_p95_latency_seconds,
+                nr.benchmark_truncated_count,
+                nr.benchmark_truncated_rate,
+                nr.benchmark_tokens_per_correct_answer,
+                nr.benchmark_seconds_per_correct_answer,
+                nr.benchmark_time_to_first_token_seconds,
+                nr.benchmark_inter_token_latency_seconds,
+                nr.benchmark_end_to_end_latency_seconds,
+                nr.benchmark_system_output_throughput_tokens_per_second,
+                nr.benchmark_input_cost_usd,
+                nr.benchmark_output_cost_usd,
+                nr.benchmark_total_cost_usd,
+                nr.benchmark_cost_per_correct_answer_usd,
                 nr.metadata_json
             FROM normalized_result nr
             JOIN model_variant mv ON nr.variant_id = mv.id

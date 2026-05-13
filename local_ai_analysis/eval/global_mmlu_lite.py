@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import GlobalMMLULiteSettings, VariantConfig
+from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -114,7 +115,7 @@ class GlobalMMLULiteRunner:
         total_runtime = 0.0
 
         with samples_path.open("w", encoding="utf-8") as sample_file:
-            for language, dataset in language_datasets:
+            for language_index, (language, dataset) in enumerate(language_datasets):
                 count = 0
                 for row_payload in dataset:
                     row = dict(row_payload)
@@ -196,6 +197,32 @@ class GlobalMMLULiteRunner:
                         and count >= self.settings.sample_limit_per_language
                     ):
                         break
+                if (
+                    self.settings.restart_between_languages
+                    and language_index < len(language_datasets) - 1
+                ):
+                    reset_error = None
+                    try:
+                        instance_id = self.client.reset_model_runtime(
+                            model,
+                            request_extra=self.settings.request_extra,
+                        )
+                    except Exception as exc:
+                        instance_id = None
+                        reset_error = str(exc)
+                    if progress_callback:
+                        progress_callback(
+                            "runtime_cache_reset",
+                            {
+                                "task": "global-mmlu-lite",
+                                "variant": variant.name,
+                                "language": language,
+                                "provider": self.settings.provider,
+                                "model": model,
+                                "instance_id": instance_id,
+                                "error": reset_error,
+                            },
+                        )
 
         summary = build_summary(
             settings=self.settings,
@@ -357,6 +384,7 @@ def build_summary(
         "reasoning_effort": settings.reasoning_effort,
         "response_format": settings.response_format,
         "request_extra": settings.request_extra,
+        "restart_between_languages": settings.restart_between_languages,
         "parser": settings.parser_version,
         "prompt_template": settings.prompt_template,
         "total": total,
@@ -426,6 +454,7 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
                 raw,
             )
         )
+    metrics.extend(efficiency_metrics_from_summary(summary))
     return metrics
 
 

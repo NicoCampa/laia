@@ -50,6 +50,7 @@ class GlobalMMLULiteSettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_between_languages: bool = False
     parser_version: str = "global_mmlu_lite_regex_v1"
     prompt_template: str = (
         "Answer the following multiple-choice question.\n\n"

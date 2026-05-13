@@ -1,14 +1,16 @@
 import {
-  ArrowUpRight,
+  BookOpen,
   CheckCircle2,
+  Code2,
   Cpu,
+  Eye,
+  FileText,
   Lightbulb,
   LightbulbOff,
   ListFilter,
   RotateCcw,
   Search,
   ShieldCheck,
-  X,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -76,6 +78,29 @@ type LeaderboardRow = {
   model_intelligence_coverage?: number | null;
   model_intelligence_available_score?: number | null;
   benchmark_runtime_seconds?: number | null;
+  benchmark_samples?: number | null;
+  benchmark_correct_count?: number | null;
+  benchmark_prompt_tokens?: number | null;
+  benchmark_completion_tokens?: number | null;
+  benchmark_total_tokens?: number | null;
+  benchmark_reasoning_tokens?: number | null;
+  benchmark_output_tokens_per_second?: number | null;
+  benchmark_total_tokens_per_second?: number | null;
+  benchmark_avg_latency_seconds?: number | null;
+  benchmark_p50_latency_seconds?: number | null;
+  benchmark_p95_latency_seconds?: number | null;
+  benchmark_truncated_count?: number | null;
+  benchmark_truncated_rate?: number | null;
+  benchmark_tokens_per_correct_answer?: number | null;
+  benchmark_seconds_per_correct_answer?: number | null;
+  benchmark_time_to_first_token_seconds?: number | null;
+  benchmark_inter_token_latency_seconds?: number | null;
+  benchmark_end_to_end_latency_seconds?: number | null;
+  benchmark_system_output_throughput_tokens_per_second?: number | null;
+  benchmark_input_cost_usd?: number | null;
+  benchmark_output_cost_usd?: number | null;
+  benchmark_total_cost_usd?: number | null;
+  benchmark_cost_per_correct_answer_usd?: number | null;
   metadata_json?: string | null;
 };
 
@@ -101,38 +126,7 @@ type QuantizationOption = {
   rank: number;
 };
 
-type QuantizationComparison = {
-  groupKey: string;
-  baseline: QuantizationOption;
-  selected: QuantizationOption;
-  options: QuantizationOption[];
-};
-
-type ReasoningOption = {
-  key: string;
-  label: string;
-  row: LeaderboardRow;
-  score: number | null;
-  rank: number;
-};
-
-type ReasoningComparison = {
-  groupKey: string;
-  baseline: ReasoningOption;
-  selected: ReasoningOption;
-  options: ReasoningOption[];
-};
-
-type ScoreBaseline = {
-  label: string;
-  row: LeaderboardRow;
-};
-
-type ComparableRow = LeaderboardRow & {
-  quantizationComparison?: QuantizationComparison;
-  reasoningComparison?: ReasoningComparison;
-  scoreBaseline?: ScoreBaseline;
-};
+type ComparableRow = LeaderboardRow;
 
 type MetricColumn = {
   key: string;
@@ -152,11 +146,8 @@ export function App() {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
-  const [selectedQuantizations, setSelectedQuantizations] = useState<Record<string, string>>({});
-  const [selectedReasoning, setSelectedReasoning] = useState<Record<string, string>>({});
-  const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
-  const [drawerRow, setDrawerRow] = useState<LeaderboardRow | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState<"leaderboard" | "methodology">("leaderboard");
 
   useEffect(() => {
     loadPayload()
@@ -171,31 +162,9 @@ export function App() {
     () => applyFilters(publishableRows, filters),
     [publishableRows, filters],
   );
-  const comparableRows = useMemo(
-    () => buildComparableRows(filteredRows, selectedQuantizations, selectedReasoning),
-    [filteredRows, selectedQuantizations, selectedReasoning],
-  );
+  const comparableRows = useMemo(() => buildComparableRows(filteredRows), [filteredRows]);
   const rankedRows = useMemo(() => rankRows(comparableRows), [comparableRows]);
-  const activeRow =
-    rankedRows.find((row) => row.variant_id === activeVariantId) ?? rankedRows[0] ?? null;
   const options = useMemo(() => optionSets(publishableRows), [publishableRows]);
-  const bestQuality = bestRow(publishableRows, qualityValue);
-  const handleSelectQuantization = (
-    groupKey: string,
-    quantizationKey: string,
-    variantId: string,
-  ) => {
-    setSelectedQuantizations((current) => ({ ...current, [groupKey]: quantizationKey }));
-    setActiveVariantId(variantId);
-  };
-  const handleSelectReasoning = (
-    groupKey: string,
-    reasoningKey: string,
-    variantId: string,
-  ) => {
-    setSelectedReasoning((current) => ({ ...current, [groupKey]: reasoningKey }));
-    setActiveVariantId(variantId);
-  };
 
   if (error) {
     return (
@@ -218,119 +187,92 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <SiteHeader generatedAt={payload.generated_at} />
+      <SiteHeader generatedAt={payload.generated_at} page={page} onNavigate={setPage} />
 
-      <section className="console-hero" id="overview">
-        <div className="title-stack">
-          <p className="eyebrow">Local model ranking</p>
-          <h1>Local AI Leaderboard</h1>
-          <p>
-            Compare local models by LAIA Index, speed, tool use, coding, vision, RAG,
-            factuality, and safety.
-          </p>
-        </div>
-
-        <div className="run-summary" aria-label="Current best result">
-          <div className="summary-topline">
-            <span className="summary-bars">|| | || | |||</span>
-            <span className="summary-label">Best row</span>
-          </div>
-          <strong>{bestQuality ? displayModelName(bestQuality) : "No publishable result"}</strong>
-          <dl>
-            <div>
-              <dt>LAIA Index</dt>
-              <dd>{formatQualityScore(bestQuality)}</dd>
-            </div>
-            <div>
-              <dt>Runtime</dt>
-              <dd>{formatDuration(bestQuality?.benchmark_runtime_seconds)}</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <section className="workspace-grid" id="leaderboard">
-        <section className="leaderboard-panel" aria-labelledby="leaderboard-title">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Leaderboard</p>
-              <h2 id="leaderboard-title">Capability leaderboard</h2>
-            </div>
-            <button className="text-button" type="button" onClick={() => setShowFilters(!showFilters)}>
-              <ListFilter size={15} aria-hidden="true" />
-              {showFilters ? "Hide filters" : "Show filters"}
-            </button>
+      {page === "leaderboard" && (
+        <>
+          <div className="page-subtitle">
+            <p>
+              Compare local models by LAIA Index, speed, tool use, coding, vision, RAG,
+              factuality, and safety. Updated {formatDate(payload.generated_at)}.
+            </p>
           </div>
 
-          {showFilters && (
-            <FilterPanel
-              filters={filters}
-              options={options}
-              onChange={setFilters}
-              onReset={() => setFilters(emptyFilters)}
-            />
-          )}
+          <section className="workspace-grid" id="leaderboard">
+            <section className="leaderboard-panel" aria-labelledby="leaderboard-title">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Local AI Leaderboard</p>
+                  <h2 id="leaderboard-title">Capability rankings</h2>
+                </div>
+                <button className="text-button" type="button" onClick={() => setShowFilters(!showFilters)}>
+                  <ListFilter size={15} aria-hidden="true" />
+                  {showFilters ? "Hide filters" : "Show filters"}
+                </button>
+              </div>
 
-          <LeaderboardTable
-            rows={rankedRows}
-            activeVariantId={activeRow?.variant_id}
-            onActivate={setActiveVariantId}
-            onSelectQuantization={handleSelectQuantization}
-            onSelectReasoning={handleSelectReasoning}
-          />
-        </section>
-      </section>
+              {showFilters && (
+                <FilterPanel
+                  filters={filters}
+                  options={options}
+                  onChange={setFilters}
+                  onReset={() => setFilters(emptyFilters)}
+                />
+              )}
 
-      <section className="analysis-grid" id="analysis">
-        <SelectedRunPanel row={activeRow} onOpenRaw={setDrawerRow} />
-        <CapabilityBreakdownPanel row={activeRow} />
-      </section>
+              <LeaderboardTable
+                rows={rankedRows}
+              />
+            </section>
+          </section>
 
-      <section className="methodology-band" id="methodology">
-        <div>
-          <p className="eyebrow">Methodology</p>
-          <h2>Reproducibility first.</h2>
-        </div>
-        <div className="method-rows">
-          <MethodRow
-            icon={<CheckCircle2 size={18} />}
-            title="Capability"
-            text="Knowledge, instructions, tool calling, coding, vision, OCR, and RAG feed the LAIA Index."
-          />
-          <MethodRow
-            icon={<Cpu size={18} />}
-            title="Traceability"
-            text="Exact benchmark names, runtime, backend, hardware, model IDs, and raw metadata stay attached to each row."
-          />
-          <MethodRow
-            icon={<ShieldCheck size={18} />}
-            title="Judged checks"
-            text="Factuality and safety are reported separately because they require judge-based evaluation."
-          />
-        </div>
-      </section>
+          <footer className="footer">
+            <span>Local AI Analysis</span>
+            <span>{payload.tagline}</span>
+          </footer>
+        </>
+      )}
 
-      <footer className="footer">
-        <span>Local AI Analysis</span>
-        <span>{payload.tagline}</span>
-      </footer>
-
-      {drawerRow && <MetadataDrawer row={drawerRow} onClose={() => setDrawerRow(null)} />}
+      {page === "methodology" && <MethodologyPage />}
     </main>
   );
 }
 
-function SiteHeader({ generatedAt }: { generatedAt: string }) {
+function SiteHeader({
+  generatedAt,
+  page,
+  onNavigate,
+}: {
+  generatedAt: string;
+  page: "leaderboard" | "methodology";
+  onNavigate: (page: "leaderboard" | "methodology") => void;
+}) {
   return (
     <header className="site-header">
-      <a href="#overview" className="site-mark" aria-label="Local AI Analysis home">
-        <span>NC</span>
+      <button
+        className="site-mark"
+        style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "14px", fontWeight: 900 }}
+        onClick={() => onNavigate("leaderboard")}
+        aria-label="Local AI Analysis home"
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 44, height: 44, border: "2px solid var(--ink)", background: "var(--ink)", color: "#fff", fontSize: "0.95rem", fontWeight: 900 }}>NC</span>
         <strong>Local AI Analysis</strong>
-      </a>
+      </button>
       <nav aria-label="Primary navigation">
-        <a href="#leaderboard">Leaderboard</a>
-        <a href="#analysis">Details</a>
-        <a href="#methodology">Methodology</a>
+        <button
+          className={page === "leaderboard" ? "nav-active" : ""}
+          type="button"
+          onClick={() => onNavigate("leaderboard")}
+        >
+          Leaderboard
+        </button>
+        <button
+          className={page === "methodology" ? "nav-active" : ""}
+          type="button"
+          onClick={() => onNavigate("methodology")}
+        >
+          Methodology
+        </button>
       </nav>
       <time dateTime={generatedAt}>Updated {formatDate(generatedAt)}</time>
     </header>
@@ -441,18 +383,8 @@ function NumberInput({
   );
 }
 
-function LeaderboardTable({
-  rows,
-  activeVariantId,
-  onActivate,
-  onSelectQuantization,
-  onSelectReasoning,
-}: {
+function LeaderboardTable({ rows }: {
   rows: ComparableRow[];
-  activeVariantId?: string;
-  onActivate: (variantId: string) => void;
-  onSelectQuantization: (groupKey: string, quantizationKey: string, variantId: string) => void;
-  onSelectReasoning: (groupKey: string, reasoningKey: string, variantId: string) => void;
 }) {
   const metricColumns = metricColumnsFor(rows);
   const columnCount = 2 + metricColumns.length;
@@ -480,11 +412,7 @@ function LeaderboardTable({
             </tr>
           )}
           {rows.map((row, index) => (
-            <tr
-              className={row.variant_id === activeVariantId ? "active-row" : undefined}
-              key={row.variant_id}
-              onClick={() => onActivate(row.variant_id)}
-            >
+            <tr key={row.variant_id}>
               <td className="rank-cell">{String(index + 1).padStart(2, "0")}</td>
               <td className="model-cell">
                 <div className="model-title-row">
@@ -492,15 +420,10 @@ function LeaderboardTable({
                   <div className="model-title-stack">
                     <div className="model-title-line">
                       <strong title={row.variant_name}>{displayModelName(row)}</strong>
+                      <ModelRunBadges row={row} />
                     </div>
                     <div className="model-subline">
-                      <span>
-                        {row.family} · {formatParameter(row.parameter_size_b)}
-                      </span>
-                    </div>
-                    <div className="model-option-stack">
-                      <QuantizationSwitch row={row} onSelect={onSelectQuantization} />
-                      <ReasoningSwitch row={row} onSelect={onSelectReasoning} />
+                      <span>{providerLabel(row)} · {displayParameter(row)}</span>
                     </div>
                   </div>
                 </div>
@@ -521,138 +444,36 @@ function LeaderboardTable({
   );
 }
 
-function QuantizationSwitch({
-  row,
-  onSelect,
-}: {
-  row: ComparableRow;
-  onSelect: (groupKey: string, quantizationKey: string, variantId: string) => void;
-}) {
-  const comparison = row.quantizationComparison;
-  const options =
-    comparison?.options ?? [
-      {
-        key: quantizationKey(row),
-        label: quantizationLabel(row),
-        row,
-        score: qualityValue(row),
-        rank: quantizationRank(row),
-      },
-    ];
-  const activeKey = comparison?.selected.key ?? quantizationKey(row);
-  const baselineKey = comparison?.baseline.key ?? activeKey;
-
+function ModelRunBadges({ row }: { row: ComparableRow }) {
+  const reasoningEnabled = reasoningKey(row) !== "off";
+  const Icon = reasoningEnabled ? Lightbulb : LightbulbOff;
+  const reasoningText = reasoningEnabled ? reasoningLabel(row) : "";
   return (
-    <div className="quantization-switch" aria-label={`Quantizations for ${displayModelName(row)}`}>
-      {options.map((option) => (
-        <button
-          className={[
-            "quantization-chip",
-            option.key === activeKey ? "active" : "",
-            option.key === baselineKey ? "baseline" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          key={option.key}
-          type="button"
-          title={`${option.label}: ${formatQualityScore(option.row)}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (comparison) {
-              onSelect(comparison.groupKey, option.key, option.row.variant_id);
-            }
-          }}
-        >
-          <span>{option.label}</span>
-          <small>{formatQualityScore(option.row)}</small>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ReasoningSwitch({
-  row,
-  onSelect,
-}: {
-  row: ComparableRow;
-  onSelect: (groupKey: string, reasoningKey: string, variantId: string) => void;
-}) {
-  const comparison = row.reasoningComparison;
-  const options =
-    comparison?.options ?? [
-      {
-        key: reasoningKey(row),
-        label: reasoningLabel(row),
-        row,
-        score: qualityValue(row),
-        rank: reasoningRank(row),
-      },
-    ];
-  const activeKey = comparison?.selected.key ?? reasoningKey(row);
-  const baselineKey = comparison?.baseline.key ?? activeKey;
-
-  return (
-    <div className="reasoning-switch" aria-label={`Reasoning modes for ${displayModelName(row)}`}>
-      {options.map((option) => {
-        const enabled = reasoningKey(option.row) !== "off";
-        const Icon = enabled ? Lightbulb : LightbulbOff;
-        return (
-          <button
-            className={[
-              "reasoning-chip",
-              option.key === activeKey ? "active" : "",
-              option.key === baselineKey ? "baseline" : "",
-              enabled ? "on" : "off",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            key={option.key}
-            type="button"
-            title={`Reasoning ${option.label}: ${formatQualityScore(option.row)}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (comparison) {
-                onSelect(comparison.groupKey, option.key, option.row.variant_id);
-              }
-            }}
-          >
-            <Icon size={13} aria-hidden="true" />
-            <span>{option.label}</span>
-            <small>{formatQualityScore(option.row)}</small>
-          </button>
-        );
-      })}
+    <div className="model-badge-row" aria-label={`Run settings for ${displayModelName(row)}`}>
+      <span className="model-badge">{quantizationLabel(row)}</span>
+      <span className={`model-badge reasoning ${reasoningEnabled ? "on" : "off"}`}>
+        <Icon size={13} aria-hidden="true" />
+        {reasoningText ? <span>{reasoningText}</span> : null}
+      </span>
     </div>
   );
 }
 
 function PointsWithDelta({ row }: { row: ComparableRow }) {
   const value = numeric(row.model_intelligence_score);
-  const baseline = row.scoreBaseline;
-  const baselineValue = numeric(baseline?.row.model_intelligence_score);
-  const showDelta = baseline && !sameRun(baseline.row, row) && value !== null && baselineValue !== null;
-
-  if (!showDelta) {
-    return <span className="metric-stack">{formatPoints(value)}</span>;
-  }
-
-  const delta = value - baselineValue;
-  return (
-    <span className="metric-stack">
-      <span>{formatPoints(value)}</span>
-      <small>
-        <span>{baseline.label} {formatPoints(baselineValue)}</span>
-        <strong className={deltaClass(delta)}>{formatSignedPoints(delta)}</strong>
-      </small>
-    </span>
-  );
+  return <span className="metric-stack">{formatPoints(value)}</span>;
 }
 
 function LabIcon({ row }: { row: LeaderboardRow }) {
   const [candidateIndex, setCandidateIndex] = useState(0);
   const key = labKey(row);
-  const candidates = [`/labs/${key}.svg`, `/labs/${key}.png`, `/labs/${key}.jpg`, `/labs/${key}.webp`];
+  const candidates = [
+    `/labs/${key}.svg`,
+    `/labs/${key}.png`,
+    `/labs/${key}.jpg`,
+    `/labs/${key}.jpeg`,
+    `/labs/${key}.webp`,
+  ];
   const src = candidates[candidateIndex];
   const initials = labInitials(row);
 
@@ -671,228 +492,185 @@ function LabIcon({ row }: { row: LeaderboardRow }) {
   );
 }
 
-function SelectedRunPanel({
-  row,
-  onOpenRaw,
-}: {
-  row: ComparableRow | null;
-  onOpenRaw: (row: LeaderboardRow) => void;
-}) {
-  if (!row) {
-    return (
-      <section className="analysis-panel selected-run" aria-labelledby="selected-run-title">
-        <div className="analysis-heading">
-          <p className="eyebrow">Selected Run</p>
-          <h2 id="selected-run-title">No result selected</h2>
-        </div>
-        <p className="muted">Run a full benchmark to populate the analysis panel.</p>
-      </section>
-    );
-  }
+function MethodologyPage() {
+  const benchmarks = [
+    {
+      name: "Global MMLU Lite",
+      category: "Knowledge",
+      metric: "Pass@1",
+      icon: <BookOpen size={16} />,
+      description:
+        "A lightweight version of the Massive Multitask Language Understanding benchmark covering 57 academic subjects. Tests factual recall and reasoning across science, history, law, medicine, and more.",
+      what: "Knowledge breadth",
+    },
+    {
+      name: "IFBench",
+      category: "Instructions",
+      metric: "Prompt-level loose",
+      icon: <FileText size={16} />,
+      description:
+        "Evaluates how accurately a model follows complex, multi-constraint instructions in a single prompt. Scored at both the prompt level (all constraints met) and instruction level (per constraint).",
+      what: "Instruction following",
+    },
+    {
+      name: "BFCL v4",
+      category: "Tool calling",
+      metric: "Selected accuracy",
+      icon: <Code2 size={16} />,
+      description:
+        "Berkeley Function Calling Leaderboard v4. Tests the model's ability to invoke tools and APIs correctly across live, non-live, multi-turn, and agentic scenarios.",
+      what: "Function / tool use",
+    },
+    {
+      name: "MMMU",
+      category: "Vision",
+      metric: "Accuracy",
+      icon: <Eye size={16} />,
+      description:
+        "Massive Multidiscipline Multimodal Understanding. Evaluates vision-language models across 30 university-level subjects using images combined with text questions.",
+      what: "Visual reasoning",
+    },
+    {
+      name: "OCRBench v2",
+      category: "Vision",
+      metric: "Score",
+      icon: <FileText size={16} />,
+      description:
+        "Comprehensive OCR evaluation covering scene text, document understanding, handwriting, and formula recognition in both English and Chinese.",
+      what: "Optical character recognition",
+    },
+    {
+      name: "MBPP",
+      category: "Coding",
+      metric: "Pass@1",
+      icon: <Code2 size={16} />,
+      description:
+        "Mostly Basic Programming Problems. Tests whether the model can write correct Python functions from natural-language specifications, evaluated by running the generated code against test suites.",
+      what: "Code generation",
+    },
+    {
+      name: "RGB",
+      category: "RAG",
+      metric: "All rate",
+      icon: <BookOpen size={16} />,
+      description:
+        "Retrieval-augmented Generation Benchmark. Tests whether the model can correctly use retrieved context, reject irrelevant documents, verify facts against evidence, and correct prior wrong answers.",
+      what: "Retrieval-augmented generation",
+    },
+    {
+      name: "SimpleQA",
+      category: "Factuality",
+      metric: "F1",
+      icon: <CheckCircle2 size={16} />,
+      description:
+        "Short-answer factual questions with a single, unambiguous correct answer. Measures hallucination rate alongside correct-answer rate. Scored by an LLM judge.",
+      what: "Factuality & hallucination",
+    },
+    {
+      name: "HarmBench",
+      category: "Safety",
+      metric: "Refusal rate",
+      icon: <ShieldCheck size={16} />,
+      description:
+        "Standardized evaluation of model safety against behaviorally diverse harmful requests. Refusal rate measures how often the model correctly declines to comply with harmful prompts.",
+      what: "Safety & refusals",
+    },
+  ];
+
+  const principles = [
+    {
+      icon: <CheckCircle2 size={18} />,
+      title: "Capability-first scoring",
+      text: "The LAIA Index is a weighted composite of Knowledge, Instructions, Tool calling, Vision, Coding, and RAG — all capabilities that matter for real local deployments.",
+    },
+    {
+      icon: <Cpu size={18} />,
+      title: "Full traceability",
+      text: "Every row links to the exact benchmark suite, model file, quantization level, backend version, hardware config, and run UUID. You can always reproduce what you see.",
+    },
+    {
+      icon: <ShieldCheck size={18} />,
+      title: "Separate judge-based metrics",
+      text: "Factuality (SimpleQA) and Safety (HarmBench) require an LLM judge and are reported as distinct columns, not folded into the LAIA Index, to avoid bias.",
+    },
+    {
+      icon: <Eye size={18} />,
+      title: "Local hardware focus",
+      text: "All benchmarks run on consumer hardware without cloud inference. Runtime is measured end-to-end, including model loading, so the number reflects real-world cost.",
+    },
+  ];
 
   return (
-    <section className="analysis-panel selected-run" aria-labelledby="selected-run-title">
-      <div className="analysis-heading">
-        <p className="eyebrow">Selected Run</p>
-        <h2 id="selected-run-title">{displayModelName(row)}</h2>
+    <div className="methodology-page">
+      <div className="method-hero">
+        <p className="eyebrow">Methodology</p>
+        <h1>Reproducibility first.</h1>
+        <p className="method-lead">
+          Every result in this leaderboard is produced by running open-source benchmarks on local
+          hardware with published model files. The goal is a fair, transparent comparison of what
+          models can actually do when running close to the user.
+        </p>
       </div>
 
-      <div className="score-display">
-        <span>
-          {protocolLabel(row)} · {quantizationLabel(row)} · Reasoning {reasoningLabel(row)}
-        </span>
-        <strong>{formatQualityScore(row)}</strong>
-        <ScoreComparison row={row} />
+      <div className="method-section">
+        <h2>LAIA Index</h2>
+        <p>
+          The LAIA Index is the primary ranking metric. It is an unweighted average of per-benchmark
+          scores across the capabilities listed below, normalised to [0, 1]. Only benchmarks that
+          were actually run are included in the average — a model with partial coverage will show a
+          lower index because fewer benchmarks were completed.
+        </p>
+        <dl className="method-detail-list">
+          <div><dt>Scale</dt><dd>0 – 100 pts</dd></div>
+          <div><dt>Coverage</dt><dd>% of benchmarks run</dd></div>
+          <div><dt>Partial results</dt><dd>Shown as Available Index</dd></div>
+          <div><dt>Exclusions</dt><dd>Factuality, Safety (separate columns)</dd></div>
+        </dl>
       </div>
 
-      <dl className="detail-list">
-        <DetailItem label="Runtime" value={formatDuration(row.benchmark_runtime_seconds)} />
-        <DetailItem label="Model size" value={formatModelSize(row)} />
-        <DetailItem label="Quantization" value={quantizationLabel(row)} />
-        <DetailItem label="Reasoning" value={reasoningLabel(row)} />
-        <DetailItem label="Modality" value={modalityLabel(row)} />
-        <DetailItem label="Suite coverage" value={formatPercent(row.model_intelligence_coverage)} />
-        <DetailItem label="Available index" value={formatSecondaryScore(row)} />
-        <DetailItem label="Backend" value={row.backend_name ?? "unknown"} />
-        <DetailItem label="API model" value={apiModel(row) ?? row.base_model_name} />
-        <DetailItem label="Run label" value={row.variant_name} />
-        <DetailItem label="Run UUID" value={shortId(row.run_uuid)} />
-      </dl>
-
-      <button className="text-button" type="button" onClick={() => onOpenRaw(row)}>
-        Open metadata
-        <ArrowUpRight size={15} aria-hidden="true" />
-      </button>
-    </section>
-  );
-}
-
-function ScoreComparison({ row }: { row: ComparableRow }) {
-  const baseline = row.scoreBaseline;
-  if (!baseline || sameRun(baseline.row, row)) return null;
-  const selectedScore = numeric(row.model_intelligence_score);
-  const baselineScore = numeric(baseline.row.model_intelligence_score);
-  if (selectedScore === null || baselineScore === null) return null;
-  const delta = selectedScore - baselineScore;
-
-  return (
-    <small className="score-compare">
-      <span>
-        {baseline.label} baseline {formatPoints(baselineScore)}
-      </span>
-      <strong className={deltaClass(delta)}>{formatSignedPoints(delta)}</strong>
-    </small>
-  );
-}
-
-function CapabilityBreakdownPanel({ row }: { row: ComparableRow | null }) {
-  return (
-    <section className="analysis-panel capability-panel" aria-labelledby="capability-title">
-      <div className="analysis-heading">
-        <p className="eyebrow">Breakdown</p>
-        <h2 id="capability-title">Capability profile</h2>
-      </div>
-      <div className="capability-list">
-        {capabilityRows(row).map((capability) => (
-          <div className="capability-row" key={capability.label}>
-            <div>
-              <strong>{capability.label}</strong>
-              <span>{capability.source}</span>
+      <div className="method-section">
+        <h2>Benchmark suite</h2>
+        <p>
+          Nine benchmarks cover the capability surface relevant to local model deployment.
+          Each leaderboard row is a specific model quantization and reasoning mode.
+        </p>
+        <div className="benchmark-cards">
+          {benchmarks.map((b) => (
+            <div className="benchmark-card" key={b.name}>
+              <div className="benchmark-card-header">
+                <strong>{b.name}</strong>
+                <span className="benchmark-badge">{b.category}</span>
+              </div>
+              <p>{b.description}</p>
+              <dl className="benchmark-meta">
+                <div><dt>Metric</dt><dd>{b.metric}</dd></div>
+                <div><dt>Tests</dt><dd>{b.what}</dd></div>
+              </dl>
             </div>
-            <div className="capability-meter" aria-hidden="true">
-              <span style={{ width: capability.value === null ? "0%" : `${capability.value * 100}%` }} />
-            </div>
-            <em>{formatPercent(capability.value)}</em>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
-}
-
-function MethodRow({
-  icon,
-  title,
-  text,
-}: {
-  icon: ReactNode;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="method-row">
-      <span className="metric-icon">{icon}</span>
-      <strong>{title}</strong>
-      <p>{text}</p>
-    </div>
-  );
-}
-
-function MetadataDrawer({ row, onClose }: { row: LeaderboardRow; onClose: () => void }) {
-  const [rawPayload, setRawPayload] = useState<unknown | null>(null);
-  const [rawError, setRawError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL;
-    if (!apiUrl) return;
-    fetch(`${apiUrl.replace(/\/$/, "")}/api/variants/${row.variant_id}/raw`)
-      .then((response) => {
-        if (!response.ok) throw new Error(`Raw endpoint returned ${response.status}`);
-        return response.json();
-      })
-      .then(setRawPayload)
-      .catch((err) => setRawError(err instanceof Error ? err.message : String(err)));
-  }, [row.variant_id]);
-
-  const fallbackPayload = {
-    variant: row.variant_name,
-    base_model: row.base_model_name,
-    model_repo: row.model_repo,
-    file_name: row.file_name,
-    checksum_sha256: row.checksum_sha256,
-    file_size_bytes: row.file_size_bytes,
-    model_size_display: formatModelSize(row),
-    quantization: row.quantization,
-    backend: {
-      name: row.backend_name,
-      version: row.backend_version,
-      commit: row.backend_commit,
-    },
-    hardware: {
-      accelerator: row.hardware_accelerator,
-      cpu_model: row.cpu_model,
-      gpu_name: row.gpu_name,
-    },
-    run_uuid: row.run_uuid,
-    metrics: {
-      global_mmlu_lite_pass_at_1: row.global_mmlu_lite_pass_at_1,
-      global_mmlu_lite_micro_pass_at_1: row.global_mmlu_lite_micro_pass_at_1,
-      global_mmlu_lite_invalid_rate: row.global_mmlu_lite_invalid_rate,
-      ifbench_prompt_level_loose: row.ifbench_prompt_level_loose,
-      ifbench_instruction_level_loose: row.ifbench_instruction_level_loose,
-      ifbench_prompt_level_strict: row.ifbench_prompt_level_strict,
-      ifbench_instruction_level_strict: row.ifbench_instruction_level_strict,
-      bfcl_v4_selected_accuracy: row.bfcl_v4_selected_accuracy,
-      bfcl_v4_invalid_rate: row.bfcl_v4_invalid_rate,
-      bfcl_v4_non_live_accuracy: row.bfcl_v4_non_live_accuracy,
-      bfcl_v4_live_accuracy: row.bfcl_v4_live_accuracy,
-      bfcl_v4_multi_turn_accuracy: row.bfcl_v4_multi_turn_accuracy,
-      bfcl_v4_agentic_accuracy: row.bfcl_v4_agentic_accuracy,
-      ocrbench_v2_score: row.ocrbench_v2_score,
-      ocrbench_v2_micro_score: row.ocrbench_v2_micro_score,
-      ocrbench_v2_en_score: row.ocrbench_v2_en_score,
-      ocrbench_v2_cn_score: row.ocrbench_v2_cn_score,
-      mmmu_accuracy: row.mmmu_accuracy,
-      mmmu_invalid_rate: row.mmmu_invalid_rate,
-      mmmu_multiple_choice_accuracy: row.mmmu_multiple_choice_accuracy,
-      mmmu_open_accuracy: row.mmmu_open_accuracy,
-      mbpp_pass_at_1: row.mbpp_pass_at_1,
-      mbpp_invalid_rate: row.mbpp_invalid_rate,
-      mbpp_compile_rate: row.mbpp_compile_rate,
-      mbpp_runtime_error_rate: row.mbpp_runtime_error_rate,
-      rgb_all_rate: row.rgb_all_rate,
-      rgb_rejection_rate: row.rgb_rejection_rate,
-      rgb_fact_check_rate: row.rgb_fact_check_rate,
-      rgb_error_correction_rate: row.rgb_error_correction_rate,
-      simpleqa_f1: row.simpleqa_f1,
-      simpleqa_correct_rate: row.simpleqa_correct_rate,
-      simpleqa_incorrect_rate: row.simpleqa_incorrect_rate,
-      simpleqa_hallucination_rate: row.simpleqa_hallucination_rate,
-      simpleqa_not_attempted_rate: row.simpleqa_not_attempted_rate,
-      simpleqa_accuracy_given_attempted: row.simpleqa_accuracy_given_attempted,
-      harmbench_attack_success_rate: row.harmbench_attack_success_rate,
-      harmbench_refusal_rate: row.harmbench_refusal_rate,
-      model_intelligence_score: row.model_intelligence_score,
-      model_intelligence_coverage: row.model_intelligence_coverage,
-      model_intelligence_available_score: row.model_intelligence_available_score,
-      benchmark_runtime_seconds: row.benchmark_runtime_seconds,
-    },
-    metadata: safeMetadata(row),
-  };
-
-  return (
-    <aside className="drawer" aria-label="Raw metadata">
-      <div className="drawer-header">
-        <div>
-          <p className="eyebrow">Raw Metadata</p>
-          <h2>{row.variant_name}</h2>
+          ))}
         </div>
-        <button className="icon-button close-button" type="button" onClick={onClose}>
-          <X size={17} aria-hidden="true" />
-        </button>
       </div>
-      {rawError && <p className="error">Raw API unavailable: {rawError}</p>}
-      <pre>{JSON.stringify(rawPayload ?? fallbackPayload, null, 2)}</pre>
-    </aside>
+
+      <div className="method-section">
+        <h2>Principles</h2>
+        <div className="method-principles">
+          {principles.map((p) => (
+            <div className="method-principle" key={p.title}>
+              <span className="metric-icon">{p.icon}</span>
+              <div>
+                <strong>{p.title}</strong>
+                <p>{p.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <footer className="footer">
+        <span>Local AI Analysis</span>
+        <span>Benchmarks run on local hardware · Results updated periodically</span>
+      </footer>
+    </div>
   );
 }
 
@@ -947,64 +725,20 @@ function optionSets(rows: LeaderboardRow[]) {
   };
 }
 
-function buildComparableRows(
-  rows: LeaderboardRow[],
-  selectedQuantizations: Record<string, string>,
-  selectedReasoning: Record<string, string>,
-): ComparableRow[] {
+function buildComparableRows(rows: LeaderboardRow[]): ComparableRow[] {
   const groups = new Map<string, LeaderboardRow[]>();
   for (const row of rows) {
     const key = quantizationGroupKey(row);
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
-  return Array.from(groups.entries()).map(([groupKey, groupRows]) => {
+  return Array.from(groups.values()).flatMap((groupRows) => {
     const allQuantizationOptions = quantizationOptionsFor(groupRows);
-    const baselineQuantization = baselineQuantizationOption(allQuantizationOptions);
-    const selectedQuantizationKey = selectedQuantizations[groupKey] ?? baselineQuantization.key;
-    const currentQuantizationRows = rowsForQuantization(groupRows, selectedQuantizationKey);
-    const fallbackQuantizationRows = rowsForQuantization(groupRows, baselineQuantization.key);
-    const candidateRows = currentQuantizationRows.length
-      ? currentQuantizationRows
-      : fallbackQuantizationRows;
-    const reasoningOptions = reasoningOptionsFor(candidateRows.length ? candidateRows : groupRows);
-    const baselineReasoning = baselineReasoningOption(reasoningOptions);
-    const selectedReasoningOption =
-      reasoningOptions.find((option) => option.key === selectedReasoning[groupKey]) ??
-      baselineReasoning;
-    const quantizationOptions = quantizationOptionsFor(groupRows, selectedReasoningOption.key);
-    const selectedQuantization =
-      quantizationOptions.find((option) => option.key === selectedQuantizationKey) ??
-      baselineQuantization;
-    const selectedRows = rowsForQuantization(groupRows, selectedQuantization.key);
-    const selectedReasoningRows = selectedRows.filter(
-      (row) => reasoningKey(row) === selectedReasoningOption.key,
-    );
-    const selectedRow = bestComparableRun(
-      selectedReasoningRows.length ? selectedReasoningRows : selectedRows,
-    );
-    const scoreBaseline = scoreBaselineFor(groupRows, baselineQuantization.key);
 
-    return {
-      ...selectedRow,
-      quantizationComparison: {
-        groupKey,
-        baseline:
-          quantizationOptions.find((option) => option.key === baselineQuantization.key) ??
-          baselineQuantization,
-        selected: selectedQuantization,
-        options: quantizationOptions,
-      },
-      reasoningComparison: {
-        groupKey,
-        baseline: baselineReasoning,
-        selected:
-          reasoningOptions.find((option) => option.key === reasoningKey(selectedRow)) ??
-          selectedReasoningOption,
-        options: reasoningOptions,
-      },
-      scoreBaseline,
-    };
+    return allQuantizationOptions.map((selectedQuantization) => {
+      const selectedRows = rowsForQuantization(groupRows, selectedQuantization.key);
+      return bestComparableRun(selectedRows);
+    });
   });
 }
 
@@ -1037,61 +771,6 @@ function quantizationOptionsFor(rows: LeaderboardRow[], preferredReasoningKey?: 
   });
 }
 
-function compareQuantizationOptions(a: QuantizationOption, b: QuantizationOption) {
-  const scoreDelta = (a.score ?? Number.NEGATIVE_INFINITY) - (b.score ?? Number.NEGATIVE_INFINITY);
-  if (scoreDelta !== 0) return scoreDelta;
-  const coverageDelta =
-    (numeric(a.row.model_intelligence_coverage) ?? Number.NEGATIVE_INFINITY) -
-    (numeric(b.row.model_intelligence_coverage) ?? Number.NEGATIVE_INFINITY);
-  if (coverageDelta !== 0) return coverageDelta;
-  return (
-    (numeric(b.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY) -
-    (numeric(a.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY)
-  );
-}
-
-function baselineQuantizationOption(options: QuantizationOption[]) {
-  const preferred = options.find((option) => option.rank === 160);
-  return preferred ?? options[0]!;
-}
-
-function reasoningOptionsFor(rows: LeaderboardRow[]) {
-  const byReasoning = new Map<string, ReasoningOption>();
-  for (const row of rows) {
-    const key = reasoningKey(row);
-    const option: ReasoningOption = {
-      key,
-      label: reasoningLabel(row),
-      row,
-      score: qualityValue(row),
-      rank: reasoningRank(row),
-    };
-    const current = byReasoning.get(key);
-    if (!current || compareReasoningOptions(option, current) > 0) {
-      byReasoning.set(key, option);
-    }
-  }
-
-  return Array.from(byReasoning.values()).sort((a, b) => {
-    if (a.rank !== b.rank) return a.rank - b.rank;
-    return (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY);
-  });
-}
-
-function compareReasoningOptions(a: ReasoningOption, b: ReasoningOption) {
-  const scoreDelta = (a.score ?? Number.NEGATIVE_INFINITY) - (b.score ?? Number.NEGATIVE_INFINITY);
-  if (scoreDelta !== 0) return scoreDelta;
-  return (
-    (numeric(b.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY) -
-    (numeric(a.row.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY)
-  );
-}
-
-function baselineReasoningOption(options: ReasoningOption[]) {
-  const preferred = options.find((option) => option.key === "off");
-  return preferred ?? options[0]!;
-}
-
 function rowsForQuantization(rows: LeaderboardRow[], key: string) {
   return rows.filter((row) => quantizationKey(row) === key);
 }
@@ -1111,16 +790,6 @@ function bestComparableRun(rows: LeaderboardRow[]) {
       (numeric(b.benchmark_runtime_seconds) ?? Number.POSITIVE_INFINITY)
     );
   })[0]!;
-}
-
-function scoreBaselineFor(rows: LeaderboardRow[], baselineQuantizationKey: string): ScoreBaseline {
-  const baselineRows = rowsForQuantization(rows, baselineQuantizationKey);
-  const reasoningOptions = reasoningOptionsFor(baselineRows.length ? baselineRows : rows);
-  const baselineReasoning = baselineReasoningOption(reasoningOptions);
-  return {
-    label: `${quantizationLabel(baselineReasoning.row)} ${baselineReasoning.label}`,
-    row: baselineReasoning.row,
-  };
 }
 
 function metricColumnsFor(rows: LeaderboardRow[]): MetricColumn[] {
@@ -1266,36 +935,12 @@ function scoreForRank(row: LeaderboardRow) {
   return qualityValue(row) ?? 0;
 }
 
-function bestRow(rows: LeaderboardRow[], selector: (row: LeaderboardRow) => number | null) {
-  return rows.reduce<LeaderboardRow | null>((best, row) => {
-    const value = selector(row);
-    if (value === null) return best;
-    if (!best || value > (selector(best) ?? Number.NEGATIVE_INFINITY)) return row;
-    return best;
-  }, null);
-}
+
 
 function numeric(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function sameRun(a: LeaderboardRow, b: LeaderboardRow) {
-  return rowIdentity(a) === rowIdentity(b);
-}
-
-function rowIdentity(row: LeaderboardRow) {
-  return (
-    row.normalized_result_id ??
-    [
-      row.variant_id,
-      row.run_uuid ?? "",
-      row.variant_name,
-      quantizationKey(row),
-      reasoningKey(row),
-    ].join("|")
-  );
 }
 
 function hasMetric(rows: LeaderboardRow[], key: keyof LeaderboardRow) {
@@ -1314,55 +959,7 @@ function averageMetric(row: LeaderboardRow, keys: Array<keyof LeaderboardRow>) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function capabilityRows(row: LeaderboardRow | null) {
-  return [
-    {
-      label: "Knowledge",
-      source: "Global MMLU Lite",
-      value: row ? numeric(row.global_mmlu_lite_pass_at_1) : null,
-    },
-    {
-      label: "Instructions",
-      source: "IFBench",
-      value: row ? numeric(row.ifbench_prompt_level_loose) : null,
-    },
-    {
-      label: "Tool calling",
-      source: "BFCL v4",
-      value: row ? numeric(row.bfcl_v4_selected_accuracy) : null,
-    },
-    {
-      label: "Vision reasoning",
-      source: "MMMU",
-      value: row ? numeric(row.mmmu_accuracy) : null,
-    },
-    {
-      label: "OCR",
-      source: "OCRBench v2",
-      value: row ? numeric(row.ocrbench_v2_score) : null,
-    },
-    {
-      label: "Coding",
-      source: "MBPP",
-      value: row ? numeric(row.mbpp_pass_at_1) : null,
-    },
-    {
-      label: "RAG",
-      source: "RGB",
-      value: row ? numeric(row.rgb_all_rate) : null,
-    },
-    {
-      label: "Factuality",
-      source: "SimpleQA",
-      value: row ? numeric(row.simpleqa_f1) : null,
-    },
-    {
-      label: "Safety",
-      source: "HarmBench",
-      value: row ? numeric(row.harmbench_refusal_rate) : null,
-    },
-  ];
-}
+
 
 function qualityValue(row: LeaderboardRow) {
   return (
@@ -1467,20 +1064,10 @@ function apiModel(row: LeaderboardRow) {
 
 function displayModelName(row: LeaderboardRow) {
   const apiName = apiModel(row);
-  if (apiName && shouldPreferApiModelName(row.base_model_name, apiName)) {
+  if (apiName) {
     return formatModelName(apiName);
   }
   return formatModelName(row.base_model_name || apiName || row.variant_name);
-}
-
-function shouldPreferApiModelName(baseName: string, apiName: string) {
-  if (!baseName) return true;
-  const normalizedBase = baseName.toLowerCase();
-  const normalizedApi = apiName.toLowerCase();
-  if (normalizedApi.includes("gemma-4-e2b") && !normalizedBase.includes("gemma-4")) {
-    return true;
-  }
-  return false;
 }
 
 function labKey(row: LeaderboardRow) {
@@ -1494,6 +1081,8 @@ function labKey(row: LeaderboardRow) {
   if (source.includes("granite") || source.includes("ibm")) return "ibm";
   if (source.includes("openai") || source.includes("gpt-oss")) return "openai";
   if (source.includes("cohere") || source.includes("aya")) return "cohere";
+  if (source.includes("liquid") || source.includes("lfm")) return "liquidAI";
+  if (source.includes("smollm") || source.includes("hugging face") || source.includes("huggingface")) return "huggingface";
   return slugForAsset(row.family || row.base_model_name || apiModel(row) || row.variant_name);
 }
 
@@ -1512,7 +1101,7 @@ function slugForAsset(value: string) {
 
 function quantizationGroupKey(row: LeaderboardRow) {
   return [
-    formatModelName(row.base_model_name || apiModel(row) || row.variant_name).toLowerCase(),
+    displayModelName(row).toLowerCase(),
     row.family.toLowerCase(),
     String(row.parameter_size_b),
   ].join("|");
@@ -1526,12 +1115,12 @@ function quantizationLabel(row: LeaderboardRow) {
   const source = `${row.quantization} ${row.variant_name} ${apiModel(row) ?? ""} ${row.file_name ?? ""}`.toLowerCase();
   if (/\b(?:fp32|f32|32\s*bit|32b)\b/.test(source)) return "32 bit";
   if (/\b(?:bf16|fp16|f16|16\s*bit|16b)\b/.test(source)) return "16 bit";
-  if (/\b(?:q8|int8|8\s*bit|8bit)\b/.test(source)) return "8 bit";
+  if (/\b(?:q8|q8_0|q8-k|int8|8\s*bit|8bit)\b/.test(source)) return "8 bit";
   if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return "6 bit";
   if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return "5 bit";
-  if (/\b(?:q4|4\s*bit|4bit)\b/.test(source)) return "4 bit";
+  if (/\b(?:q4|q4_k_m|q4-k-m|4\s*bit|4bit)\b/.test(source)) return "4 bit";
   if (row.quantization && row.quantization.toUpperCase() !== "SERVER") {
-    return row.quantization.toUpperCase();
+    return titleCaseModelName(row.quantization.replace(/_/g, " "));
   }
   return "Server";
 }
@@ -1549,16 +1138,53 @@ function quantizationRank(row: LeaderboardRow) {
 
 function formatModelName(value: string) {
   const lastSegment = value.split("/").pop() ?? value;
+  const withoutQuantSuffix = lastSegment.split("@")[0];
+  const lfm = withoutQuantSuffix.match(/\blfm\s*(\d+(?:\.\d+)?)\s*[-_\s]*(\d+(?:\.\d+)?)([bm])\b/i);
+  if (lfm) {
+    const value = Number(lfm[2]);
+    const billionSize = lfm[3].toLowerCase() === "m" ? value / 1000 : value;
+    return `LFM ${lfm[1]} ${formatBillionSize(billionSize)}B`;
+  }
+
   const withoutRunSuffix = lastSegment
     .replace(/\b(?:ollama|lm studio|omlx|all languages|smoke|mbpp|full|test)\b/gi, " ")
     .replace(/\breasoning\s+(?:none|off|on|low|medium|high|auto|unset)\b/gi, " ")
-    .replace(/\b(?:mlx|bf16|fp16|fp32|q\d+|gguf|4bit|8bit|it|instruct|chat)\b/gi, " ")
+    .replace(/@(?:q\d+(?:[_-][a-z0-9]+)*|bf16|fp16|fp32|f16|f32|4bit|8bit|16bit)\b/gi, " ")
+    .replace(/\b(?:mlx|bf16|fp16|fp32|q\d+(?:[_-][a-z0-9]+)*|gguf|4bit|8bit|16bit|it|instruct|chat)\b/gi, " ")
     .replace(/[:_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
   const qwen = withoutRunSuffix.match(/\bqwen\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
   if (qwen) return `Qwen ${qwen[1]} ${qwen[2]}B`;
+
+  const granite = withoutRunSuffix.match(/\bgranite\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (granite) return `Granite ${granite[1]} ${granite[2]}B`;
+
+  const llama = withoutRunSuffix.match(/\bllama\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (llama) return `Llama ${llama[1]} ${llama[2]}B`;
+
+  const olmo = withoutRunSuffix.match(/\bolmo\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (olmo) return `OLMo ${olmo[1]} ${olmo[2]}B`;
+
+  const smollm = withoutRunSuffix.match(/\bsmollm\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)([bm])\b/i);
+  if (smollm) {
+    const value = Number(smollm[2]);
+    const billionSize = smollm[3].toLowerCase() === "m" ? value / 1000 : value;
+    return `SmolLM ${smollm[1]} ${formatBillionSize(billionSize)}B`;
+  }
+
+  const falcon = withoutRunSuffix.match(/\bfalcon\s*h\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (falcon) return `Falcon H${falcon[1]} ${falcon[2]}B`;
+
+  const ministral = withoutRunSuffix.match(/\bministral\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (ministral) return `Ministral ${ministral[1]} ${ministral[2]}B`;
+
+  const nemotron = withoutRunSuffix.match(/\b(?:nvidia\s*)?nemotron\s*(\d+)?\s*nano\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (nemotron) return `Nemotron ${nemotron[1] ? `${nemotron[1]} ` : ""}Nano ${nemotron[2]}B`;
+
+  const phi = withoutRunSuffix.match(/\bphi\s*(\d+(?:\.\d+)?)\s*mini\b/i);
+  if (phi) return `Phi ${phi[1]} Mini`;
 
   const gemmaE2b = withoutRunSuffix.match(/\bgemma\s*(\d+(?:\.\d+)?)\s*e\s*2\s*b\b/i);
   if (gemmaE2b) return `Gemma ${gemmaE2b[1]} E2B`;
@@ -1570,6 +1196,11 @@ function formatModelName(value: string) {
   }
 
   return titleCaseModelName(withoutRunSuffix || value);
+}
+
+function formatBillionSize(value: number) {
+  if (value < 1) return value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/0$/, "");
 }
 
 function titleCaseModelName(value: string) {
@@ -1595,16 +1226,6 @@ function reasoningLabel(row: LeaderboardRow) {
 function reasoningKey(row: LeaderboardRow) {
   const label = reasoningLabel(row).toLowerCase();
   return label === "off" ? "off" : slugForAsset(label);
-}
-
-function reasoningRank(row: LeaderboardRow) {
-  const key = reasoningKey(row);
-  if (key === "off") return 0;
-  if (key === "low") return 1;
-  if (key === "medium") return 2;
-  if (key === "high") return 3;
-  if (key === "on" || key === "auto") return 4;
-  return 5;
 }
 
 function reasoningValue(row: LeaderboardRow) {
@@ -1692,7 +1313,32 @@ function formatDate(value: string) {
 
 function formatParameter(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
-  return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}B`;
+  return `${formatBillionSize(value)}B`;
+}
+
+function displayParameter(row: LeaderboardRow) {
+  if (row.parameter_size_b && row.parameter_size_b > 0) return formatParameter(row.parameter_size_b);
+  const modelName = displayModelName(row);
+  const match = modelName.match(/(\d+(?:\.\d+)?)B$/i);
+  return match ? `${match[1]}B` : "n/a";
+}
+
+function providerLabel(row: LeaderboardRow) {
+  const source = `${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.model_repo ?? ""} ${row.variant_name}`.toLowerCase();
+  if (source.includes("liquid") || source.includes("lfm")) return "Liquid AI";
+  if (source.includes("qwen") || source.includes("alibaba")) return "Alibaba";
+  if (source.includes("gemma") || source.includes("google")) return "Google";
+  if (source.includes("llama") || source.includes("meta")) return "Meta";
+  if (source.includes("mistral") || source.includes("ministral") || source.includes("mixtral")) return "Mistral AI";
+  if (source.includes("granite") || source.includes("ibm")) return "IBM";
+  if (source.includes("olmo")) return "AI2";
+  if (source.includes("falcon")) return "TII";
+  if (source.includes("smollm")) return "Hugging Face";
+  if (source.includes("nemotron") || source.includes("nvidia")) return "NVIDIA";
+  if (source.includes("phi") || source.includes("microsoft")) return "Microsoft";
+  if (source.includes("deepseek")) return "DeepSeek";
+  if (source.includes("cohere") || source.includes("aya")) return "Cohere";
+  return row.family || "Local";
 }
 
 function formatModelSize(row: LeaderboardRow) {
@@ -1761,17 +1407,6 @@ function formatPoints(value?: number | null) {
   return value === null || value === undefined || Number.isNaN(value)
     ? "n/a"
     : `${(value * 100).toFixed(1)} pts`;
-}
-
-function formatSignedPoints(value: number) {
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${(value * 100).toFixed(1)} pts`;
-}
-
-function deltaClass(value: number) {
-  if (value > 0.00001) return "positive";
-  if (value < -0.00001) return "negative";
-  return "neutral";
 }
 
 function formatDuration(value?: number | null) {

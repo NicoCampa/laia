@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import SimpleQASettings, VariantConfig
+from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -582,11 +583,13 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
             "seconds",
         ),
     ]
-    return [
+    result = [
         MetricResult(name, _as_float(value), unit, raw)
         for name, value, unit in metrics
         if value is not None
     ]
+    result.extend(efficiency_metrics_from_summary(summary))
+    return result
 
 
 def _metadata(value: Any) -> dict[str, Any]:

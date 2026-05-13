@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 from local_ai_analysis.adapters.native import ImagePayload, create_native_client
 from local_ai_analysis.config import MMMUSettings, VariantConfig
+from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -455,6 +456,7 @@ def metrics_from_summary(summary: dict[str, Any]) -> list[MetricResult]:
                 raw,
             )
         )
+    metrics.extend(efficiency_metrics_from_summary(summary))
     return metrics
 
 

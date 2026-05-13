@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -20,12 +23,17 @@ from rich.progress import (
 from rich.table import Table
 
 from local_ai_analysis import __version__
+from local_ai_analysis.config import load_config
 from local_ai_analysis.db import LocalAIAnalysisDB
 from local_ai_analysis.eval.mmmu import MMMU_SUBJECTS
 from local_ai_analysis.eval.rgb import RGB_DATASETS
 from local_ai_analysis.export import export_leaderboard, leaderboard_payload
 from local_ai_analysis.normalization import refresh_normalized_results
-from local_ai_analysis.runner import run_benchmark, run_benchmark_with_progress
+from local_ai_analysis.runner import (
+    BenchmarkRunError,
+    run_benchmark,
+    run_benchmark_with_progress,
+)
 
 app = typer.Typer(
     name="laia",
@@ -111,6 +119,7 @@ HARMBENCH_DATASET_URL = (
     "data/behavior_datasets/harmbench_behaviors_text_all.csv"
 )
 HARMBENCH_DEFAULT_CATEGORIES = "standard,contextual"
+DEFAULT_CONTEXT_LENGTH = 8192
 CORE_BENCHMARKS = ["global-mmlu-lite", "ifbench", "bfcl-v4", "mbpp", "rgb"]
 MULTIMODAL_BENCHMARKS = ["ocrbench-v2", "mmmu"]
 JUDGED_BENCHMARKS = ["simpleqa", "harmbench"]
@@ -336,6 +345,17 @@ def run_ollama_shortcut(
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
     ] = None,
+    context_length: Annotated[
+        int | None,
+        typer.Option(
+            "--context-length",
+            min=1,
+            help=(
+                "Request context window for backends that support it. "
+                "Defaults to 8192 for Ollama and LM Studio."
+            ),
+        ),
+    ] = DEFAULT_CONTEXT_LENGTH,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Create the generated config and print planned work only."),
@@ -380,6 +400,8 @@ def run_ollama_shortcut(
         reasoning_effort=reasoning_effort,
         modality=modality,
         max_tokens=max_tokens,
+        context_length=context_length,
+        restart_between_languages=False,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -547,6 +569,28 @@ def run_lmstudio_shortcut(
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
     ] = None,
+    context_length: Annotated[
+        int | None,
+        typer.Option(
+            "--context-length",
+            min=1,
+            help=(
+                "Request context window for backends that support it. "
+                "Defaults to 8192 for Ollama and LM Studio."
+            ),
+        ),
+    ] = DEFAULT_CONTEXT_LENGTH,
+    restart_between_languages: Annotated[
+        bool,
+        typer.Option(
+            "--restart-between-languages",
+            help=(
+                "For Global MMLU Lite, unload/reload the model between language "
+                "groups to release runtime cache. Currently only LM Studio performs "
+                "a real unload; other providers ignore it."
+            ),
+        ),
+    ] = False,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Create the generated config and print planned work only."),
@@ -591,6 +635,8 @@ def run_lmstudio_shortcut(
         reasoning_effort=reasoning_effort,
         modality=modality,
         max_tokens=max_tokens,
+        context_length=context_length,
+        restart_between_languages=restart_between_languages,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -765,6 +811,17 @@ def run_omlx_shortcut(
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
     ] = None,
+    context_length: Annotated[
+        int | None,
+        typer.Option(
+            "--context-length",
+            min=1,
+            help=(
+                "Request context window for backends that support it. "
+                "Defaults to 8192 where supported."
+            ),
+        ),
+    ] = DEFAULT_CONTEXT_LENGTH,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Create the generated config and print planned work only."),
@@ -809,6 +866,8 @@ def run_omlx_shortcut(
         reasoning_effort=reasoning_effort,
         modality=modality,
         max_tokens=max_tokens,
+        context_length=context_length,
+        restart_between_languages=False,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -821,15 +880,38 @@ def _execute_run(
     no_progress: bool,
     auto_export: bool,
 ) -> None:
+    lmstudio_eject = None if dry_run else _lmstudio_eject_target(config)
     try:
         if no_progress:
             result = run_benchmark(config, dry_run=dry_run)
         else:
             result = _run_with_progress(config, dry_run)
+    except BenchmarkRunError as exc:
+        result = exc.result
+        exported_results = (
+            _export_website_results(Path(str(result["db_path"])))
+            if auto_export and not dry_run and result.get("db_path")
+            else []
+        )
+        if no_progress:
+            console.print(f"💥 [red]Run failed:[/red] {exc}")
+        console.print("⚠️ [yellow]Run failed after saving completed benchmark metrics[/yellow]")
+        for key, value in result.items():
+            console.print(f"{key}: {value}")
+        for exported in exported_results:
+            console.print(
+                f"🌐 Exported partial website data: {exported['rows']} rows to {exported['out']}"
+            )
+        _eject_lmstudio_model(lmstudio_eject)
+        raise typer.Exit(1) from exc
     except RuntimeError as exc:
         if no_progress:
             console.print(f"💥 [red]Run failed:[/red] {exc}")
+        _eject_lmstudio_model(lmstudio_eject)
         raise typer.Exit(1) from exc
+    except KeyboardInterrupt as exc:
+        _eject_lmstudio_model(lmstudio_eject)
+        raise typer.Exit(130) from exc
     exported_results = (
         _export_website_results(Path(str(result["db_path"])))
         if auto_export and not dry_run and result.get("db_path")
@@ -840,6 +922,7 @@ def _execute_run(
         console.print(f"{key}: {value}")
     for exported in exported_results:
         console.print(f"🌐 Exported website data: {exported['rows']} rows to {exported['out']}")
+    _eject_lmstudio_model(lmstudio_eject)
 
 
 @app.command()
@@ -1018,6 +1101,138 @@ def _export_website_results(db_path: Path) -> list[dict[str, Any]]:
     return exported
 
 
+def _lmstudio_eject_target(config_path: Path) -> dict[str, str] | None:
+    try:
+        config = load_config(config_path)
+    except Exception:
+        return None
+    if _provider_key(config.backend.backend_type) != "lmstudio":
+        return None
+    model = None
+    for base_model in config.models:
+        for variant in base_model.variants:
+            if variant.api_model:
+                model = variant.api_model
+                break
+        if model:
+            break
+    if not model or model.lower() == "auto":
+        return None
+    base_url = _first_lmstudio_base_url(config)
+    if not base_url:
+        return None
+    api_key = _first_lmstudio_api_key(config)
+    return {"base_url": base_url.rstrip("/"), "model": model, "api_key": api_key or ""}
+
+
+def _first_lmstudio_base_url(config: Any) -> str | None:
+    for settings in _benchmark_settings(config):
+        if getattr(settings, "enabled", False) and _provider_key(getattr(settings, "provider", "")) == "lmstudio":
+            base_url = getattr(settings, "base_url", None)
+            if base_url:
+                return str(base_url)
+    return None
+
+
+def _first_lmstudio_api_key(config: Any) -> str | None:
+    for settings in _benchmark_settings(config):
+        if not getattr(settings, "enabled", False):
+            continue
+        if _provider_key(getattr(settings, "provider", "")) != "lmstudio":
+            continue
+        api_key = getattr(settings, "api_key", None)
+        if api_key:
+            return str(api_key)
+        api_key_env = getattr(settings, "api_key_env", None)
+        if api_key_env:
+            import os
+
+            env_value = os.environ.get(str(api_key_env))
+            if env_value:
+                return env_value
+    return None
+
+
+def _benchmark_settings(config: Any) -> list[Any]:
+    return [
+        config.global_mmlu_lite,
+        config.ifbench,
+        config.bfcl_v4,
+        config.ocrbench_v2,
+        config.mmmu,
+        config.mbpp,
+        config.rgb,
+        config.simpleqa,
+        config.harmbench,
+    ]
+
+
+def _eject_lmstudio_model(target: dict[str, str] | None) -> None:
+    if not target:
+        return
+    try:
+        instance_id = _lmstudio_loaded_instance_id(target["base_url"], target["model"], target["api_key"])
+        if not instance_id:
+            console.print(f"🧹 LM Studio model already unloaded or not found: {target['model']}")
+            return
+        _lmstudio_unload_instance(target["base_url"], instance_id, target["api_key"])
+    except Exception as exc:
+        console.print(f"⚠️ [yellow]Could not eject LM Studio model:[/yellow] {exc}")
+        return
+    console.print(f"🧹 Ejected LM Studio model: {instance_id}")
+
+
+def _lmstudio_loaded_instance_id(base_url: str, model: str, api_key: str | None) -> str | None:
+    request = urllib.request.Request(
+        f"{base_url}/api/v1/models",
+        headers=_lmstudio_headers(api_key),
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    for item in payload.get("models") or []:
+        if not isinstance(item, dict) or model not in _lmstudio_model_ids_from_payload(item):
+            continue
+        for instance in item.get("loaded_instances") or []:
+            if isinstance(instance, dict) and instance.get("id"):
+                return str(instance["id"])
+    return None
+
+
+def _lmstudio_unload_instance(base_url: str, instance_id: str, api_key: str | None) -> None:
+    body = json.dumps({"instance_id": instance_id}).encode("utf-8")
+    request = urllib.request.Request(
+        f"{base_url}/api/v1/models/unload",
+        data=body,
+        headers=_lmstudio_headers(api_key),
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        response.read()
+
+
+def _lmstudio_headers(api_key: str | None) -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+def _lmstudio_model_ids_from_payload(item: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for key in ("key", "selected_variant"):
+        value = item.get(key)
+        if isinstance(value, str):
+            ids.add(value)
+    for variant in item.get("variants") or []:
+        if isinstance(variant, str):
+            ids.add(variant)
+    for instance in item.get("loaded_instances") or []:
+        if isinstance(instance, dict) and isinstance(instance.get("id"), str):
+            ids.add(instance["id"])
+    return ids
+
+
 def _write_api_benchmark_config(
     *,
     provider: str,
@@ -1046,6 +1261,8 @@ def _write_api_benchmark_config(
     reasoning_effort: str | None,
     modality: str,
     max_tokens: int | None,
+    context_length: int | None,
+    restart_between_languages: bool,
 ) -> Path:
     resolved_reasoning_effort = _resolve_reasoning_effort(model, reasoning_effort)
     selected_benchmarks = _parse_benchmarks(benchmark)
@@ -1107,7 +1324,8 @@ def _write_api_benchmark_config(
         Path("results/generated_configs")
         / f"{provider_slug}_{model_slug}_{benchmark_slug}_{scope_slug}_{reasoning_slug}.yaml"
     )
-    display_model = _display_model_name(provider, model)
+    model_metadata = _model_metadata(provider_key, base_url, model)
+    display_model = _display_model_name(provider, model, model_metadata)
     provider_label = provider if provider != "LM Studio" else "LM Studio"
     variant_suffix = _variant_suffix(
         smoke=smoke,
@@ -1121,7 +1339,8 @@ def _write_api_benchmark_config(
         all_languages_selected=all_languages_selected,
     )
     reasoning_label = resolved_reasoning_effort or "unset"
-    quantization = _infer_quantization(model)
+    quantization = _infer_quantization(model, model_metadata)
+    request_extra = _context_request_extra(provider_key, context_length)
 
     global_mmlu_lite: dict[str, Any] = {
         "enabled": "global-mmlu-lite" in selected_benchmarks,
@@ -1141,6 +1360,8 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        "restart_between_languages": restart_between_languages and provider_key == "lmstudio",
+        "request_extra": _copy_config_dict(request_extra),
         "parser_version": "global_mmlu_lite_regex_v1",
         "prompt_template": GLOBAL_MMLU_LITE_PROMPT,
     }
@@ -1164,6 +1385,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "evaluator": "allenai_ifbench_loose_v1",
     }
     if resolved_reasoning_effort:
@@ -1187,6 +1409,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "include_input_log": False,
         "exclude_state_log": True,
         "evaluator": "bfcl_eval_prompt_mode_v4",
@@ -1214,6 +1437,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "image_format": "PNG",
         "evaluator": "ocrbench_v2_local_vqa_anls_iou_v1",
         "prompt_template": OCRBENCH_V2_PROMPT,
@@ -1239,6 +1463,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "image_format": "PNG",
         "evaluator": "mmmu_official_parse_local_v1",
         "multiple_choice_prompt_template": MMMU_MULTI_CHOICE_PROMPT,
@@ -1265,6 +1490,7 @@ def _write_api_benchmark_config(
         "stop": ["[DONE]"],
         "seed": 42,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "include_tests_in_prompt": True,
         "include_challenge_tests": mbpp_challenge_tests,
         "execution_timeout_seconds": 5,
@@ -1287,12 +1513,13 @@ def _write_api_benchmark_config(
         "base_url": base_url,
         "api_key_env": api_key_env,
         "timeout_seconds": 360,
-        "temperature": 0.2,
+        "temperature": 0,
         "max_tokens": max_tokens if max_tokens is not None else 512,
         "top_p": None,
         "stop": None,
         "seed": 2333,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "noise_rate": rgb_noise_rate,
         "passage_num": rgb_passage_num,
         "correct_rate": rgb_correct_rate,
@@ -1327,6 +1554,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "grader": selected_simpleqa_grader,
         "grader_model": simpleqa_grader_model,
         "grader_provider": None,
@@ -1339,6 +1567,7 @@ def _write_api_benchmark_config(
         "grader_stop": None,
         "grader_seed": 42,
         "grader_reasoning_effort": "none",
+        "grader_request_extra": _copy_config_dict(request_extra),
         "evaluator": (
             "simpleqa_heuristic_v1"
             if selected_simpleqa_grader == "heuristic"
@@ -1370,6 +1599,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        "request_extra": _copy_config_dict(request_extra),
         "judge": selected_harmbench_judge,
         "judge_model": resolved_harmbench_judge_model,
         "judge_provider": None,
@@ -1382,6 +1612,7 @@ def _write_api_benchmark_config(
         "judge_stop": None,
         "judge_seed": 42,
         "judge_reasoning_effort": "none",
+        "judge_request_extra": _copy_config_dict(request_extra),
         "evaluator": (
             "harmbench_heuristic_refusal_v1"
             if selected_harmbench_judge == "heuristic"
@@ -1428,9 +1659,9 @@ def _write_api_benchmark_config(
         "harmbench": harmbench,
         "models": [
             {
-                "family": _infer_family(model),
-                "name": _infer_base_model_name(provider, model),
-                "parameter_size_b": _infer_parameter_size_b(model),
+                "family": _infer_family(model, model_metadata),
+                "name": _infer_base_model_name(provider, model, model_metadata),
+                "parameter_size_b": _infer_parameter_size_b(model, model_metadata),
                 "architecture": _architecture_for_modality(resolved_modality),
                 "modality": resolved_modality,
                 "license": "replace-with-upstream-license",
@@ -1438,13 +1669,15 @@ def _write_api_benchmark_config(
                 "variants": [
                     {
                         "name": (
-                            f"{display_model} {provider_label} {variant_suffix} "
+                            f"{display_model} {quantization} {provider_label} {variant_suffix} "
                             f"Reasoning {reasoning_label}"
                         ),
                         "quantization": quantization,
                         "precision": _infer_precision(model, quantization),
                         "baseline": False,
                         "api_model": model,
+                        "model_repo": _model_metadata_value(model_metadata, "publisher"),
+                        "file_size_bytes": _model_metadata_value(model_metadata, "size_bytes"),
                         "modality": resolved_modality,
                         "input_modalities": selected_input_modalities,
                     }
@@ -1741,6 +1974,25 @@ def _shared_judge_model(simpleqa_grader_model: str, harmbench_judge_model: str) 
     return harmbench_model or "same"
 
 
+def _context_request_extra(provider_key: str, context_length: int | None) -> dict[str, Any]:
+    if context_length is None:
+        return {}
+    if context_length <= 0:
+        raise typer.BadParameter("--context-length must be greater than 0")
+    if provider_key == "ollama":
+        return {"options": {"num_ctx": context_length}}
+    if provider_key == "lmstudio":
+        return {"context_length": context_length}
+    return {}
+
+
+def _copy_config_dict(value: dict[str, Any]) -> dict[str, Any]:
+    copied: dict[str, Any] = {}
+    for key, item in value.items():
+        copied[key] = dict(item) if isinstance(item, dict) else item
+    return copied
+
+
 def _parse_bfcl_categories(value: str) -> list[str]:
     categories = [item.strip().lower().replace("-", "_") for item in value.split(",")]
     categories = [item for item in categories if item]
@@ -1842,28 +2094,68 @@ def _architecture_for_modality(modality: str) -> str:
     return "decoder-only transformer"
 
 
-def _display_model_name(provider: str, model: str) -> str:
+def _model_metadata(provider_key: str, base_url: str, model: str) -> dict[str, Any] | None:
+    if provider_key != "lmstudio" or model.lower() == "auto":
+        return None
+    try:
+        with urllib.request.urlopen(
+            f"{base_url.rstrip('/')}/api/v1/models",
+            timeout=5,
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError):
+        return None
+    for item in payload.get("models") or []:
+        if isinstance(item, dict) and item.get("key") == model:
+            return item
+    return None
+
+
+def _model_metadata_value(metadata: dict[str, Any] | None, key: str) -> Any:
+    return metadata.get(key) if metadata else None
+
+
+def _display_model_name(
+    provider: str,
+    model: str,
+    metadata: dict[str, Any] | None = None,
+) -> str:
     if model.lower() == "auto":
         return f"{provider} Served Model"
+    if metadata and metadata.get("display_name"):
+        return str(metadata["display_name"])
     return model
 
 
-def _infer_base_model_name(provider: str, model: str) -> str:
+def _infer_base_model_name(
+    provider: str,
+    model: str,
+    metadata: dict[str, Any] | None = None,
+) -> str:
     if model.lower() == "auto":
         return f"{provider} Served Model"
+    if metadata and metadata.get("display_name"):
+        return str(metadata["display_name"])
     size_match = re.search(r"(\d+(?:\.\d+)?)b\b", model, flags=re.IGNORECASE)
     if not size_match:
+        m_match = re.search(r"(\d+(?:\.\d+)?)m\b", model, flags=re.IGNORECASE)
+        if m_match:
+            return f"{_infer_family(model, metadata)} {m_match.group(1)}M"
         return model
     qwen_match = re.search(r"qwen\d+(?:\.\d+)?", model, flags=re.IGNORECASE)
     if qwen_match:
         family = "Qwen" + qwen_match.group(0)[4:]
     else:
-        family = _infer_family(model)
+        family = _infer_family(model, metadata)
     return f"{family}-{size_match.group(1)}B"
 
 
-def _infer_family(model: str) -> str:
+def _infer_family(model: str, metadata: dict[str, Any] | None = None) -> str:
+    publisher = str((metadata or {}).get("publisher") or "").lower()
+    architecture = str((metadata or {}).get("architecture") or "").lower()
     lowered = model.lower()
+    if "liquid" in publisher or "lfm" in lowered or "lfm" in architecture:
+        return "Liquid AI"
     if "qwen" in lowered:
         return "Qwen"
     if "gemma" in lowered:
@@ -1874,15 +2166,36 @@ def _infer_family(model: str) -> str:
         return "Mistral"
     if "phi" in lowered:
         return "Phi"
+    if "granite" in lowered:
+        return "IBM"
+    if "olmo" in lowered:
+        return "AI2"
+    if "falcon" in lowered:
+        return "TII"
+    if "smollm" in lowered:
+        return "Hugging Face"
+    if "nemotron" in lowered or "nvidia" in lowered:
+        return "NVIDIA"
     return "Local"
 
 
-def _infer_parameter_size_b(model: str) -> float:
+def _infer_parameter_size_b(model: str, metadata: dict[str, Any] | None = None) -> float:
+    params = str((metadata or {}).get("params_string") or "")
+    params_match = re.search(r"(\d+(?:\.\d+)?)([bm])\b", params, flags=re.IGNORECASE)
+    if params_match:
+        value = float(params_match.group(1))
+        return value / 1000 if params_match.group(2).lower() == "m" else value
     match = re.search(r"(\d+(?:\.\d+)?)b\b", model, flags=re.IGNORECASE)
-    return float(match.group(1)) if match else 0.0
+    if match:
+        return float(match.group(1))
+    m_match = re.search(r"(\d+(?:\.\d+)?)m\b", model, flags=re.IGNORECASE)
+    return float(m_match.group(1)) / 1000 if m_match else 0.0
 
 
-def _infer_quantization(model: str) -> str:
+def _infer_quantization(model: str, metadata: dict[str, Any] | None = None) -> str:
+    quantization = (metadata or {}).get("quantization")
+    if isinstance(quantization, dict) and quantization.get("name"):
+        return str(quantization["name"]).upper()
     lowered = model.lower()
     if "bf16" in lowered:
         return "BF16"
@@ -2042,6 +2355,18 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
                     f"{result_icon} Q {completed}/{total} lang={language} "
                     f"answer={latest_answer} • score {sample_score:.1f}/{completed} "
                     f"({accuracy:.1%}) • {latest_runtime:.2f}s{invalid_text}"
+                )
+        elif event_type == "runtime_cache_reset":
+            language = payload.get("language")
+            instance_id = payload.get("instance_id") or payload.get("model")
+            if payload.get("error"):
+                progress.console.print(
+                    f"⚠️ Could not restart model runtime after lang={language}: "
+                    f"{payload.get('error')}"
+                )
+            else:
+                progress.console.print(
+                    f"🧹 Restarted model runtime after lang={language} • {instance_id}"
                 )
         elif event_type == "task_completed":
             variant = payload.get("variant")
