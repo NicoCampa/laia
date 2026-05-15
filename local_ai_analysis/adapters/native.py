@@ -239,6 +239,9 @@ class LMStudioNativeClient(NativeClient):
     def planned_endpoint(self) -> str:
         return f"{self.base_url}/api/v1/chat"
 
+    def chat_completions_endpoint(self) -> str:
+        return f"{self.base_url}/v1/chat/completions"
+
     def models_endpoint(self) -> str:
         return f"{self.base_url}/api/v1/models"
 
@@ -266,6 +269,18 @@ class LMStudioNativeClient(NativeClient):
         request_extra: dict[str, Any] | None = None,
         images: list[ImagePayload | dict[str, str]] | None = None,
     ) -> GenerationResponse:
+        if _lmstudio_uses_no_think_system_prompt(model, reasoning_effort) and not images:
+            return self._generate_chat_completion_no_think(
+                model=model,
+                prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                stop=stop,
+                seed=seed,
+                response_format=response_format,
+            )
+
         input_payload: str | list[dict[str, Any]]
         if images:
             input_payload = [{"type": "text", "content": prompt}]
@@ -301,6 +316,47 @@ class LMStudioNativeClient(NativeClient):
         usage = _lmstudio_usage(raw)
         if usage:
             raw.setdefault("usage", usage)
+        return GenerationResponse(text=text, raw=raw, runtime_seconds=runtime)
+
+    def _generate_chat_completion_no_think(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        temperature: float,
+        max_tokens: int,
+        top_p: float | None,
+        stop: list[str] | None,
+        seed: int | None,
+        response_format: dict[str, Any] | None,
+    ) -> GenerationResponse:
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "/no_think"},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        if top_p is not None:
+            payload["top_p"] = top_p
+        if stop is not None:
+            payload["stop"] = stop
+        if seed is not None:
+            payload["seed"] = seed
+        if response_format is not None:
+            payload["response_format"] = response_format
+
+        raw, runtime = self._request_json(
+            self.chat_completions_endpoint(),
+            method="POST",
+            payload=payload,
+            headers=self._headers(),
+        )
+        message = _first_chat_completion_message(raw)
+        text = str(message.get("content") or "")
         return GenerationResponse(text=text, raw=raw, runtime_seconds=runtime)
 
     def reset_model_runtime(
@@ -426,6 +482,14 @@ def _lmstudio_reasoning(value: str | None) -> str | None:
     return normalized
 
 
+def _lmstudio_uses_no_think_system_prompt(model: str, reasoning_effort: str | None) -> bool:
+    model_id = model.lower()
+    uses_prompt_switch = "smollm3" in model_id or "nemotron-3-nano" in model_id
+    if not uses_prompt_switch:
+        return False
+    return _lmstudio_reasoning(reasoning_effort) == "off"
+
+
 def _lmstudio_text(raw: dict[str, Any]) -> str:
     output = raw.get("output") or []
     parts = [
@@ -434,6 +498,14 @@ def _lmstudio_text(raw: dict[str, Any]) -> str:
         if isinstance(item, dict) and item.get("type") == "message"
     ]
     return "".join(parts)
+
+
+def _first_chat_completion_message(raw: dict[str, Any]) -> dict[str, Any]:
+    choices = raw.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return {}
+    message = choices[0].get("message") or {}
+    return message if isinstance(message, dict) else {}
 
 
 def _lmstudio_usage(raw: dict[str, Any]) -> dict[str, Any]:

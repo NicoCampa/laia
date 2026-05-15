@@ -311,7 +311,7 @@ class BenchmarkRunner:
                 "precision": variant.precision or variant.quantization,
                 "parameter_size_b": base_model.parameter_size_b,
                 "checksum_sha256": None,
-                "file_size_bytes": None,
+                "file_size_bytes": variant.file_size_bytes,
                 "is_baseline": variant.baseline,
                 "metadata": {
                     "variant_config": variant.model_dump(),

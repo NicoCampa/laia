@@ -223,6 +223,8 @@ export function App() {
               <LeaderboardTable
                 rows={rankedRows}
               />
+
+              <IntelligenceSizeChart rows={rankedRows} />
             </section>
           </section>
 
@@ -464,15 +466,146 @@ function PointsWithDelta({ row }: { row: ComparableRow }) {
   return <span className="metric-stack">{formatPoints(value)}</span>;
 }
 
+function IntelligenceSizeChart({ rows }: { rows: ComparableRow[] }) {
+  const points = rows
+    .map((row) => ({
+      row,
+      sizeGb: modelSizeGb(row),
+      score: numeric(row.model_intelligence_score),
+    }))
+    .filter((point): point is { row: ComparableRow; sizeGb: number; score: number } => (
+      point.sizeGb !== null && point.score !== null
+    ));
+
+  if (points.length < 2) {
+    return null;
+  }
+
+  const width = 760;
+  const height = 330;
+  const padding = { top: 22, right: 34, bottom: 54, left: 62 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const maxSize = Math.max(...points.map((point) => point.sizeGb));
+  const maxScore = Math.max(...points.map((point) => point.score), 0.01);
+  const xMax = Math.max(1, Math.ceil(maxSize * 1.15));
+  const yMax = Math.max(0.1, Math.ceil(maxScore * 120) / 100);
+  const xTicks = [0, xMax / 2, xMax];
+  const yTicks = [0, yMax / 2, yMax];
+  const labelPoints = [...points]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+  const labelIds = new Set(labelPoints.map((point) => point.row.variant_id));
+
+  const xFor = (value: number) => padding.left + (value / xMax) * plotWidth;
+  const yFor = (value: number) => padding.top + plotHeight - (value / yMax) * plotHeight;
+
+  return (
+    <section className="chart-section" aria-labelledby="intelligence-size-title">
+      <div className="chart-heading">
+        <div>
+          <p className="eyebrow">Efficiency Map</p>
+          <h3 id="intelligence-size-title">Intelligence vs size</h3>
+        </div>
+        <span>{points.length} visible runs</span>
+      </div>
+
+      <div className="chart-shell">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="intelligence-size-title">
+          <rect
+            x={padding.left}
+            y={padding.top}
+            width={plotWidth}
+            height={plotHeight}
+            className="chart-plot"
+          />
+
+          {xTicks.map((tick) => (
+            <g key={`x-${tick}`}>
+              <line
+                className="chart-grid-line"
+                x1={xFor(tick)}
+                x2={xFor(tick)}
+                y1={padding.top}
+                y2={padding.top + plotHeight}
+              />
+              <text className="chart-axis-label" x={xFor(tick)} y={height - 22} textAnchor="middle">
+                {tick === 0 ? "0" : `${tick.toFixed(tick < 10 ? 1 : 0)} GB`}
+              </text>
+            </g>
+          ))}
+
+          {yTicks.map((tick) => (
+            <g key={`y-${tick}`}>
+              <line
+                className="chart-grid-line"
+                x1={padding.left}
+                x2={padding.left + plotWidth}
+                y1={yFor(tick)}
+                y2={yFor(tick)}
+              />
+              <text className="chart-axis-label" x={padding.left - 12} y={yFor(tick) + 4} textAnchor="end">
+                {formatPoints(tick)}
+              </text>
+            </g>
+          ))}
+
+          <text className="chart-axis-title" x={padding.left + plotWidth / 2} y={height - 4} textAnchor="middle">
+            Model size
+          </text>
+          <text
+            className="chart-axis-title"
+            transform={`translate(16 ${padding.top + plotHeight / 2}) rotate(-90)`}
+            textAnchor="middle"
+          >
+            LAIA Index
+          </text>
+
+          {points.map((point) => {
+            const x = xFor(point.sizeGb);
+            const y = yFor(point.score);
+            const quantization = quantizationLabel(point.row);
+            const label = `${displayModelName(point.row)} ${quantization}`;
+            const isLabeled = labelIds.has(point.row.variant_id);
+            return (
+              <g className="chart-point-group" key={point.row.variant_id}>
+                <circle
+                  className="chart-point"
+                  cx={x}
+                  cy={y}
+                  r={isLabeled ? 6 : 4.5}
+                >
+                  <title>
+                    {`${label}: ${formatPoints(point.score)} at ${formatModelSize(point.row)}`}
+                  </title>
+                </circle>
+                {isLabeled && (
+                  <text className="chart-point-label" x={x + 9} y={y - 8}>
+                    {displayModelName(point.row)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </section>
+  );
+}
+
 function LabIcon({ row }: { row: LeaderboardRow }) {
   const [candidateIndex, setCandidateIndex] = useState(0);
   const key = labKey(row);
   const candidates = [
     `/labs/${key}.svg`,
     `/labs/${key}.png`,
+    `/labs/${key}.PNG`,
     `/labs/${key}.jpg`,
+    `/labs/${key}.JPG`,
     `/labs/${key}.jpeg`,
+    `/labs/${key}.JPEG`,
     `/labs/${key}.webp`,
+    `/labs/${key}.WEBP`,
   ];
   const src = candidates[candidateIndex];
   const initials = labInitials(row);
@@ -1075,8 +1208,9 @@ function labKey(row: LeaderboardRow) {
   if (source.includes("qwen") || source.includes("alibaba")) return "qwen";
   if (source.includes("gemma") || source.includes("google")) return "google";
   if (source.includes("llama") || source.includes("meta")) return "meta";
-  if (source.includes("mistral") || source.includes("mixtral")) return "mistral";
+  if (source.includes("mistral") || source.includes("ministral") || source.includes("mixtral")) return "mistral";
   if (source.includes("deepseek")) return "deepseek";
+  if (source.includes("falcon") || source.includes("tii") || source.includes("technology innovation institute")) return "TechnologyInnovationINstitute";
   if (source.includes("phi") || source.includes("microsoft")) return "microsoft";
   if (source.includes("granite") || source.includes("ibm")) return "ibm";
   if (source.includes("openai") || source.includes("gpt-oss")) return "openai";
@@ -1362,9 +1496,33 @@ function fileSizeBytes(row: LeaderboardRow) {
   const metadata = safeMetadata(row);
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
   const modelFile = (metadata as { model_file?: unknown }).model_file;
-  if (!modelFile || typeof modelFile !== "object" || Array.isArray(modelFile)) return null;
-  return numeric((modelFile as { size_bytes?: unknown }).size_bytes);
+  if (modelFile && typeof modelFile === "object" && !Array.isArray(modelFile)) {
+    const modelFileSize = numeric((modelFile as { size_bytes?: unknown }).size_bytes);
+    if (modelFileSize !== null) return modelFileSize;
+  }
+
+  const variantConfig = (metadata as { variant_config?: unknown }).variant_config;
+  if (variantConfig && typeof variantConfig === "object" && !Array.isArray(variantConfig)) {
+    const variantSize = numeric((variantConfig as { file_size_bytes?: unknown }).file_size_bytes);
+    if (variantSize !== null) return variantSize;
+  }
+
+  const apiModelValue = apiModel(row);
+  if (apiModelValue && apiModelValue in KNOWN_LM_STUDIO_MODEL_SIZES) {
+    return KNOWN_LM_STUDIO_MODEL_SIZES[apiModelValue];
+  }
+
+  return null;
 }
+
+const KNOWN_LM_STUDIO_MODEL_SIZES: Record<string, number> = {
+  "lfm2.5-350m@bf16": 711_500_000,
+  "lfm2.5-350m@q8_0": 379_200_000,
+  "lfm2.5-350m@q4_k_m": 229_300_000,
+  "qwen3.5-0.8b@bf16": 1_700_000_000,
+  "qwen3.5-0.8b@q8_0": 1_200_000_000,
+  "qwen3.5-0.8b@q4_k_m": 934_900_000,
+};
 
 function estimatedModelSizeGb(row: LeaderboardRow) {
   const parameterSize = numeric(row.parameter_size_b);

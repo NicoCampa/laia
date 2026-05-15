@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 from io import StringIO
@@ -117,6 +118,7 @@ class GlobalMMLULiteRunner:
         with samples_path.open("w", encoding="utf-8") as sample_file:
             for language_index, (language, dataset) in enumerate(language_datasets):
                 count = 0
+                language_total = self._planned_sample_count(dataset)
                 for row_payload in dataset:
                     row = dict(row_payload)
                     prompt = render_prompt(self.settings.prompt_template, row)
@@ -197,32 +199,37 @@ class GlobalMMLULiteRunner:
                         and count >= self.settings.sample_limit_per_language
                     ):
                         break
+                    if (
+                        self.settings.restart_every_calls is not None
+                        and self.settings.restart_every_calls > 0
+                        and completed_samples < total_samples
+                        and completed_samples % self.settings.restart_every_calls == 0
+                        and not (
+                            self.settings.restart_between_languages
+                            and count >= language_total
+                            and language_index < len(language_datasets) - 1
+                        )
+                    ):
+                        self._reset_runtime(
+                            model=model,
+                            progress_callback=progress_callback,
+                            variant_name=variant.name,
+                            language=language,
+                            completed_samples=completed_samples,
+                            reason="call_interval",
+                        )
                 if (
                     self.settings.restart_between_languages
                     and language_index < len(language_datasets) - 1
                 ):
-                    reset_error = None
-                    try:
-                        instance_id = self.client.reset_model_runtime(
-                            model,
-                            request_extra=self.settings.request_extra,
-                        )
-                    except Exception as exc:
-                        instance_id = None
-                        reset_error = str(exc)
-                    if progress_callback:
-                        progress_callback(
-                            "runtime_cache_reset",
-                            {
-                                "task": "global-mmlu-lite",
-                                "variant": variant.name,
-                                "language": language,
-                                "provider": self.settings.provider,
-                                "model": model,
-                                "instance_id": instance_id,
-                                "error": reset_error,
-                            },
-                        )
+                    self._reset_runtime(
+                        model=model,
+                        progress_callback=progress_callback,
+                        variant_name=variant.name,
+                        language=language,
+                        completed_samples=completed_samples,
+                        reason="language_boundary",
+                    )
 
         summary = build_summary(
             settings=self.settings,
@@ -323,6 +330,45 @@ class GlobalMMLULiteRunner:
             return dataset_count
         return min(dataset_count, self.settings.sample_limit_per_language)
 
+    def _reset_runtime(
+        self,
+        *,
+        model: str,
+        progress_callback: ProgressCallback | None,
+        variant_name: str,
+        language: str,
+        completed_samples: int,
+        reason: str,
+    ) -> None:
+        reset_error = None
+        try:
+            instance_id = self.client.reset_model_runtime(
+                model,
+                request_extra=self.settings.request_extra,
+            )
+        except Exception as exc:
+            instance_id = None
+            reset_error = str(exc)
+        cooldown_seconds = max(0.0, float(self.settings.restart_cooldown_seconds or 0.0))
+        if progress_callback:
+            progress_callback(
+                "runtime_cache_reset",
+                {
+                    "task": "global-mmlu-lite",
+                    "variant": variant_name,
+                    "language": language,
+                    "provider": self.settings.provider,
+                    "model": model,
+                    "instance_id": instance_id,
+                    "completed_samples": completed_samples,
+                    "reason": reason,
+                    "cooldown_seconds": cooldown_seconds,
+                    "error": reset_error,
+                },
+            )
+        if cooldown_seconds > 0:
+            time.sleep(cooldown_seconds)
+
 
 def render_prompt(template: str, row: dict[str, Any]) -> str:
     return template.format(
@@ -385,6 +431,8 @@ def build_summary(
         "response_format": settings.response_format,
         "request_extra": settings.request_extra,
         "restart_between_languages": settings.restart_between_languages,
+        "restart_every_calls": settings.restart_every_calls,
+        "restart_cooldown_seconds": settings.restart_cooldown_seconds,
         "parser": settings.parser_version,
         "prompt_template": settings.prompt_template,
         "total": total,

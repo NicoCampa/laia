@@ -402,6 +402,8 @@ def run_ollama_shortcut(
         max_tokens=max_tokens,
         context_length=context_length,
         restart_between_languages=False,
+        restart_every_calls=None,
+        restart_cooldown_seconds=0.0,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -591,6 +593,28 @@ def run_lmstudio_shortcut(
             ),
         ),
     ] = False,
+    restart_every_calls: Annotated[
+        int | None,
+        typer.Option(
+            "--restart-every-calls",
+            min=1,
+            help=(
+                "For LM Studio Global MMLU Lite runs, unload/reload the model every "
+                "N completed calls to release runtime cache."
+            ),
+        ),
+    ] = None,
+    restart_cooldown_seconds: Annotated[
+        float,
+        typer.Option(
+            "--restart-cooldown-seconds",
+            min=0.0,
+            help=(
+                "For LM Studio Global MMLU Lite runs, wait this many seconds after "
+                "each model unload/reload refresh."
+            ),
+        ),
+    ] = 0.0,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Create the generated config and print planned work only."),
@@ -637,6 +661,8 @@ def run_lmstudio_shortcut(
         max_tokens=max_tokens,
         context_length=context_length,
         restart_between_languages=restart_between_languages,
+        restart_every_calls=restart_every_calls,
+        restart_cooldown_seconds=restart_cooldown_seconds,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -868,6 +894,8 @@ def run_omlx_shortcut(
         max_tokens=max_tokens,
         context_length=context_length,
         restart_between_languages=False,
+        restart_every_calls=None,
+        restart_cooldown_seconds=0.0,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -1263,6 +1291,8 @@ def _write_api_benchmark_config(
     max_tokens: int | None,
     context_length: int | None,
     restart_between_languages: bool,
+    restart_every_calls: int | None,
+    restart_cooldown_seconds: float,
 ) -> Path:
     resolved_reasoning_effort = _resolve_reasoning_effort(model, reasoning_effort)
     selected_benchmarks = _parse_benchmarks(benchmark)
@@ -1361,6 +1391,12 @@ def _write_api_benchmark_config(
         "seed": 42,
         "strip_thinking": True,
         "restart_between_languages": restart_between_languages and provider_key == "lmstudio",
+        "restart_every_calls": (
+            restart_every_calls if provider_key == "lmstudio" else None
+        ),
+        "restart_cooldown_seconds": (
+            restart_cooldown_seconds if provider_key == "lmstudio" else 0.0
+        ),
         "request_extra": _copy_config_dict(request_extra),
         "parser_version": "global_mmlu_lite_regex_v1",
         "prompt_template": GLOBAL_MMLU_LITE_PROMPT,
@@ -2359,14 +2395,23 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
         elif event_type == "runtime_cache_reset":
             language = payload.get("language")
             instance_id = payload.get("instance_id") or payload.get("model")
+            completed = payload.get("completed_samples")
+            reason = payload.get("reason")
+            cooldown = payload.get("cooldown_seconds") or 0
+            reason_text = (
+                f"after {completed} call(s)"
+                if reason == "call_interval" and completed is not None
+                else f"after lang={language}"
+            )
+            cooldown_text = f" • cooldown {cooldown:g}s" if cooldown else ""
             if payload.get("error"):
                 progress.console.print(
-                    f"⚠️ Could not restart model runtime after lang={language}: "
+                    f"⚠️ Could not restart model runtime {reason_text}: "
                     f"{payload.get('error')}"
                 )
             else:
                 progress.console.print(
-                    f"🧹 Restarted model runtime after lang={language} • {instance_id}"
+                    f"🧹 Restarted model runtime {reason_text} • {instance_id}{cooldown_text}"
                 )
         elif event_type == "task_completed":
             variant = payload.get("variant")

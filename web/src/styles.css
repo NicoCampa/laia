@@ -634,6 +634,103 @@ tbody tr:last-child td {
   text-align: center;
 }
 
+/* ── Intelligence Chart ── */
+
+.chart-section {
+  border-top: 2px solid var(--line);
+  background: var(--surface);
+  padding: 24px;
+}
+
+.chart-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.chart-heading h3 {
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.chart-heading > span {
+  border: 2px solid var(--line);
+  background: var(--accent);
+  padding: 5px 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.chart-shell {
+  overflow-x: auto;
+  border: 2px solid var(--line);
+  background:
+    linear-gradient(90deg, rgba(200, 255, 95, 0.28), transparent 62%),
+    var(--surface-soft);
+}
+
+.chart-shell svg {
+  display: block;
+  min-width: 760px;
+  width: 100%;
+  height: auto;
+}
+
+.chart-plot {
+  fill: rgba(255, 255, 255, 0.72);
+  stroke: var(--line);
+  stroke-width: 2;
+}
+
+.chart-grid-line {
+  stroke: rgba(17, 17, 17, 0.16);
+  stroke-width: 1;
+}
+
+.chart-axis-label,
+.chart-axis-title,
+.chart-point-label {
+  fill: var(--ink);
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 800;
+}
+
+.chart-axis-label {
+  fill: var(--muted);
+  font-size: 0.66rem;
+}
+
+.chart-axis-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.chart-point {
+  fill: var(--accent);
+  stroke: var(--ink);
+  stroke-width: 2.4;
+}
+
+.chart-point-group:nth-of-type(3n) .chart-point {
+  fill: var(--blue);
+}
+
+.chart-point-group:nth-of-type(4n) .chart-point {
+  fill: var(--surface);
+}
+
+.chart-point-label {
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4;
+  font-size: 0.64rem;
+}
+
 /* ── Methodology Page ── */
 
 .methodology-page {
