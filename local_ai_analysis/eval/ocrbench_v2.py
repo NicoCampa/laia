@@ -14,6 +14,7 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import ImagePayload, create_native_client
 from local_ai_analysis.config import OCRBenchV2Settings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -255,6 +256,17 @@ class OCRBenchV2Runner:
                             "latest_subject": task_type,
                         },
                     )
+                maybe_reset_runtime(
+                    client=self.client,
+                    settings=self.settings,
+                    model=model,
+                    task="ocrbench-v2",
+                    variant_name=variant.name,
+                    completed_samples=completed_samples,
+                    total_samples=total_samples,
+                    progress_callback=progress_callback,
+                    language=task_type,
+                )
 
         summary = build_summary(
             settings=self.settings,

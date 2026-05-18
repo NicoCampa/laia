@@ -251,6 +251,43 @@ dd {
   padding: 24px;
 }
 
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.version-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 2px solid var(--line);
+  background: var(--accent);
+  color: var(--ink);
+  padding: 0 14px;
+  box-shadow: 4px 4px 0 var(--ink);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.version-toggle-button:hover,
+.version-toggle-button.active {
+  background: var(--accent-dark);
+}
+
+.version-toggle-button:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
 .panel-heading h2 {
   font-size: 1.55rem;
   font-weight: 900;
@@ -563,6 +600,24 @@ tbody tr:last-child td {
   text-align: right;
 }
 
+.sort-heading-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  text-transform: inherit;
+}
+
+.sort-heading-button:hover {
+  color: var(--accent-strong);
+}
+
 .primary-score {
   color: var(--ink);
   font-weight: 900;
@@ -634,6 +689,26 @@ tbody tr:last-child td {
   text-align: center;
 }
 
+.alternate-version-row {
+  background: var(--accent-soft);
+}
+
+.alternate-version-row:nth-child(even) {
+  background: #e3ff92;
+}
+
+.hosted-openai-row {
+  background: #dff0ff;
+}
+
+.hosted-openai-row:nth-child(even) {
+  background: #cae6ff;
+}
+
+.hosted-openai-row td {
+  border-bottom-color: #111111;
+}
+
 /* ── Intelligence Chart ── */
 
 .chart-section {
@@ -664,6 +739,30 @@ tbody tr:last-child td {
   font-size: 0.68rem;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: -4px 0 14px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--line);
 }
 
 .chart-shell {
@@ -710,18 +809,37 @@ tbody tr:last-child td {
   text-transform: uppercase;
 }
 
+.chart-series-line {
+  fill: none;
+  stroke: rgba(17, 17, 17, 0.28);
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+}
+
 .chart-point {
   fill: var(--accent);
   stroke: var(--ink);
   stroke-width: 2.4;
 }
 
-.chart-point-group:nth-of-type(3n) .chart-point {
+.quant-bf16 {
   fill: var(--blue);
+  background: var(--blue);
 }
 
-.chart-point-group:nth-of-type(4n) .chart-point {
-  fill: var(--surface);
+.quant-q8 {
+  fill: var(--blue-soft);
+  background: var(--blue-soft);
+}
+
+.quant-q4 {
+  fill: var(--accent);
+  background: var(--accent);
+}
+
+.quant-other {
+  fill: var(--surface-warm);
+  background: var(--surface-warm);
 }
 
 .chart-point-label {
@@ -729,6 +847,72 @@ tbody tr:last-child td {
   stroke: var(--surface);
   stroke-width: 4;
   font-size: 0.64rem;
+}
+
+.efficiency-panel {
+  border: 2px solid var(--line);
+  border-top: 0;
+  background: var(--surface);
+}
+
+.efficiency-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 2px solid var(--line);
+}
+
+.efficiency-heading strong {
+  font-size: 0.9rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.efficiency-heading span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.efficiency-list {
+  display: grid;
+}
+
+.efficiency-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(140px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.16);
+}
+
+.efficiency-row:last-child {
+  border-bottom: 0;
+}
+
+.efficiency-row strong,
+.efficiency-row b {
+  font-weight: 900;
+}
+
+.efficiency-row span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.efficiency-bar {
+  height: 16px;
+  border: 2px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.efficiency-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
 }
 
 /* ── Methodology Page ── */

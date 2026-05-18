@@ -135,6 +135,56 @@ type MetricColumn = {
   primary?: boolean;
 };
 
+type SizeSort = "asc" | "desc" | null;
+
+const MERGED_BENCHMARK_METRICS = [
+  "global_mmlu_lite_pass_at_1",
+  "global_mmlu_lite_micro_pass_at_1",
+  "global_mmlu_lite_invalid_rate",
+  "ifbench_prompt_level_loose",
+  "ifbench_instruction_level_loose",
+  "ifbench_prompt_level_strict",
+  "ifbench_instruction_level_strict",
+  "bfcl_v4_selected_accuracy",
+  "bfcl_v4_invalid_rate",
+  "bfcl_v4_non_live_accuracy",
+  "bfcl_v4_live_accuracy",
+  "bfcl_v4_multi_turn_accuracy",
+  "bfcl_v4_agentic_accuracy",
+  "ocrbench_v2_score",
+  "ocrbench_v2_micro_score",
+  "ocrbench_v2_en_score",
+  "ocrbench_v2_cn_score",
+  "mmmu_accuracy",
+  "mmmu_invalid_rate",
+  "mmmu_multiple_choice_accuracy",
+  "mmmu_open_accuracy",
+  "mbpp_pass_at_1",
+  "mbpp_invalid_rate",
+  "mbpp_compile_rate",
+  "mbpp_runtime_error_rate",
+  "rgb_all_rate",
+  "rgb_rejection_rate",
+  "rgb_fact_check_rate",
+  "rgb_error_correction_rate",
+  "simpleqa_f1",
+  "simpleqa_correct_rate",
+  "simpleqa_incorrect_rate",
+  "simpleqa_hallucination_rate",
+  "simpleqa_not_attempted_rate",
+  "simpleqa_accuracy_given_attempted",
+  "harmbench_attack_success_rate",
+  "harmbench_refusal_rate",
+] satisfies Array<keyof LeaderboardRow>;
+
+const LAIA_INDEX_WEIGHTS = {
+  global_mmlu_lite_pass_at_1: 0.25,
+  ifbench_prompt_level_loose: 0.20,
+  bfcl_v4_selected_accuracy: 0.20,
+  mbpp_pass_at_1: 0.20,
+  rgb_all_rate: 0.15,
+} satisfies Partial<Record<keyof LeaderboardRow, number>>;
+
 const emptyFilters: Filters = {
   query: "",
   family: "all",
@@ -147,7 +197,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [showFilters, setShowFilters] = useState(false);
+  const [showAllVersions, setShowAllVersions] = useState(false);
   const [page, setPage] = useState<"leaderboard" | "methodology">("leaderboard");
+  const [sizeSort, setSizeSort] = useState<SizeSort>(null);
 
   useEffect(() => {
     loadPayload()
@@ -163,7 +215,16 @@ export function App() {
     [publishableRows, filters],
   );
   const comparableRows = useMemo(() => buildComparableRows(filteredRows), [filteredRows]);
-  const rankedRows = useMemo(() => rankRows(comparableRows), [comparableRows]);
+  const displayedComparableRows = useMemo(
+    () => (
+      showAllVersions
+        ? comparableRows
+        : comparableRows.filter((row) => isFourBitRow(row) || isHostedOpenAIRow(row))
+    ),
+    [comparableRows, showAllVersions],
+  );
+  const rankedRows = useMemo(() => rankRows(displayedComparableRows), [displayedComparableRows]);
+  const visibleRows = useMemo(() => sortRowsForDisplay(rankedRows, sizeSort), [rankedRows, sizeSort]);
   const options = useMemo(() => optionSets(publishableRows), [publishableRows]);
 
   if (error) {
@@ -193,8 +254,9 @@ export function App() {
         <>
           <div className="page-subtitle">
             <p>
-              Compare local models by LAIA Index, speed, tool use, coding, vision, RAG,
-              factuality, and safety. Updated {formatDate(payload.generated_at)}.
+              Compare local models by LAIA Index across knowledge, instructions, tool use,
+              coding, and RAG. Vision, factuality, and safety are shown when available.
+              Updated {formatDate(payload.generated_at)}.
             </p>
           </div>
 
@@ -205,10 +267,19 @@ export function App() {
                   <p className="eyebrow">Local AI Leaderboard</p>
                   <h2 id="leaderboard-title">Capability rankings</h2>
                 </div>
-                <button className="text-button" type="button" onClick={() => setShowFilters(!showFilters)}>
-                  <ListFilter size={15} aria-hidden="true" />
-                  {showFilters ? "Hide filters" : "Show filters"}
-                </button>
+                <div className="panel-actions">
+                  <button
+                    className={`version-toggle-button ${showAllVersions ? "active" : ""}`}
+                    type="button"
+                    onClick={() => setShowAllVersions((current) => !current)}
+                  >
+                    {showAllVersions ? "Show 4 bit only" : "Show all versions"}
+                  </button>
+                  <button className="text-button" type="button" onClick={() => setShowFilters(!showFilters)}>
+                    <ListFilter size={15} aria-hidden="true" />
+                    {showFilters ? "Hide filters" : "Show filters"}
+                  </button>
+                </div>
               </div>
 
               {showFilters && (
@@ -221,10 +292,14 @@ export function App() {
               )}
 
               <LeaderboardTable
-                rows={rankedRows}
+                rows={visibleRows}
+                sizeSort={sizeSort}
+                onToggleSizeSort={() => setSizeSort((current) => (
+                  current === null ? "asc" : current === "asc" ? "desc" : null
+                ))}
               />
 
-              <IntelligenceSizeChart rows={rankedRows} />
+              <IntelligenceSizeChart rows={visibleRows} />
             </section>
           </section>
 
@@ -385,8 +460,10 @@ function NumberInput({
   );
 }
 
-function LeaderboardTable({ rows }: {
+function LeaderboardTable({ rows, sizeSort, onToggleSizeSort }: {
   rows: ComparableRow[];
+  sizeSort: SizeSort;
+  onToggleSizeSort: () => void;
 }) {
   const metricColumns = metricColumnsFor(rows);
   const columnCount = 2 + metricColumns.length;
@@ -400,7 +477,22 @@ function LeaderboardTable({ rows }: {
             <th>Model</th>
             {metricColumns.map((column) => (
               <th className="numeric-heading" key={column.key}>
-                {column.label}
+                {column.key === "model_size_gb" ? (
+                  <button
+                    className="sort-heading-button"
+                    type="button"
+                    onClick={onToggleSizeSort}
+                    aria-label={`Sort by model size ${
+                      sizeSort === "asc" ? "largest first" : sizeSort === "desc" ? "by LAIA Index" : "smallest first"
+                    }`}
+                    aria-sort={sizeSort === "asc" ? "ascending" : sizeSort === "desc" ? "descending" : "none"}
+                  >
+                    <span>{column.label}</span>
+                    <span aria-hidden="true">{sizeSort === "asc" ? "↑" : sizeSort === "desc" ? "↓" : "↕"}</span>
+                  </button>
+                ) : (
+                  column.label
+                )}
               </th>
             ))}
           </tr>
@@ -414,7 +506,10 @@ function LeaderboardTable({ rows }: {
             </tr>
           )}
           {rows.map((row, index) => (
-            <tr key={row.variant_id}>
+            <tr
+              className={leaderboardRowClass(row)}
+              key={row.normalized_result_id ?? row.variant_id}
+            >
               <td className="rank-cell">{String(index + 1).padStart(2, "0")}</td>
               <td className="model-cell">
                 <div className="model-title-row">
@@ -472,8 +567,18 @@ function IntelligenceSizeChart({ rows }: { rows: ComparableRow[] }) {
       row,
       sizeGb: modelSizeGb(row),
       score: numeric(row.model_intelligence_score),
+      series: modelSeriesKey(row),
+      quantization: quantizationLabel(row),
+      quantizationTone: quantizationTone(row),
     }))
-    .filter((point): point is { row: ComparableRow; sizeGb: number; score: number } => (
+    .filter((point): point is {
+      row: ComparableRow;
+      sizeGb: number;
+      score: number;
+      series: string;
+      quantization: string;
+      quantizationTone: string;
+    } => (
       point.sizeGb !== null && point.score !== null
     ));
 
@@ -496,6 +601,28 @@ function IntelligenceSizeChart({ rows }: { rows: ComparableRow[] }) {
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
   const labelIds = new Set(labelPoints.map((point) => point.row.variant_id));
+  const seriesLines = Array.from(
+    points.reduce((map, point) => {
+      map.set(point.series, [...(map.get(point.series) ?? []), point]);
+      return map;
+    }, new Map<string, typeof points>()),
+  )
+    .map(([, seriesPoints]) => seriesPoints.sort((a, b) => a.sizeGb - b.sizeGb))
+    .filter((seriesPoints) => seriesPoints.length > 1);
+  const efficiencyRows = [...points]
+    .map((point) => ({
+      ...point,
+      efficiency: (point.score * 100) / point.sizeGb,
+    }))
+    .sort((a, b) => b.efficiency - a.efficiency)
+    .slice(0, 8);
+  const maxEfficiency = Math.max(...efficiencyRows.map((point) => point.efficiency), 0.1);
+  const legendItems = [
+    { key: "bf16", label: "16 bit / BF16" },
+    { key: "q8", label: "8 bit" },
+    { key: "q4", label: "4 bit" },
+    { key: "other", label: "Other" },
+  ];
 
   const xFor = (value: number) => padding.left + (value / xMax) * plotWidth;
   const yFor = (value: number) => padding.top + plotHeight - (value / yMax) * plotHeight;
@@ -508,6 +635,15 @@ function IntelligenceSizeChart({ rows }: { rows: ComparableRow[] }) {
           <h3 id="intelligence-size-title">Intelligence vs size</h3>
         </div>
         <span>{points.length} visible runs</span>
+      </div>
+
+      <div className="chart-legend" aria-label="Quantization legend">
+        {legendItems.map((item) => (
+          <span key={item.key}>
+            <i className={`legend-dot quant-${item.key}`} aria-hidden="true" />
+            {item.label}
+          </span>
+        ))}
       </div>
 
       <div className="chart-shell">
@@ -561,16 +697,23 @@ function IntelligenceSizeChart({ rows }: { rows: ComparableRow[] }) {
             LAIA Index
           </text>
 
+          {seriesLines.map((seriesPoints) => (
+            <polyline
+              className="chart-series-line"
+              key={seriesPoints.map((point) => point.row.variant_id).join("-")}
+              points={seriesPoints.map((point) => `${xFor(point.sizeGb)},${yFor(point.score)}`).join(" ")}
+            />
+          ))}
+
           {points.map((point) => {
             const x = xFor(point.sizeGb);
             const y = yFor(point.score);
-            const quantization = quantizationLabel(point.row);
-            const label = `${displayModelName(point.row)} ${quantization}`;
+            const label = `${displayModelName(point.row)} ${point.quantization}`;
             const isLabeled = labelIds.has(point.row.variant_id);
             return (
               <g className="chart-point-group" key={point.row.variant_id}>
                 <circle
-                  className="chart-point"
+                  className={`chart-point quant-${point.quantizationTone}`}
                   cx={x}
                   cy={y}
                   r={isLabeled ? 6 : 4.5}
@@ -588,6 +731,27 @@ function IntelligenceSizeChart({ rows }: { rows: ComparableRow[] }) {
             );
           })}
         </svg>
+      </div>
+
+      <div className="efficiency-panel" aria-label="LAIA per GB ranking">
+        <div className="efficiency-heading">
+          <strong>LAIA per GB</strong>
+          <span>Higher means more score per memory footprint.</span>
+        </div>
+        <div className="efficiency-list">
+          {efficiencyRows.map((point) => (
+            <div className="efficiency-row" key={`eff-${point.row.variant_id}`}>
+              <div>
+                <strong>{displayModelName(point.row)}</strong>
+                <span>{point.quantization} · {formatModelSize(point.row)}</span>
+              </div>
+              <div className="efficiency-bar" aria-hidden="true">
+                <span style={{ width: `${Math.max(6, (point.efficiency / maxEfficiency) * 100)}%` }} />
+              </div>
+              <b>{point.efficiency.toFixed(1)} pts/GB</b>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -714,7 +878,7 @@ function MethodologyPage() {
     {
       icon: <CheckCircle2 size={18} />,
       title: "Capability-first scoring",
-      text: "The LAIA Index is a weighted composite of Knowledge, Instructions, Tool calling, Vision, Coding, and RAG — all capabilities that matter for real local deployments.",
+      text: "The LAIA Index is a 100-point text-model score: Knowledge 25, Instructions 20, Tool calling 20, Coding 20, and RAG 15. Vision and judge-based results stay separate.",
     },
     {
       icon: <Cpu size={18} />,
@@ -748,16 +912,17 @@ function MethodologyPage() {
       <div className="method-section">
         <h2>LAIA Index</h2>
         <p>
-          The LAIA Index is the primary ranking metric. It is an unweighted average of per-benchmark
-          scores across the capabilities listed below, normalised to [0, 1]. Only benchmarks that
-          were actually run are included in the average — a model with partial coverage will show a
-          lower index because fewer benchmarks were completed.
+          The LAIA Index is the primary ranking metric. It is a 100-point text-model score built
+          from non-judge benchmarks: Knowledge, Instructions, Tool calling, Coding, and RAG. Vision
+          benchmarks are kept as separate columns when available, but they do not affect LAIA. Missing
+          text benchmarks do not receive guessed values, so partial runs show only the points earned
+          from completed benchmark categories.
         </p>
         <dl className="method-detail-list">
           <div><dt>Scale</dt><dd>0 – 100 pts</dd></div>
-          <div><dt>Coverage</dt><dd>% of benchmarks run</dd></div>
-          <div><dt>Partial results</dt><dd>Shown as Available Index</dd></div>
-          <div><dt>Exclusions</dt><dd>Factuality, Safety (separate columns)</dd></div>
+          <div><dt>Weights</dt><dd>25 / 20 / 20 / 20 / 15</dd></div>
+          <div><dt>Partial results</dt><dd>No imputation for missing benchmarks</dd></div>
+          <div><dt>Exclusions</dt><dd>Vision, Factuality, Safety (separate columns)</dd></div>
         </dl>
       </div>
 
@@ -870,9 +1035,51 @@ function buildComparableRows(rows: LeaderboardRow[]): ComparableRow[] {
 
     return allQuantizationOptions.map((selectedQuantization) => {
       const selectedRows = rowsForQuantization(groupRows, selectedQuantization.key);
-      return bestComparableRun(selectedRows);
+      return mergeComparableRuns(selectedRows);
     });
   });
+}
+
+function mergeComparableRuns(rows: LeaderboardRow[]) {
+  const base = bestComparableRun(rows);
+  const merged: LeaderboardRow = { ...base };
+
+  for (const key of MERGED_BENCHMARK_METRICS) {
+    if (numeric(merged[key]) !== null) continue;
+    const source = rows.find((row) => numeric(row[key]) !== null);
+    if (source) {
+      merged[key] = source[key] as never;
+    }
+  }
+  const intelligence = laiaIndexValues(merged);
+  merged.model_intelligence_score = intelligence.score;
+  merged.model_intelligence_coverage = intelligence.coverage;
+  merged.model_intelligence_available_score = intelligence.availableScore;
+
+  return merged;
+}
+
+function laiaIndexValues(row: LeaderboardRow) {
+  let weightedSum = 0;
+  let coveredWeight = 0;
+
+  for (const [key, weight] of Object.entries(LAIA_INDEX_WEIGHTS) as Array<
+    [keyof typeof LAIA_INDEX_WEIGHTS, number]
+  >) {
+    const value = numeric(row[key]);
+    if (value === null) continue;
+    weightedSum += Math.max(0, Math.min(1, value)) * weight;
+    coveredWeight += weight;
+  }
+
+  if (coveredWeight <= 0) {
+    return { score: null, coverage: null, availableScore: null };
+  }
+  return {
+    score: weightedSum,
+    coverage: coveredWeight,
+    availableScore: weightedSum / coveredWeight,
+  };
 }
 
 function quantizationOptionsFor(rows: LeaderboardRow[], preferredReasoningKey?: string) {
@@ -1064,6 +1271,20 @@ function rankRows<T extends LeaderboardRow>(rows: T[]) {
   return [...rows].sort((a, b) => scoreForRank(b) - scoreForRank(a));
 }
 
+function sortRowsForDisplay<T extends LeaderboardRow>(rows: T[], sizeSort: SizeSort) {
+  if (!sizeSort) return rows;
+  return [...rows].sort((a, b) => {
+    const aSize = modelSizeGb(a);
+    const bSize = modelSizeGb(b);
+    if (aSize === null && bSize === null) return scoreForRank(b) - scoreForRank(a);
+    if (aSize === null) return 1;
+    if (bSize === null) return -1;
+    const sizeDelta = sizeSort === "asc" ? aSize - bSize : bSize - aSize;
+    if (sizeDelta !== 0) return sizeDelta;
+    return scoreForRank(b) - scoreForRank(a);
+  });
+}
+
 function scoreForRank(row: LeaderboardRow) {
   return qualityValue(row) ?? 0;
 }
@@ -1205,6 +1426,7 @@ function displayModelName(row: LeaderboardRow) {
 
 function labKey(row: LeaderboardRow) {
   const source = `${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.variant_name}`.toLowerCase();
+  if (source.includes("nemotron") || source.includes("nvidia")) return "nvidia";
   if (source.includes("qwen") || source.includes("alibaba")) return "qwen";
   if (source.includes("gemma") || source.includes("google")) return "google";
   if (source.includes("llama") || source.includes("meta")) return "meta";
@@ -1213,6 +1435,7 @@ function labKey(row: LeaderboardRow) {
   if (source.includes("falcon") || source.includes("tii") || source.includes("technology innovation institute")) return "TechnologyInnovationINstitute";
   if (source.includes("phi") || source.includes("microsoft")) return "microsoft";
   if (source.includes("granite") || source.includes("ibm")) return "ibm";
+  if (source.includes("olmo") || source.includes("ai2") || source.includes("allenai")) return "ai2";
   if (source.includes("openai") || source.includes("gpt-oss")) return "openai";
   if (source.includes("cohere") || source.includes("aya")) return "cohere";
   if (source.includes("liquid") || source.includes("lfm")) return "liquidAI";
@@ -1236,13 +1459,29 @@ function slugForAsset(value: string) {
 function quantizationGroupKey(row: LeaderboardRow) {
   return [
     displayModelName(row).toLowerCase(),
-    row.family.toLowerCase(),
-    String(row.parameter_size_b),
+    providerLabel(row).toLowerCase(),
+    displayParameter(row).toLowerCase(),
   ].join("|");
 }
 
 function quantizationKey(row: LeaderboardRow) {
   return slugForAsset(quantizationLabel(row) || row.quantization || "default");
+}
+
+function modelSeriesKey(row: LeaderboardRow) {
+  return [
+    providerLabel(row).toLowerCase(),
+    displayModelName(row).toLowerCase(),
+    reasoningKey(row),
+  ].join("|");
+}
+
+function quantizationTone(row: LeaderboardRow) {
+  const label = quantizationLabel(row).toLowerCase();
+  if (label.includes("32") || label.includes("16")) return "bf16";
+  if (label.includes("8")) return "q8";
+  if (label.includes("4")) return "q4";
+  return "other";
 }
 
 function quantizationLabel(row: LeaderboardRow) {
@@ -1253,10 +1492,25 @@ function quantizationLabel(row: LeaderboardRow) {
   if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return "6 bit";
   if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return "5 bit";
   if (/\b(?:q4|q4_k_m|q4-k-m|4\s*bit|4bit)\b/.test(source)) return "4 bit";
+  if (/\bnemotron\b/.test(source) && /:4b\b/.test(source)) return "4 bit";
   if (row.quantization && row.quantization.toUpperCase() !== "SERVER") {
     return titleCaseModelName(row.quantization.replace(/_/g, " "));
   }
   return "Server";
+}
+
+function leaderboardRowClass(row: LeaderboardRow) {
+  if (isHostedOpenAIRow(row)) return "hosted-openai-row";
+  if (!isFourBitRow(row)) return "alternate-version-row";
+  return undefined;
+}
+
+function isHostedOpenAIRow(row: LeaderboardRow) {
+  return providerLabel(row) === "OpenAI";
+}
+
+function isFourBitRow(row: LeaderboardRow) {
+  return quantizationLabel(row).toLowerCase() === "4 bit";
 }
 
 function quantizationRank(row: LeaderboardRow) {
@@ -1320,8 +1574,8 @@ function formatModelName(value: string) {
   const phi = withoutRunSuffix.match(/\bphi\s*(\d+(?:\.\d+)?)\s*mini\b/i);
   if (phi) return `Phi ${phi[1]} Mini`;
 
-  const gemmaE2b = withoutRunSuffix.match(/\bgemma\s*(\d+(?:\.\d+)?)\s*e\s*2\s*b\b/i);
-  if (gemmaE2b) return `Gemma ${gemmaE2b[1]} E2B`;
+  const gemmaEdge = withoutRunSuffix.match(/\bgemma\s*(\d+(?:\.\d+)?)\s*e\s*(\d+(?:\.\d+)?)\s*b\b/i);
+  if (gemmaEdge) return `Gemma ${gemmaEdge[1]} E${gemmaEdge[2]}B`;
 
   const gemma = withoutRunSuffix.match(/\bgemma\s*(\d+(?:\.\d+)?)?.*?(\d+(?:\.\d+)?)\s*b\b/i);
   if (gemma) {
@@ -1459,6 +1713,8 @@ function displayParameter(row: LeaderboardRow) {
 
 function providerLabel(row: LeaderboardRow) {
   const source = `${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.model_repo ?? ""} ${row.variant_name}`.toLowerCase();
+  if (source.includes("openai") || /\bgpt-[\w.-]+/.test(source)) return "OpenAI";
+  if (source.includes("nemotron") || source.includes("nvidia")) return "NVIDIA";
   if (source.includes("liquid") || source.includes("lfm")) return "Liquid AI";
   if (source.includes("qwen") || source.includes("alibaba")) return "Alibaba";
   if (source.includes("gemma") || source.includes("google")) return "Google";
@@ -1468,7 +1724,6 @@ function providerLabel(row: LeaderboardRow) {
   if (source.includes("olmo")) return "AI2";
   if (source.includes("falcon")) return "TII";
   if (source.includes("smollm")) return "Hugging Face";
-  if (source.includes("nemotron") || source.includes("nvidia")) return "NVIDIA";
   if (source.includes("phi") || source.includes("microsoft")) return "Microsoft";
   if (source.includes("deepseek")) return "DeepSeek";
   if (source.includes("cohere") || source.includes("aya")) return "Cohere";

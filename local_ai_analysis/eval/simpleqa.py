@@ -14,6 +14,7 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import SimpleQASettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -256,6 +257,17 @@ class SimpleQARunner:
                             "latest_subject": str(_metadata(row.get("metadata")).get("topic", "")),
                         },
                     )
+                maybe_reset_runtime(
+                    client=self.client,
+                    settings=self.settings,
+                    model=model,
+                    task="simpleqa",
+                    variant_name=variant.name,
+                    completed_samples=index,
+                    total_samples=total_samples,
+                    progress_callback=progress_callback,
+                    language="en",
+                )
 
         summary = build_summary(
             settings=self.settings,

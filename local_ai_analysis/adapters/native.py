@@ -48,11 +48,20 @@ def create_native_client(
             api_key_env=api_key_env,
             timeout_seconds=timeout_seconds,
         )
-    raise ValueError("provider must be one of: ollama, lmstudio, omlx")
+    if normalized == "openai":
+        return OpenAINativeClient(
+            base_url=base_url,
+            api_key=api_key,
+            api_key_env=api_key_env,
+            timeout_seconds=timeout_seconds,
+        )
+    raise ValueError("provider must be one of: ollama, lmstudio, omlx, openai")
 
 
 class NativeClient:
     provider_name = "native"
+    request_retries = 0
+    retryable_http_statuses: tuple[int, ...] = ()
 
     def planned_endpoint(self) -> str:
         raise NotImplementedError
@@ -112,23 +121,35 @@ class NativeClient:
         request_headers = {"Content-Type": "application/json"}
         if headers:
             request_headers.update(headers)
-        request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
         start = time.perf_counter()
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-                raw_body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as exc:
-            error_body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"{url} returned HTTP {exc.code}: {error_body}") from exc
-        except urllib.error.URLError as exc:
-            raise RuntimeError(self._connection_error(url, exc)) from exc
-        except (http.client.IncompleteRead, TimeoutError, OSError) as exc:
-            raise RuntimeError(
-                f"{self.provider_name} native server dropped the response from {url}: {exc}. "
-                "The model may have crashed, timed out, or exceeded the server's generation limits."
-            ) from exc
-        runtime = time.perf_counter() - start
-        return json.loads(raw_body), runtime
+        attempts = max(1, self.request_retries + 1)
+        for attempt in range(attempts):
+            request = urllib.request.Request(url, data=body, headers=request_headers, method=method)
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                    raw_body = response.read().decode("utf-8")
+                runtime = time.perf_counter() - start
+                return json.loads(raw_body), runtime
+            except urllib.error.HTTPError as exc:
+                error_body = exc.read().decode("utf-8", errors="replace")
+                if self._should_retry_http(exc.code, attempt):
+                    self._sleep_before_retry(attempt)
+                    continue
+                raise RuntimeError(f"{url} returned HTTP {exc.code}: {error_body}") from exc
+            except urllib.error.URLError as exc:
+                if self._should_retry_request(attempt):
+                    self._sleep_before_retry(attempt)
+                    continue
+                raise RuntimeError(self._connection_error(url, exc)) from exc
+            except (http.client.IncompleteRead, TimeoutError, OSError) as exc:
+                if self._should_retry_request(attempt):
+                    self._sleep_before_retry(attempt)
+                    continue
+                raise RuntimeError(
+                    f"{self.provider_name} native server dropped the response from {url}: {exc}. "
+                    "The model may have crashed, timed out, or exceeded the server's generation limits."
+                ) from exc
+        raise RuntimeError(f"{self.provider_name} request failed after {attempts} attempt(s): {url}")
 
     def _connection_error(self, url: str, exc: urllib.error.URLError) -> str:
         reason = getattr(exc, "reason", exc)
@@ -137,6 +158,15 @@ class NativeClient:
             f"Check that the local server is running and that --base-url is correct "
             f"(current base URL: {self.base_url})."
         )
+
+    def _should_retry_http(self, status_code: int, attempt: int) -> bool:
+        return status_code in self.retryable_http_statuses and self._should_retry_request(attempt)
+
+    def _should_retry_request(self, attempt: int) -> bool:
+        return attempt < self.request_retries
+
+    def _sleep_before_retry(self, attempt: int) -> None:
+        time.sleep(min(2 ** attempt, 30))
 
 
 class OllamaNativeClient(NativeClient):
@@ -332,18 +362,17 @@ class LMStudioNativeClient(NativeClient):
     ) -> GenerationResponse:
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": "/no_think"},
-                {"role": "user", "content": prompt},
-            ],
+            "messages": _lmstudio_no_think_messages(model, prompt),
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": False,
+            "chat_template_kwargs": {
+                "enable_thinking": False,
+                "enableThinking": False,
+            },
         }
         if top_p is not None:
             payload["top_p"] = top_p
-        if stop is not None:
-            payload["stop"] = stop
         if seed is not None:
             payload["seed"] = seed
         if response_format is not None:
@@ -490,6 +519,19 @@ def _lmstudio_uses_no_think_system_prompt(model: str, reasoning_effort: str | No
     return _lmstudio_reasoning(reasoning_effort) == "off"
 
 
+def _lmstudio_no_think_messages(model: str, prompt: str) -> list[dict[str, str]]:
+    model_id = model.lower()
+    if "nemotron-3-nano" in model_id:
+        return [
+            {"role": "system", "content": "You are a helpful assistant. /no_think"},
+            {"role": "user", "content": f"/no_think\n{prompt}"},
+        ]
+    return [
+        {"role": "system", "content": "/no_think"},
+        {"role": "user", "content": prompt},
+    ]
+
+
 def _lmstudio_text(raw: dict[str, Any]) -> str:
     output = raw.get("output") or []
     parts = [
@@ -626,6 +668,114 @@ class OmlxNativeClient(NativeClient):
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+
+
+class OpenAINativeClient(NativeClient):
+    provider_name = "OpenAI"
+    request_retries = 5
+    retryable_http_statuses = (408, 409, 429, 500, 502, 503, 504)
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str | None = None,
+        api_key_env: str | None = None,
+        timeout_seconds: int = 120,
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key or (os.environ.get(api_key_env) if api_key_env else None)
+        self.timeout_seconds = timeout_seconds
+
+    def planned_endpoint(self) -> str:
+        return f"{self.base_url}/chat/completions"
+
+    def models_endpoint(self) -> str:
+        return f"{self.base_url}/models"
+
+    def list_models(self) -> list[str]:
+        payload, _ = self._request_json(self.models_endpoint(), headers=self._headers())
+        models: list[str] = []
+        for item in payload.get("data", []):
+            if isinstance(item, dict) and item.get("id"):
+                models.append(str(item["id"]))
+        return models
+
+    def generate(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        temperature: float,
+        max_tokens: int,
+        top_p: float | None = None,
+        stop: list[str] | None = None,
+        seed: int | None = None,
+        reasoning_effort: str | None = None,
+        response_format: dict[str, Any] | None = None,
+        request_extra: dict[str, Any] | None = None,
+        images: list[ImagePayload | dict[str, str]] | None = None,
+    ) -> GenerationResponse:
+        content: str | list[dict[str, Any]]
+        if images:
+            content = [{"type": "text", "text": prompt}]
+            content.extend(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": _image_data_url(image)},
+                }
+                for image in images
+            )
+        else:
+            content = prompt
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": content}],
+            "temperature": temperature,
+            "max_completion_tokens": max_tokens,
+            "stream": False,
+            "store": False,
+        }
+        if top_p is not None:
+            payload["top_p"] = top_p
+        if stop is not None:
+            payload["stop"] = stop
+        if seed is not None:
+            payload["seed"] = seed
+        if reasoning_effort is not None:
+            payload["reasoning_effort"] = _openai_reasoning_effort(reasoning_effort)
+        if response_format is not None:
+            payload["response_format"] = response_format
+        if request_extra:
+            payload.update(request_extra)
+        _strip_openai_unsupported_parameters(payload)
+
+        raw, runtime = self._request_json(
+            self.planned_endpoint(),
+            method="POST",
+            payload=payload,
+            headers=self._headers(),
+        )
+        text = _openai_chat_completion_text(raw)
+        return GenerationResponse(text=text, raw=raw, runtime_seconds=runtime)
+
+    def _headers(self) -> dict[str, str]:
+        if not self.api_key:
+            raise RuntimeError("OPENAI_API_KEY is required for the OpenAI provider.")
+        return {"Authorization": f"Bearer {self.api_key}"}
+
+
+def _openai_reasoning_effort(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized in {"", "off", "false", "0"}:
+        return "none"
+    return normalized
+
+
+def _strip_openai_unsupported_parameters(payload: dict[str, Any]) -> None:
+    # GPT-5.4 chat completions reject `stop`; MBPP cleanup is handled by the shared parser.
+    payload.pop("stop", None)
 
 
 def _omlx_chat_template_kwargs(value: str | None) -> dict[str, Any]:

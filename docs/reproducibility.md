@@ -98,6 +98,7 @@ For publishable runs:
   from 0 to 1, while the website and terminal leaderboard render it as points
   out of 100.
 
-Default model intelligence weights are Global MMLU Lite 17%, IFBench 17%,
-BFCL v4 17%, OCRBench v2 11%, MMMU 17%, MBPP 16%, and RGB 5%.
-SimpleQA and HarmBench are reported separately because they require a judge.
+Default LAIA Index weights are text-only: Global MMLU Lite 25%, IFBench 20%,
+BFCL v4 20%, MBPP 20%, and RGB 15%. OCRBench v2 and MMMU are reported as
+separate vision metrics. SimpleQA and HarmBench are reported separately because
+they require a judge.

@@ -17,6 +17,7 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import MBPPSettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -214,6 +215,17 @@ class MBPPRunner:
                             "latest_subject": str(row.get("task_id") or index),
                         },
                     )
+                maybe_reset_runtime(
+                    client=self.client,
+                    settings=self.settings,
+                    model=model,
+                    task="mbpp",
+                    variant_name=variant.name,
+                    completed_samples=index,
+                    total_samples=total_samples,
+                    progress_callback=progress_callback,
+                    language="python",
+                )
 
         summary = build_summary(
             settings=self.settings,

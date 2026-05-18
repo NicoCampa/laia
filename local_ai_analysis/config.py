@@ -53,6 +53,7 @@ class GlobalMMLULiteSettings(BaseModel):
     restart_between_languages: bool = False
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     parser_version: str = "global_mmlu_lite_regex_v1"
     prompt_template: str = (
         "Answer the following multiple-choice question.\n\n"
@@ -89,6 +90,8 @@ class IFBenchSettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     evaluator: str = "allenai_ifbench_loose_v1"
 
 
@@ -116,6 +119,8 @@ class BFCLV4Settings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     include_input_log: bool = False
     exclude_state_log: bool = True
     evaluator: str = "bfcl_eval_prompt_mode_v4"
@@ -147,6 +152,8 @@ class OCRBenchV2Settings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     image_format: str = "PNG"
     evaluator: str = "ocrbench_v2_local_vqa_anls_iou_v1"
     prompt_template: str = "{question}\nAnswer directly. Do not explain."
@@ -176,6 +183,8 @@ class MMMUSettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     image_format: str = "PNG"
     evaluator: str = "mmmu_official_parse_local_v1"
     multiple_choice_prompt_template: str = (
@@ -211,6 +220,8 @@ class MBPPSettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     include_tests_in_prompt: bool = True
     include_challenge_tests: bool = False
     execution_timeout_seconds: float = 5.0
@@ -247,6 +258,8 @@ class RGBSettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     noise_rate: float = 0.8
     passage_num: int = 5
     correct_rate: float = 0.0
@@ -302,6 +315,8 @@ class SimpleQASettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     grader: str = "llm"
     grader_model: str | None = "same"
     grader_provider: str | None = None
@@ -353,6 +368,8 @@ class HarmBenchSettings(BaseModel):
     response_format: dict[str, Any] | None = None
     request_extra: dict[str, Any] = Field(default_factory=dict)
     strip_thinking: bool = True
+    restart_every_calls: int | None = None
+    restart_cooldown_seconds: float = 0.0
     judge: str = "llm"
     judge_model: str | None = "same"
     judge_provider: str | None = None

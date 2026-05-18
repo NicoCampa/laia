@@ -114,14 +114,62 @@ class GlobalMMLULiteRunner:
         sensitivity_scores: dict[str, ScoreBucket] = {}
         invalid_count = 0
         total_runtime = 0.0
+        resume_records = (
+            self._load_resume_records(samples_path) if self.settings.resume_samples else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open("a" if resume_records else "w", encoding="utf-8") as sample_file:
             for language_index, (language, dataset) in enumerate(language_datasets):
                 count = 0
                 language_total = self._planned_sample_count(dataset)
-                for row_payload in dataset:
+                for row_index, row_payload in enumerate(dataset):
                     row = dict(row_payload)
                     prompt = render_prompt(self.settings.prompt_template, row)
+                    cache_key = _sample_cache_key(language, row, row_index)
+                    cached_record = resume_records.get(cache_key)
+                    if cached_record and self._cached_record_matches(
+                        cached_record,
+                        language=language,
+                        row=row,
+                        prompt=prompt,
+                    ):
+                        invalid_count += int(bool(cached_record.get("invalid")))
+                        total_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                        _accumulate_record_scores(
+                            cached_record,
+                            language_scores=language_scores,
+                            sensitivity_scores=sensitivity_scores,
+                        )
+                        count += 1
+                        completed_samples += 1
+                        if (
+                            self.settings.sample_limit_per_language is not None
+                            and count >= self.settings.sample_limit_per_language
+                        ):
+                            break
+                        continue
+                    if (
+                        self.settings.resume_samples
+                        and completed_samples > 0
+                        and not resume_announced
+                    ):
+                        resume_announced = True
+                        if progress_callback:
+                            progress_callback(
+                                "task_resume",
+                                {
+                                    "task": "global-mmlu-lite",
+                                    "variant": variant.name,
+                                    "completed_samples": completed_samples,
+                                    "total_samples": total_samples,
+                                    "correct_samples": sum(
+                                        bucket.correct for bucket in language_scores.values()
+                                    ),
+                                    "invalid_samples": invalid_count,
+                                    "runtime_seconds": total_runtime,
+                                },
+                            )
                     response = self.client.generate(
                         model=model,
                         prompt=prompt,
@@ -177,6 +225,7 @@ class GlobalMMLULiteRunner:
                     sample_file.write(
                         json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                     )
+                    sample_file.flush()
                     count += 1
                     completed_samples += 1
                     if progress_callback:
@@ -228,7 +277,23 @@ class GlobalMMLULiteRunner:
                         variant_name=variant.name,
                         language=language,
                         completed_samples=completed_samples,
-                        reason="language_boundary",
+                            reason="language_boundary",
+                        )
+            if self.settings.resume_samples and completed_samples > 0 and not resume_announced:
+                if progress_callback:
+                    progress_callback(
+                        "task_resume",
+                        {
+                            "task": "global-mmlu-lite",
+                            "variant": variant.name,
+                            "completed_samples": completed_samples,
+                            "total_samples": total_samples,
+                            "correct_samples": sum(
+                                bucket.correct for bucket in language_scores.values()
+                            ),
+                            "invalid_samples": invalid_count,
+                            "runtime_seconds": total_runtime,
+                        },
                     )
 
         summary = build_summary(
@@ -266,7 +331,7 @@ class GlobalMMLULiteRunner:
             model=model,
             prompt="Reply with only this letter: A",
             temperature=self.settings.temperature,
-            max_tokens=16,
+            max_tokens=max(16, self.settings.max_tokens),
             top_p=self.settings.top_p,
             stop=self.settings.stop,
             seed=self.settings.seed,
@@ -330,6 +395,45 @@ class GlobalMMLULiteRunner:
             return dataset_count
         return min(dataset_count, self.settings.sample_limit_per_language)
 
+    def _load_resume_records(self, samples_path: Path) -> dict[str, dict[str, Any]]:
+        if not samples_path.exists():
+            return {}
+        records: dict[str, dict[str, Any]] = {}
+        with samples_path.open("r", encoding="utf-8") as sample_file:
+            for line in sample_file:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                language = str(record.get("language") or "")
+                sample_id = record.get("sample_id")
+                if not language or sample_id is None:
+                    continue
+                records[f"{language}\0{sample_id}"] = record
+        return records
+
+    def _cached_record_matches(
+        self,
+        record: dict[str, Any],
+        *,
+        language: str,
+        row: dict[str, Any],
+        prompt: str,
+    ) -> bool:
+        return (
+            record.get("dataset") == self.settings.dataset_name
+            and record.get("dataset_revision") == self.settings.dataset_revision
+            and record.get("language") == language
+            and record.get("split") == self.settings.split
+            and record.get("sample_id") == row.get("sample_id")
+            and record.get("parser") == self.settings.parser_version
+            and record.get("prompt") == prompt
+        )
+
     def _reset_runtime(
         self,
         *,
@@ -380,6 +484,31 @@ def render_prompt(template: str, row: dict[str, Any]) -> str:
         subject=row.get("subject", ""),
         subject_category=row.get("subject_category", ""),
     )
+
+
+def _sample_cache_key(language: str, row: dict[str, Any], row_index: int) -> str:
+    sample_id = row.get("sample_id")
+    if sample_id is None:
+        sample_id = f"index:{row_index}"
+    return f"{language}\0{sample_id}"
+
+
+def _accumulate_record_scores(
+    record: dict[str, Any],
+    *,
+    language_scores: dict[str, ScoreBucket],
+    sensitivity_scores: dict[str, ScoreBucket],
+) -> None:
+    language = str(record.get("language") or "unknown")
+    correct = bool(record.get("correct"))
+    language_bucket = language_scores.setdefault(language, ScoreBucket())
+    language_bucket.total += 1
+    language_bucket.correct += int(correct)
+
+    label = str(record.get("cultural_sensitivity_label") or "unknown").lower()
+    sensitivity_bucket = sensitivity_scores.setdefault(label, ScoreBucket())
+    sensitivity_bucket.total += 1
+    sensitivity_bucket.correct += int(correct)
 
 
 def extract_answer(text: str, *, strip_thinking: bool = True) -> str | None:

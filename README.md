@@ -52,12 +52,21 @@ laia omlx
 laia omlx Qwen3.5-9B-4bit
 ```
 
+OpenAI can be used as a hosted reference baseline. Set an API key, then pass the
+exact model id available to your account:
+
+```bash
+export OPENAI_API_KEY=your-openai-api-key
+laia openai gpt-5.4-nano
+```
+
 Quick checks:
 
 ```bash
 laia ollama qwen3.5:0.8b-mlx-bf16 --smoke
 laia lmstudio --smoke
 laia omlx --smoke
+laia openai gpt-5.4-nano --smoke
 ```
 
 Useful options:
@@ -94,6 +103,8 @@ laia lmstudio exact-model-id --reasoning-effort high
 laia lmstudio exact-model-id --context-length 8192
 laia omlx exact-model-id --base-url http://127.0.0.1:8000
 laia omlx exact-model-id --api-key-env OMLX_API_KEY
+laia openai gpt-5.4-nano --benchmark text
+laia openai gpt-5.4-nano --benchmark full --simpleqa-grader-model same --harmbench-judge-model same
 laia ollama qwen3-vl:8b --benchmark vision --modality multimodal
 ```
 
@@ -127,6 +138,7 @@ VITE_API_URL=http://127.0.0.1:8000 npm run dev
 laia ollama MODEL
 laia lmstudio [MODEL]
 laia omlx [MODEL]
+laia openai MODEL
 laia run --config results/generated_configs/some-run.yaml
 laia leaderboard --db results/local_ai_analysis.duckdb
 laia export --format json --out web/public/results.json
@@ -187,35 +199,37 @@ The repository does not include synthetic benchmark rows or fake sample data.
 
 ## Model Intelligence Score
 
-Normalized rows include a weighted `model_intelligence_score` for a broad local
-model profile based only on non-judge benchmarks. The stored value is normalized
+Normalized rows include a weighted `model_intelligence_score` for text-model
+capability based only on non-judge text benchmarks. The stored value is normalized
 from 0 to 1, but the website and terminal leaderboard present it as points out
-of 100, not as a benchmark percentage. Missing benchmark families count as zero
-in the score, and `model_intelligence_coverage` records how much of the weighted
-suite was actually run. `model_intelligence_available_score` is the weighted
-average over only the benchmarks present in that row and is also presented as
-points.
+of 100, not as a benchmark percentage. Missing text benchmark families count as
+zero in the score, and `model_intelligence_coverage` records how much of the
+weighted text suite was actually run. `model_intelligence_available_score` is the
+weighted average over only the benchmarks present in that row and is also
+presented as points.
 
 Default weights:
 
-- Global MMLU Lite: 17%
-- IFBench: 17%
-- BFCL v4: 17%
-- OCRBench v2: 11%
-- MMMU: 17%
-- MBPP: 16%
-- RGB: 5%
+- Global MMLU Lite: 25%
+- IFBench: 20%
+- BFCL v4: 20%
+- MBPP: 20%
+- RGB: 15%
 
-SimpleQA and HarmBench are intentionally excluded from `model_intelligence_score`
-because they require a judge. They remain available as separate factuality and
+OCRBench v2 and MMMU are intentionally kept as separate vision metrics. SimpleQA
+and HarmBench are intentionally excluded from `model_intelligence_score` because
+they require a judge. They remain available as separate factuality and
 safety metrics.
 
 ## Reproducibility
 
-Shortcut commands default to `--reasoning-effort none`. Ollama maps that to native
-`think: false`; LM Studio maps it to native `reasoning: "off"` when the model exposes
-reasoning controls; oMLX maps it to `chat_template_kwargs.enable_thinking=false`.
-Override it with `--reasoning-effort low`, `medium`, `high`, or `auto`.
+Local shortcut commands default to `--reasoning-effort none`. Ollama maps that to
+native `think: false`; LM Studio maps it to native `reasoning: "off"` when the
+model exposes reasoning controls; oMLX maps it to
+`chat_template_kwargs.enable_thinking=false`. OpenAI defaults to
+`--reasoning-effort auto`, which resolves to `none` for GPT-5.4/GPT-5.1 models
+and `minimal` for older GPT-5 reasoning models. Override it with
+`--reasoning-effort none`, `low`, `medium`, `high`, or `auto`.
 
 Shortcut commands also default to `--context-length 8192` for Ollama and
 LM Studio. Ollama receives `options.num_ctx=8192`; LM Studio receives

@@ -14,6 +14,7 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import ImagePayload, create_native_client
 from local_ai_analysis.config import MMMUSettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -272,6 +273,17 @@ class MMMURunner:
                                 "latest_subject": row.get("subfield") or subject,
                             },
                         )
+                    maybe_reset_runtime(
+                        client=self.client,
+                        settings=self.settings,
+                        model=model,
+                        task="mmmu",
+                        variant_name=variant.name,
+                        completed_samples=completed_samples,
+                        total_samples=total_samples,
+                        progress_callback=progress_callback,
+                        language=subject,
+                    )
                 if (
                     self.settings.sample_limit is not None
                     and completed_samples >= self.settings.sample_limit

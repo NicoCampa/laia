@@ -345,6 +345,13 @@ def run_ollama_shortcut(
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
     ] = None,
+    resume_samples: Annotated[
+        bool,
+        typer.Option(
+            "--resume-samples/--no-resume-samples",
+            help="Resume Global MMLU Lite from an existing matching samples.jsonl file.",
+        ),
+    ] = False,
     context_length: Annotated[
         int | None,
         typer.Option(
@@ -571,6 +578,13 @@ def run_lmstudio_shortcut(
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
     ] = None,
+    resume_samples: Annotated[
+        bool,
+        typer.Option(
+            "--resume-samples/--no-resume-samples",
+            help="Resume Global MMLU Lite from an existing matching samples.jsonl file.",
+        ),
+    ] = False,
     context_length: Annotated[
         int | None,
         typer.Option(
@@ -599,8 +613,8 @@ def run_lmstudio_shortcut(
             "--restart-every-calls",
             min=1,
             help=(
-                "For LM Studio Global MMLU Lite runs, unload/reload the model every "
-                "N completed calls to release runtime cache."
+                "For LM Studio runs, unload/reload the model every N completed "
+                "sample calls to release runtime cache."
             ),
         ),
     ] = None,
@@ -610,8 +624,8 @@ def run_lmstudio_shortcut(
             "--restart-cooldown-seconds",
             min=0.0,
             help=(
-                "For LM Studio Global MMLU Lite runs, wait this many seconds after "
-                "each model unload/reload refresh."
+                "For LM Studio runs, wait this many seconds after each model "
+                "unload/reload refresh."
             ),
         ),
     ] = 0.0,
@@ -663,6 +677,7 @@ def run_lmstudio_shortcut(
         restart_between_languages=restart_between_languages,
         restart_every_calls=restart_every_calls,
         restart_cooldown_seconds=restart_cooldown_seconds,
+        resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -896,6 +911,231 @@ def run_omlx_shortcut(
         restart_between_languages=False,
         restart_every_calls=None,
         restart_cooldown_seconds=0.0,
+    )
+    console.print(f"🧾 Generated config: {config}")
+    _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
+
+
+@app.command("openai")
+def run_openai_shortcut(
+    model: Annotated[
+        str,
+        typer.Argument(help="OpenAI model id, for example gpt-5.4-nano."),
+    ],
+    smoke: Annotated[
+        bool,
+        typer.Option("--smoke", help="Run a 5-sample smoke set for the selected benchmark."),
+    ] = False,
+    languages: Annotated[
+        str,
+        typer.Option(
+            "--languages",
+            help="Comma-separated language codes, or 'all'. Ignored when --smoke is used.",
+        ),
+    ] = "all",
+    benchmark: Annotated[
+        str,
+        typer.Option(
+            "--benchmark",
+            help=(
+                "Benchmark or suite to run. Suites: text = text-only non-judge; "
+                "vision = multimodal non-judge; judge = LLM-as-judge; "
+                "suite = text + vision; recommended/full = everything. "
+                "Individual names include global-mmlu-lite, ifbench, bfcl, ocrbench, "
+                "mmmu, mbpp, rgb, simpleqa, and harmbench."
+            ),
+        ),
+    ] = "global-mmlu-lite",
+    bfcl_categories: Annotated[
+        str,
+        typer.Option(
+            "--bfcl-categories",
+            help=(
+                "BFCL v4 category alias/list, for example single_turn, non_live, "
+                "live, multi_turn, agentic, all_scoring."
+            ),
+        ),
+    ] = BFCL_V4_DEFAULT_CATEGORIES,
+    ocrbench_configs: Annotated[
+        str,
+        typer.Option(
+            "--ocrbench-configs",
+            help="OCRBench v2 dataset configs, for example EN,CN or text recognition en.",
+        ),
+    ] = OCRBENCH_V2_DEFAULT_CONFIGS,
+    mmmu_subjects: Annotated[
+        str,
+        typer.Option(
+            "--mmmu-subjects",
+            help="MMMU subjects, for example all, Accounting,Math, or Computer_Science.",
+        ),
+    ] = MMMU_DEFAULT_SUBJECTS,
+    mmmu_split: Annotated[
+        str,
+        typer.Option("--mmmu-split", help="MMMU split: dev, validation, or test."),
+    ] = MMMU_DEFAULT_SPLIT,
+    mbpp_config: Annotated[
+        str,
+        typer.Option("--mbpp-config", help="MBPP dataset config: full or sanitized."),
+    ] = MBPP_DEFAULT_CONFIG,
+    mbpp_split: Annotated[
+        str,
+        typer.Option("--mbpp-split", help="MBPP split: train, test, validation, or prompt."),
+    ] = MBPP_DEFAULT_SPLIT,
+    mbpp_challenge_tests: Annotated[
+        bool,
+        typer.Option(
+            "--mbpp-challenge-tests/--no-mbpp-challenge-tests",
+            help="Also run full MBPP challenge_test_list assertions when present.",
+        ),
+    ] = False,
+    rgb_dataset: Annotated[
+        str,
+        typer.Option(
+            "--rgb-dataset",
+            help="RGB dataset: suite, en_refine, zh_refine, en_int, zh_int, en_fact, or zh_fact.",
+        ),
+    ] = RGB_DEFAULT_DATASET,
+    rgb_noise_rate: Annotated[
+        float,
+        typer.Option("--rgb-noise-rate", min=0.0, max=1.0, help="RGB noisy passage rate."),
+    ] = RGB_DEFAULT_NOISE_RATE,
+    rgb_passage_num: Annotated[
+        int,
+        typer.Option("--rgb-passage-num", min=0, help="RGB number of supplied passages."),
+    ] = RGB_DEFAULT_PASSAGE_NUM,
+    rgb_correct_rate: Annotated[
+        float,
+        typer.Option(
+            "--rgb-correct-rate",
+            min=0.0,
+            max=1.0,
+            help="RGB correct-passage rate for counterfactual datasets.",
+        ),
+    ] = RGB_DEFAULT_CORRECT_RATE,
+    simpleqa_grader: Annotated[
+        str,
+        typer.Option("--simpleqa-grader", help="SimpleQA grader: llm or heuristic."),
+    ] = "llm",
+    simpleqa_grader_model: Annotated[
+        str,
+        typer.Option(
+            "--simpleqa-grader-model",
+            help="SimpleQA judge model id. Use 'same' to grade with the tested model.",
+        ),
+    ] = "same",
+    harmbench_categories: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-categories",
+            help=(
+                "HarmBench functional categories: standard, contextual, copyright, "
+                "text, or all. Default excludes copyright."
+            ),
+        ),
+    ] = HARMBENCH_DEFAULT_CATEGORIES,
+    harmbench_judge: Annotated[
+        str,
+        typer.Option("--harmbench-judge", help="HarmBench judge: llm or heuristic."),
+    ] = "llm",
+    harmbench_judge_model: Annotated[
+        str,
+        typer.Option(
+            "--harmbench-judge-model",
+            help=(
+                "HarmBench judge model id. Use 'same' to reuse the tested model; "
+                "this mirrors the SimpleQA judge-model default."
+            ),
+        ),
+    ] = "same",
+    base_url: Annotated[
+        str,
+        typer.Option("--base-url", help="OpenAI API base URL."),
+    ] = "https://api.openai.com/v1",
+    api_key_env: Annotated[
+        str,
+        typer.Option("--api-key-env", help="Environment variable containing the OpenAI API key."),
+    ] = "OPENAI_API_KEY",
+    reasoning_effort: Annotated[
+        str,
+        typer.Option(
+            "--reasoning-effort",
+            help=(
+                "OpenAI reasoning_effort. Defaults to auto: none for GPT-5.4/GPT-5.1, "
+                "minimal for older GPT-5 reasoning models."
+            ),
+        ),
+    ] = "auto",
+    modality: Annotated[
+        str,
+        typer.Option(
+            "--modality",
+            help=(
+                "Model modality metadata: auto, text, vision, or multimodal. "
+                "Auto marks runs with vision benchmarks as multimodal."
+            ),
+        ),
+    ] = "auto",
+    max_tokens: Annotated[
+        int | None,
+        typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
+    ] = None,
+    resume_samples: Annotated[
+        bool,
+        typer.Option(
+            "--resume-samples/--no-resume-samples",
+            help="Resume Global MMLU Lite from an existing matching samples.jsonl file.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Create the generated config and print planned work only."),
+    ] = False,
+    no_progress: Annotated[
+        bool,
+        typer.Option("--no-progress", help="Disable the live progress display."),
+    ] = False,
+    auto_export: Annotated[
+        bool,
+        typer.Option(
+            "--auto-export/--no-auto-export",
+            help="Export website results JSON after a successful benchmark run.",
+        ),
+    ] = True,
+) -> None:
+    """Run a benchmark against an OpenAI API model."""
+    config = _write_api_benchmark_config(
+        provider="OpenAI",
+        model=model,
+        base_url=base_url,
+        api_key_env=api_key_env,
+        smoke=smoke,
+        languages=languages,
+        benchmark=benchmark,
+        bfcl_categories=bfcl_categories,
+        ocrbench_configs=ocrbench_configs,
+        mmmu_subjects=mmmu_subjects,
+        mmmu_split=mmmu_split,
+        mbpp_config=mbpp_config,
+        mbpp_split=mbpp_split,
+        mbpp_challenge_tests=mbpp_challenge_tests,
+        rgb_dataset=rgb_dataset,
+        rgb_noise_rate=rgb_noise_rate,
+        rgb_passage_num=rgb_passage_num,
+        rgb_correct_rate=rgb_correct_rate,
+        simpleqa_grader=simpleqa_grader,
+        simpleqa_grader_model=simpleqa_grader_model,
+        harmbench_categories=harmbench_categories,
+        harmbench_judge=harmbench_judge,
+        harmbench_judge_model=harmbench_judge_model,
+        reasoning_effort=reasoning_effort,
+        modality=modality,
+        max_tokens=max_tokens,
+        context_length=None,
+        restart_between_languages=False,
+        restart_every_calls=None,
+        restart_cooldown_seconds=0.0,
+        resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
@@ -1293,10 +1533,15 @@ def _write_api_benchmark_config(
     restart_between_languages: bool,
     restart_every_calls: int | None,
     restart_cooldown_seconds: float,
+    resume_samples: bool = False,
 ) -> Path:
-    resolved_reasoning_effort = _resolve_reasoning_effort(model, reasoning_effort)
     selected_benchmarks = _parse_benchmarks(benchmark)
     provider_key = _provider_key(provider)
+    resolved_reasoning_effort = _resolve_reasoning_effort(
+        model,
+        reasoning_effort,
+        provider_key=provider_key,
+    )
     selected_languages = ["en"] if smoke else _parse_languages(languages)
     selected_ocrbench_configs = (
         _parse_ocrbench_configs(OCRBENCH_V2_SMOKE_CONFIGS)
@@ -1397,12 +1642,21 @@ def _write_api_benchmark_config(
         "restart_cooldown_seconds": (
             restart_cooldown_seconds if provider_key == "lmstudio" else 0.0
         ),
+        "resume_samples": resume_samples,
         "request_extra": _copy_config_dict(request_extra),
         "parser_version": "global_mmlu_lite_regex_v1",
         "prompt_template": GLOBAL_MMLU_LITE_PROMPT,
     }
     if resolved_reasoning_effort:
         global_mmlu_lite["reasoning_effort"] = resolved_reasoning_effort
+    restart_settings = {
+        "restart_every_calls": (
+            restart_every_calls if provider_key == "lmstudio" else None
+        ),
+        "restart_cooldown_seconds": (
+            restart_cooldown_seconds if provider_key == "lmstudio" else 0.0
+        ),
+    }
 
     ifbench: dict[str, Any] = {
         "enabled": "ifbench" in selected_benchmarks,
@@ -1421,6 +1675,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "evaluator": "allenai_ifbench_loose_v1",
     }
@@ -1445,6 +1700,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "include_input_log": False,
         "exclude_state_log": True,
@@ -1473,6 +1729,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "image_format": "PNG",
         "evaluator": "ocrbench_v2_local_vqa_anls_iou_v1",
@@ -1499,6 +1756,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "image_format": "PNG",
         "evaluator": "mmmu_official_parse_local_v1",
@@ -1523,9 +1781,10 @@ def _write_api_benchmark_config(
         "temperature": 0,
         "max_tokens": max_tokens if max_tokens is not None else 1024,
         "top_p": None,
-        "stop": ["[DONE]"],
+        "stop": None if provider_key == "openai" else ["[DONE]"],
         "seed": 42,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "include_tests_in_prompt": True,
         "include_challenge_tests": mbpp_challenge_tests,
@@ -1555,6 +1814,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 2333,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "noise_rate": rgb_noise_rate,
         "passage_num": rgb_passage_num,
@@ -1590,6 +1850,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "grader": selected_simpleqa_grader,
         "grader_model": simpleqa_grader_model,
@@ -1635,6 +1896,7 @@ def _write_api_benchmark_config(
         "stop": None,
         "seed": 42,
         "strip_thinking": True,
+        **restart_settings,
         "request_extra": _copy_config_dict(request_extra),
         "judge": selected_harmbench_judge,
         "judge_model": resolved_harmbench_judge_model,
@@ -1682,7 +1944,11 @@ def _write_api_benchmark_config(
             "backend_type": provider_key,
             "version": None,
             "commit": None,
-            "command": f"{provider_label} local server",
+            "command": (
+                "OpenAI API"
+                if provider_key == "openai"
+                else f"{provider_label} local server"
+            ),
         },
         "global_mmlu_lite": global_mmlu_lite,
         "ifbench": ifbench,
@@ -2059,17 +2325,31 @@ def _provider_key(provider: str) -> str:
         return "lmstudio"
     if normalized == "omlx":
         return "omlx"
+    if normalized == "openai":
+        return "openai"
     return _slug(provider)
 
 
-def _resolve_reasoning_effort(model: str, value: str | None) -> str | None:
+def _resolve_reasoning_effort(
+    model: str,
+    value: str | None,
+    *,
+    provider_key: str | None = None,
+) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower()
     if normalized in {"", "unset", "none"}:
         return "none"
     if normalized == "auto":
-        return "none" if "qwen" in model.lower() else "high"
+        lowered_model = model.lower()
+        if provider_key == "openai":
+            if lowered_model.startswith(("gpt-5.4", "gpt-5.1")):
+                return "none"
+            if lowered_model.startswith("gpt-5"):
+                return "minimal"
+            return "none"
+        return "none" if "qwen" in lowered_model else "high"
     return normalized
 
 
@@ -2212,6 +2492,8 @@ def _infer_family(model: str, metadata: dict[str, Any] | None = None) -> str:
         return "Hugging Face"
     if "nemotron" in lowered or "nvidia" in lowered:
         return "NVIDIA"
+    if lowered.startswith("gpt-") or lowered.startswith("o3") or lowered.startswith("o4"):
+        return "OpenAI"
     return "Local"
 
 
@@ -2237,6 +2519,8 @@ def _infer_quantization(model: str, metadata: dict[str, Any] | None = None) -> s
         return "BF16"
     if "fp16" in lowered:
         return "FP16"
+    if re.search(r"(?:^|[:@_-])4b(?:$|[:@_-])", lowered):
+        return "Q4_K_M"
     bit_match = re.search(r"\b(\d+)\s*bit\b", lowered)
     if bit_match:
         return f"{bit_match.group(1)}BIT"
@@ -2350,6 +2634,30 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
                 f"🌍 {variant}: {task_label}",
                 total=total_samples,
                 details=f"score 0/{total_samples} • acc 0.0% • {languages}",
+            )
+        elif event_type == "task_resume" and sample_task_id is not None:
+            completed = int(payload.get("completed_samples") or 0)
+            total = int(payload.get("total_samples") or 1)
+            correct = float(payload.get("correct_samples") or 0.0)
+            invalid = int(payload.get("invalid_samples") or 0)
+            runtime_seconds = float(payload.get("runtime_seconds") or 0.0)
+            sample_completed = completed
+            sample_score = correct
+            sample_invalid = invalid
+            sample_runtime = runtime_seconds
+            accuracy = sample_score / completed if completed else 0.0
+            average_runtime = sample_runtime / completed if completed else 0.0
+            progress.console.print(
+                f"↩️ Resuming {payload.get('task')} • reused {completed}/{total} sample(s)"
+            )
+            progress.update(
+                sample_task_id,
+                completed=completed,
+                description=f"🌍 {payload.get('variant')}: Q {completed}/{total}",
+                details=(
+                    f"cached • score {sample_score:.1f}/{completed} "
+                    f"• acc {accuracy:.1%} • avg {average_runtime:.2f}s"
+                ),
             )
         elif event_type == "task_progress" and sample_task_id is not None:
             completed = int(payload.get("completed_samples") or 0)
