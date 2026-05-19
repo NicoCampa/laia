@@ -14,6 +14,13 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import SimpleQASettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.resume import (
+    cache_key,
+    load_resume_records,
+    maybe_announce_resume,
+    record_matches,
+    sample_file_mode,
+)
 from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
@@ -181,12 +188,61 @@ class SimpleQARunner:
         total_runtime = 0.0
         grader_runtime = 0.0
         grade_counts = {"correct": 0, "incorrect": 0, "not_attempted": 0}
+        completed_samples = 0
+        resume_records = (
+            load_resume_records(samples_path, key=_simpleqa_record_key)
+            if self.settings.resume_samples
+            else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open(sample_file_mode(resume_records), encoding="utf-8") as sample_file:
             for index, row in enumerate(rows, start=1):
                 question = str(row.get("problem") or "")
                 answer = str(row.get("answer") or "")
                 prompt = render_prompt(self.settings.prompt_template, question)
+                sample_id = index - 1
+                row_key = _simpleqa_sample_key(
+                    self.settings,
+                    sample_id=sample_id,
+                    question=question,
+                    answer=answer,
+                    prompt=prompt,
+                    grader_model=grader_model,
+                )
+                cached_record = resume_records.get(row_key)
+                if cached_record and record_matches(
+                    cached_record,
+                    {
+                        "dataset": self.settings.dataset_name,
+                        "dataset_revision": self.settings.dataset_revision,
+                        "sample_id": sample_id,
+                        "question": question,
+                        "answer": answer,
+                        "prompt": prompt,
+                        "grader": self.settings.grader,
+                        "grader_model": grader_model,
+                    },
+                ):
+                    grade_label = str(cached_record.get("grade") or "")
+                    if grade_label in grade_counts:
+                        grade_counts[grade_label] += 1
+                    total_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                    grader_runtime += (
+                        _as_float(cached_record.get("grader_runtime_seconds")) or 0.0
+                    )
+                    completed_samples += 1
+                    continue
+                resume_announced = maybe_announce_resume(
+                    progress_callback=progress_callback,
+                    announced=resume_announced,
+                    task="simpleqa",
+                    variant=variant.name,
+                    completed_samples=completed_samples,
+                    total_samples=total_samples,
+                    correct_samples=grade_counts["correct"],
+                    runtime_seconds=total_runtime + grader_runtime,
+                )
                 response = self.client.generate(
                     model=model,
                     prompt=prompt,
@@ -212,11 +268,12 @@ class SimpleQARunner:
                 )
                 grader_runtime += grade.runtime_seconds
                 grade_counts[grade.label] += 1
+                completed_samples += 1
 
                 sample_record = {
                     "dataset": self.settings.dataset_name,
                     "dataset_revision": self.settings.dataset_revision,
-                    "sample_id": index - 1,
+                    "sample_id": sample_id,
                     "metadata": _metadata(row.get("metadata")),
                     "question": question,
                     "answer": answer,
@@ -238,6 +295,7 @@ class SimpleQARunner:
                 sample_file.write(
                     json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                 )
+                sample_file.flush()
 
                 if progress_callback:
                     progress_callback(
@@ -246,7 +304,7 @@ class SimpleQARunner:
                             "task": "simpleqa",
                             "variant": variant.name,
                             "language": "en",
-                            "completed_samples": index,
+                            "completed_samples": completed_samples,
                             "total_samples": total_samples,
                             "latest_score": 1.0 if grade.is_correct else 0.0,
                             "latest_correct": grade.is_correct,
@@ -263,7 +321,7 @@ class SimpleQARunner:
                     model=model,
                     task="simpleqa",
                     variant_name=variant.name,
-                    completed_samples=index,
+                    completed_samples=completed_samples,
                     total_samples=total_samples,
                     progress_callback=progress_callback,
                     language="en",
@@ -537,8 +595,10 @@ def build_summary(
         "sample_strategy": settings.sample_strategy,
         "sample_seed": settings.sample_seed,
         "model": model,
+        "max_tokens": settings.max_tokens,
         "grader": settings.grader,
         "grader_model": grader_model,
+        "grader_max_tokens": settings.grader_max_tokens,
         "evaluator": settings.evaluator,
         "total": total,
         "correct": correct,
@@ -614,6 +674,40 @@ def _metadata(value: Any) -> dict[str, Any]:
     except (SyntaxError, ValueError):
         return {"raw": str(value)}
     return parsed if isinstance(parsed, dict) else {"raw": str(value)}
+
+
+def _simpleqa_sample_key(
+    settings: SimpleQASettings,
+    *,
+    sample_id: int,
+    question: str,
+    answer: str,
+    prompt: str,
+    grader_model: str,
+) -> str:
+    return cache_key(
+        settings.dataset_name,
+        settings.dataset_revision,
+        sample_id,
+        question,
+        answer,
+        prompt,
+        settings.grader,
+        grader_model,
+    )
+
+
+def _simpleqa_record_key(record: dict[str, Any]) -> str | None:
+    return cache_key(
+        record.get("dataset"),
+        record.get("dataset_revision"),
+        record.get("sample_id"),
+        record.get("question"),
+        record.get("answer"),
+        record.get("prompt"),
+        record.get("grader"),
+        record.get("grader_model"),
+    )
 
 
 def _normalize_answer(text: str) -> str:

@@ -445,15 +445,16 @@ class GlobalMMLULiteRunner:
         reason: str,
     ) -> None:
         reset_error = None
+        cooldown_seconds = max(0.0, float(self.settings.restart_cooldown_seconds or 0.0))
         try:
             instance_id = self.client.reset_model_runtime(
                 model,
                 request_extra=self.settings.request_extra,
+                cooldown_seconds=cooldown_seconds,
             )
         except Exception as exc:
             instance_id = None
             reset_error = str(exc)
-        cooldown_seconds = max(0.0, float(self.settings.restart_cooldown_seconds or 0.0))
         if progress_callback:
             progress_callback(
                 "runtime_cache_reset",
@@ -470,8 +471,6 @@ class GlobalMMLULiteRunner:
                     "error": reset_error,
                 },
             )
-        if cooldown_seconds > 0:
-            time.sleep(cooldown_seconds)
 
 
 def render_prompt(template: str, row: dict[str, Any]) -> str:

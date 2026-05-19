@@ -14,6 +14,13 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import ImagePayload, create_native_client
 from local_ai_analysis.config import OCRBenchV2Settings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.resume import (
+    cache_key,
+    load_resume_records,
+    maybe_announce_resume,
+    record_matches,
+    sample_file_mode,
+)
 from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
@@ -175,11 +182,62 @@ class OCRBenchV2Runner:
         completed_samples = 0
         total_runtime = 0.0
         sample_scores: list[dict[str, Any]] = []
+        resume_records = (
+            load_resume_records(samples_path, key=_ocrbench_record_key)
+            if self.settings.resume_samples
+            else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open(sample_file_mode(resume_records), encoding="utf-8") as sample_file:
             for sample_ref in selected_samples:
                 row = dict(sample_ref.dataset[int(sample_ref.index)])
                 prompt = render_prompt(self.settings.prompt_template, row)
+                task_type = _task_type(row)
+                row_key = _ocrbench_sample_key(
+                    self.settings,
+                    sample_ref=sample_ref,
+                    row=row,
+                    task_type=task_type,
+                    prompt=prompt,
+                )
+                cached_record = resume_records.get(row_key)
+                if cached_record and record_matches(
+                    cached_record,
+                    {
+                        "dataset": self.settings.dataset_name,
+                        "dataset_revision": self.settings.dataset_revision,
+                        "dataset_config": sample_ref.config_name,
+                        "split": self.settings.split,
+                        "sample_id": row.get("id"),
+                        "sample_index": sample_ref.index,
+                        "question": row.get("question"),
+                        "prompt": prompt,
+                        "image_path": row.get("image_path"),
+                        "evaluator": self.settings.evaluator,
+                    },
+                ):
+                    score = _as_float(cached_record.get("score")) or 0.0
+                    total_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                    completed_samples += 1
+                    sample_scores.append(
+                        {
+                            "config": sample_ref.config_name,
+                            "type": task_type,
+                            "score": score,
+                        }
+                    )
+                    continue
+                resume_announced = maybe_announce_resume(
+                    progress_callback=progress_callback,
+                    announced=resume_announced,
+                    task="ocrbench-v2",
+                    variant=variant.name,
+                    completed_samples=completed_samples,
+                    total_samples=total_samples,
+                    correct_samples=sum(float(row["score"]) for row in sample_scores),
+                    runtime_seconds=total_runtime,
+                )
                 image = _image_payload(row, self.settings.image_format)
                 response = self.client.generate(
                     model=model,
@@ -202,7 +260,6 @@ class OCRBenchV2Runner:
                     else raw_output
                 )
                 score = score_response(row, parsed_output)
-                task_type = _task_type(row)
                 completed_samples += 1
                 sample_scores.append(
                     {
@@ -222,6 +279,7 @@ class OCRBenchV2Runner:
                     "sample_id": row.get("id"),
                     "sample_index": sample_ref.index,
                     "image_path": row.get("image_path"),
+                    "image_format": self.settings.image_format,
                     "question": row.get("question"),
                     "prompt": prompt,
                     "answers": _answers(row),
@@ -239,6 +297,7 @@ class OCRBenchV2Runner:
                 sample_file.write(
                     json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                 )
+                sample_file.flush()
 
                 if progress_callback:
                     progress_callback(
@@ -317,6 +376,45 @@ class OCRBenchV2Runner:
                 )
             datasets.append((config_name, dataset))
         return datasets
+
+
+def _ocrbench_sample_key(
+    settings: OCRBenchV2Settings,
+    *,
+    sample_ref: SampleRef,
+    row: dict[str, Any],
+    task_type: str,
+    prompt: str,
+) -> str:
+    return cache_key(
+        settings.dataset_name,
+        settings.dataset_revision,
+        sample_ref.config_name,
+        settings.split,
+        row.get("id"),
+        sample_ref.index,
+        task_type,
+        row.get("question"),
+        prompt,
+        row.get("image_path"),
+        settings.evaluator,
+    )
+
+
+def _ocrbench_record_key(record: dict[str, Any]) -> str | None:
+    return cache_key(
+        record.get("dataset"),
+        record.get("dataset_revision"),
+        record.get("dataset_config"),
+        record.get("split"),
+        record.get("sample_id"),
+        record.get("sample_index"),
+        record.get("type"),
+        record.get("question"),
+        record.get("prompt"),
+        record.get("image_path"),
+        record.get("evaluator"),
+    )
 
 
 def render_prompt(template: str, row: dict[str, Any]) -> str:

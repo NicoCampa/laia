@@ -13,6 +13,13 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import RGBSettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.resume import (
+    cache_key,
+    load_resume_records,
+    maybe_announce_resume,
+    record_matches,
+    sample_file_mode,
+)
 from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
@@ -227,11 +234,57 @@ class RGBRunner:
 
         total_runtime = 0.0
         score_rows: list[dict[str, Any]] = []
+        completed_samples = 0
+        resume_records = (
+            load_resume_records(samples_path, key=_rgb_record_key)
+            if self.settings.resume_samples
+            else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open(sample_file_mode(resume_records), encoding="utf-8") as sample_file:
             for index, row in enumerate(rows, start=1):
                 query, answer, docs = process_data(row, self.settings)
                 prompt = render_prompt(self.settings, query=query, docs=docs)
+                row_key = _rgb_sample_key(self.settings, task_mode, row, prompt)
+                cached_record = resume_records.get(row_key)
+                if cached_record and record_matches(
+                    cached_record,
+                    {
+                        "dataset": self.settings.dataset_name,
+                        "dataset_revision": self.settings.dataset_revision,
+                        "rgb_dataset": self.settings.dataset,
+                        "task_mode": task_mode,
+                        "sample_id": row.get("id"),
+                        "noise_rate": self.settings.noise_rate,
+                        "passage_num": self.settings.passage_num,
+                        "correct_rate": self.settings.correct_rate,
+                        "prompt": prompt,
+                        "evaluator": self.settings.evaluator,
+                    },
+                ):
+                    score_rows.append(
+                        {
+                            "sample_id": cached_record.get("sample_id"),
+                            "correct": bool(cached_record.get("correct")),
+                            "rejected": bool(cached_record.get("rejected")),
+                            "fact_detected": bool(cached_record.get("fact_detected")),
+                            "fact_corrected": bool(cached_record.get("fact_corrected")),
+                        }
+                    )
+                    total_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                    completed_samples += 1
+                    continue
+                resume_announced = maybe_announce_resume(
+                    progress_callback=progress_callback,
+                    announced=resume_announced,
+                    task="rgb",
+                    variant=variant.name,
+                    completed_samples=completed_samples,
+                    total_samples=total_samples,
+                    correct_samples=sum(int(row["correct"]) for row in score_rows),
+                    runtime_seconds=total_runtime,
+                )
                 response = self.client.generate(
                     model=model,
                     prompt=prompt,
@@ -255,6 +308,7 @@ class RGBRunner:
                     dataset=self.settings.dataset,
                     noise_rate=self.settings.noise_rate,
                 )
+                completed_samples += 1
                 score_rows.append(
                     {
                         "sample_id": row.get("id"),
@@ -293,6 +347,7 @@ class RGBRunner:
                 sample_file.write(
                     json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                 )
+                sample_file.flush()
 
                 if progress_callback:
                     progress_callback(
@@ -301,7 +356,7 @@ class RGBRunner:
                             "task": "rgb",
                             "variant": variant.name,
                             "language": self.settings.dataset,
-                            "completed_samples": index,
+                            "completed_samples": completed_samples,
                             "total_samples": total_samples,
                             "latest_score": 1.0 if scored.correct else 0.0,
                             "latest_correct": scored.correct,
@@ -317,7 +372,7 @@ class RGBRunner:
                     model=model,
                     task="rgb",
                     variant_name=variant.name,
-                    completed_samples=index,
+                    completed_samples=completed_samples,
                     total_samples=total_samples,
                     progress_callback=progress_callback,
                     language=self.settings.dataset,
@@ -423,6 +478,41 @@ def _select_rows(rows: list[dict[str, Any]], settings: RGBSettings) -> list[dict
     rng.shuffle(indexes)
     selected_indexes = sorted(indexes[:sample_limit])
     return [rows[index] for index in selected_indexes]
+
+
+def _rgb_sample_key(
+    settings: RGBSettings,
+    task_mode: str,
+    row: dict[str, Any],
+    prompt: str,
+) -> str:
+    return cache_key(
+        settings.dataset_name,
+        settings.dataset_revision,
+        settings.dataset,
+        task_mode,
+        row.get("id"),
+        settings.noise_rate,
+        settings.passage_num,
+        settings.correct_rate,
+        prompt,
+        settings.evaluator,
+    )
+
+
+def _rgb_record_key(record: dict[str, Any]) -> str | None:
+    return cache_key(
+        record.get("dataset"),
+        record.get("dataset_revision"),
+        record.get("rgb_dataset"),
+        record.get("task_mode"),
+        record.get("sample_id"),
+        record.get("noise_rate"),
+        record.get("passage_num"),
+        record.get("correct_rate"),
+        record.get("prompt"),
+        record.get("evaluator"),
+    )
 
 
 def process_data(instance: dict[str, Any], settings: RGBSettings) -> tuple[str, Any, list[str]]:

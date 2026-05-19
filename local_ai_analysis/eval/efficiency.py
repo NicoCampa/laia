@@ -27,7 +27,7 @@ def efficiency_metrics_from_summary(summary: dict[str, Any]) -> list[MetricResul
     total_runtime = sum(runtimes)
     samples = len(records)
     correct = sum(1 for record in records if _is_correct(record))
-    truncated = sum(1 for record in records if _is_truncated(record))
+    truncated = sum(1 for record in records if _is_truncated(record, summary))
 
     usage_totals = _usage_totals(records)
     prompt_tokens = usage_totals.get("prompt_tokens")
@@ -153,11 +153,37 @@ def _is_correct(record: dict[str, Any]) -> bool:
     return False
 
 
-def _is_truncated(record: dict[str, Any]) -> bool:
+def _is_truncated(record: dict[str, Any], summary: dict[str, Any]) -> bool:
     for key in ("raw_response", "grader_raw_response", "judge_raw_response"):
         if _finish_reason(record.get(key)) == "length":
             return True
-    return str(record.get("finish_reason") or "").lower() == "length"
+    if str(record.get("finish_reason") or "").lower() == "length":
+        return True
+
+    max_tokens = _int(summary.get("max_tokens"))
+    if max_tokens is not None and _usage_reached_limit(record.get("usage"), max_tokens):
+        return True
+
+    grader_max_tokens = _int(summary.get("grader_max_tokens"))
+    if grader_max_tokens is not None and _usage_reached_limit(
+        record.get("grader_usage"), grader_max_tokens
+    ):
+        return True
+
+    judge_max_tokens = _int(summary.get("judge_max_tokens"))
+    if judge_max_tokens is not None and _usage_reached_limit(
+        record.get("judge_usage"), judge_max_tokens
+    ):
+        return True
+
+    return False
+
+
+def _usage_reached_limit(usage: Any, max_tokens: int) -> bool:
+    if not isinstance(usage, dict) or max_tokens <= 0:
+        return False
+    completion_tokens = _int(usage.get("completion_tokens"))
+    return completion_tokens is not None and completion_tokens >= max_tokens
 
 
 def _finish_reason(raw: Any) -> str | None:

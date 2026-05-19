@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -180,9 +181,22 @@ def run(
             help="Export website results JSON after a successful benchmark run.",
         ),
     ] = True,
+    auto_push: Annotated[
+        bool,
+        typer.Option(
+            "--auto-push/--no-auto-push",
+            help="Commit and push exported website result files after each benchmark is saved.",
+        ),
+    ] = True,
 ) -> None:
     """Run benchmark jobs from a YAML config file."""
-    _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
+    _execute_run(
+        config,
+        dry_run=dry_run,
+        no_progress=no_progress,
+        auto_export=auto_export,
+        auto_push=auto_push,
+    )
 
 
 @app.command("ollama")
@@ -349,7 +363,7 @@ def run_ollama_shortcut(
         bool,
         typer.Option(
             "--resume-samples/--no-resume-samples",
-            help="Resume Global MMLU Lite from an existing matching samples.jsonl file.",
+            help="Resume benchmarks from existing matching samples.jsonl files.",
         ),
     ] = False,
     context_length: Annotated[
@@ -376,6 +390,13 @@ def run_ollama_shortcut(
         typer.Option(
             "--auto-export/--no-auto-export",
             help="Export website results JSON after a successful benchmark run.",
+        ),
+    ] = True,
+    auto_push: Annotated[
+        bool,
+        typer.Option(
+            "--auto-push/--no-auto-push",
+            help="Commit and push exported website result files after each benchmark is saved.",
         ),
     ] = True,
 ) -> None:
@@ -413,7 +434,13 @@ def run_ollama_shortcut(
         restart_cooldown_seconds=0.0,
     )
     console.print(f"🧾 Generated config: {config}")
-    _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
+    _execute_run(
+        config,
+        dry_run=dry_run,
+        no_progress=no_progress,
+        auto_export=auto_export,
+        auto_push=auto_push,
+    )
 
 
 @app.command("lmstudio")
@@ -582,7 +609,7 @@ def run_lmstudio_shortcut(
         bool,
         typer.Option(
             "--resume-samples/--no-resume-samples",
-            help="Resume Global MMLU Lite from an existing matching samples.jsonl file.",
+            help="Resume benchmarks from existing matching samples.jsonl files.",
         ),
     ] = False,
     context_length: Annotated[
@@ -624,8 +651,8 @@ def run_lmstudio_shortcut(
             "--restart-cooldown-seconds",
             min=0.0,
             help=(
-                "For LM Studio runs, wait this many seconds after each model "
-                "unload/reload refresh."
+                "For LM Studio runs, wait this many seconds after unloading "
+                "the model and before loading it again."
             ),
         ),
     ] = 0.0,
@@ -642,6 +669,13 @@ def run_lmstudio_shortcut(
         typer.Option(
             "--auto-export/--no-auto-export",
             help="Export website results JSON after a successful benchmark run.",
+        ),
+    ] = True,
+    auto_push: Annotated[
+        bool,
+        typer.Option(
+            "--auto-push/--no-auto-push",
+            help="Commit and push exported website result files after each benchmark is saved.",
         ),
     ] = True,
 ) -> None:
@@ -680,7 +714,13 @@ def run_lmstudio_shortcut(
         resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
-    _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
+    _execute_run(
+        config,
+        dry_run=dry_run,
+        no_progress=no_progress,
+        auto_export=auto_export,
+        auto_push=auto_push,
+    )
 
 
 @app.command("omlx")
@@ -852,6 +892,13 @@ def run_omlx_shortcut(
         int | None,
         typer.Option("--max-tokens", help="Override max generated tokens for the benchmark."),
     ] = None,
+    resume_samples: Annotated[
+        bool,
+        typer.Option(
+            "--resume-samples/--no-resume-samples",
+            help="Resume benchmarks from existing matching samples.jsonl files.",
+        ),
+    ] = False,
     context_length: Annotated[
         int | None,
         typer.Option(
@@ -876,6 +923,13 @@ def run_omlx_shortcut(
         typer.Option(
             "--auto-export/--no-auto-export",
             help="Export website results JSON after a successful benchmark run.",
+        ),
+    ] = True,
+    auto_push: Annotated[
+        bool,
+        typer.Option(
+            "--auto-push/--no-auto-push",
+            help="Commit and push exported website result files after each benchmark is saved.",
         ),
     ] = True,
 ) -> None:
@@ -911,9 +965,16 @@ def run_omlx_shortcut(
         restart_between_languages=False,
         restart_every_calls=None,
         restart_cooldown_seconds=0.0,
+        resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
-    _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
+    _execute_run(
+        config,
+        dry_run=dry_run,
+        no_progress=no_progress,
+        auto_export=auto_export,
+        auto_push=auto_push,
+    )
 
 
 @app.command("openai")
@@ -1084,7 +1145,7 @@ def run_openai_shortcut(
         bool,
         typer.Option(
             "--resume-samples/--no-resume-samples",
-            help="Resume Global MMLU Lite from an existing matching samples.jsonl file.",
+            help="Resume benchmarks from existing matching samples.jsonl files.",
         ),
     ] = False,
     dry_run: Annotated[
@@ -1100,6 +1161,13 @@ def run_openai_shortcut(
         typer.Option(
             "--auto-export/--no-auto-export",
             help="Export website results JSON after a successful benchmark run.",
+        ),
+    ] = True,
+    auto_push: Annotated[
+        bool,
+        typer.Option(
+            "--auto-push/--no-auto-push",
+            help="Commit and push exported website result files after each benchmark is saved.",
         ),
     ] = True,
 ) -> None:
@@ -1138,7 +1206,13 @@ def run_openai_shortcut(
         resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
-    _execute_run(config, dry_run=dry_run, no_progress=no_progress, auto_export=auto_export)
+    _execute_run(
+        config,
+        dry_run=dry_run,
+        no_progress=no_progress,
+        auto_export=auto_export,
+        auto_push=auto_push,
+    )
 
 
 def _execute_run(
@@ -1147,17 +1221,31 @@ def _execute_run(
     dry_run: bool,
     no_progress: bool,
     auto_export: bool,
+    auto_push: bool,
 ) -> None:
     lmstudio_eject = None if dry_run else _lmstudio_eject_target(config)
     try:
         if no_progress:
-            result = run_benchmark(config, dry_run=dry_run)
+            result = run_benchmark_with_progress(
+                config,
+                dry_run=dry_run,
+                progress_callback=_benchmark_saved_callback(
+                    auto_export=auto_export,
+                    auto_push=auto_push,
+                    dry_run=dry_run,
+                ),
+            )
         else:
-            result = _run_with_progress(config, dry_run)
+            result = _run_with_progress(
+                config,
+                dry_run,
+                auto_export=auto_export,
+                auto_push=auto_push,
+            )
     except BenchmarkRunError as exc:
         result = exc.result
         exported_results = (
-            _export_website_results(Path(str(result["db_path"])))
+            _safe_export_website_results(Path(str(result["db_path"])))
             if auto_export and not dry_run and result.get("db_path")
             else []
         )
@@ -1178,10 +1266,24 @@ def _execute_run(
         _eject_lmstudio_model(lmstudio_eject)
         raise typer.Exit(1) from exc
     except KeyboardInterrupt as exc:
+        exported_results = (
+            _safe_export_website_results(Path(str(load_config(config).run.output_db)))
+            if auto_export and not dry_run
+            else []
+        )
+        if exported_results:
+            console.print(
+                "⚠️ [yellow]Interrupted after saving completed benchmark metrics[/yellow]"
+            )
+            for exported in exported_results:
+                console.print(
+                    f"🌐 Exported partial website data: {exported['rows']} rows "
+                    f"to {exported['out']}"
+                )
         _eject_lmstudio_model(lmstudio_eject)
         raise typer.Exit(130) from exc
     exported_results = (
-        _export_website_results(Path(str(result["db_path"])))
+        _safe_export_website_results(Path(str(result["db_path"])))
         if auto_export and not dry_run and result.get("db_path")
         else []
     )
@@ -1367,6 +1469,112 @@ def _export_website_results(db_path: Path) -> list[dict[str, Any]]:
         seen.add(resolved)
         exported.append(export_leaderboard(db_path=db_path, out=path, fmt="json"))
     return exported
+
+
+def _safe_export_website_results(db_path: Path) -> list[dict[str, Any]]:
+    try:
+        return _export_website_results(db_path)
+    except Exception as exc:
+        console.print(f"⚠️ [yellow]Could not export website data:[/yellow] {exc}")
+        return []
+
+
+def _benchmark_saved_callback(
+    *,
+    auto_export: bool,
+    auto_push: bool,
+    dry_run: bool,
+) -> Any:
+    if dry_run or (not auto_export and not auto_push):
+        return None
+
+    def callback(event_type: str, payload: dict[str, Any]) -> None:
+        if event_type != "benchmark_saved":
+            return
+        exported_results = []
+        if auto_export:
+            exported_results = _export_for_benchmark_payload(payload)
+        if auto_push:
+            _safe_commit_and_push_results(payload, exported_results)
+
+    return callback
+
+
+def _export_for_benchmark_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    db_path = payload.get("db_path")
+    if not db_path:
+        return []
+    return _safe_export_website_results(Path(str(db_path)))
+
+
+def _safe_commit_and_push_results(
+    payload: dict[str, Any],
+    exported_results: list[dict[str, Any]],
+) -> None:
+    try:
+        pushed = _commit_and_push_results(payload, exported_results)
+    except Exception as exc:
+        console.print(f"⚠️ [yellow]Could not push benchmark results:[/yellow] {exc}")
+        return
+    if pushed:
+        console.print(f"🚀 Pushed benchmark results to GitHub • {pushed}")
+
+
+def _commit_and_push_results(
+    payload: dict[str, Any],
+    exported_results: list[dict[str, Any]],
+) -> str | None:
+    paths = _result_paths_for_git(exported_results)
+    if not paths:
+        return None
+
+    def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            cwd=Path.cwd(),
+            text=True,
+            capture_output=True,
+            check=check,
+        )
+
+    git("add", "--", *paths)
+    diff = git("diff", "--cached", "--quiet", "--", *paths, check=False)
+    if diff.returncode == 0:
+        return None
+    if diff.returncode not in {0, 1}:
+        raise RuntimeError((diff.stderr or diff.stdout).strip() or "git diff failed")
+
+    task = _slug(str(payload.get("task") or "benchmark"))
+    variant = _slug(str(payload.get("variant") or "model"))
+    commit_message = f"Update benchmark results: {variant} {task}"
+    git("commit", "-m", commit_message, "--", *paths)
+    push = git("push")
+    return (push.stdout or push.stderr).strip() or "origin"
+
+
+def _result_paths_for_git(exported_results: list[dict[str, Any]]) -> list[str]:
+    candidates = [
+        Path(str(exported.get("out")))
+        for exported in exported_results
+        if exported.get("out")
+    ]
+    if not candidates:
+        candidates = [
+            Path("public/results.json"),
+            Path("web/public/results.json"),
+            Path("web/dist/results.json"),
+        ]
+    paths: list[str] = []
+    seen: set[Path] = set()
+    for path in candidates:
+        if not path.exists():
+            continue
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        paths.append(str(path))
+    return paths
 
 
 def _lmstudio_eject_target(config_path: Path) -> dict[str, str] | None:
@@ -1656,6 +1864,7 @@ def _write_api_benchmark_config(
         "restart_cooldown_seconds": (
             restart_cooldown_seconds if provider_key == "lmstudio" else 0.0
         ),
+        "resume_samples": resume_samples,
     }
 
     ifbench: dict[str, Any] = {
@@ -1779,7 +1988,7 @@ def _write_api_benchmark_config(
         "api_key_env": api_key_env,
         "timeout_seconds": 360,
         "temperature": 0,
-        "max_tokens": max_tokens if max_tokens is not None else 1024,
+        "max_tokens": max_tokens if max_tokens is not None else 2048,
         "top_p": None,
         "stop": None if provider_key == "openai" else ["[DONE]"],
         "seed": 42,
@@ -1809,7 +2018,7 @@ def _write_api_benchmark_config(
         "api_key_env": api_key_env,
         "timeout_seconds": 360,
         "temperature": 0,
-        "max_tokens": max_tokens if max_tokens is not None else 512,
+        "max_tokens": max_tokens if max_tokens is not None else 2048,
         "top_p": None,
         "stop": None,
         "seed": 2333,
@@ -2515,17 +2724,19 @@ def _infer_quantization(model: str, metadata: dict[str, Any] | None = None) -> s
     if isinstance(quantization, dict) and quantization.get("name"):
         return str(quantization["name"]).upper()
     lowered = model.lower()
+    match = re.search(r"\bq\d(?:_[a-z0-9]+)*\b", lowered)
+    if match:
+        return match.group(0).upper()
     if "bf16" in lowered:
         return "BF16"
     if "fp16" in lowered:
         return "FP16"
-    if re.search(r"(?:^|[:@_-])4b(?:$|[:@_-])", lowered):
+    if "nemotron-3-nano:4b" in lowered:
         return "Q4_K_M"
     bit_match = re.search(r"\b(\d+)\s*bit\b", lowered)
     if bit_match:
         return f"{bit_match.group(1)}BIT"
-    match = re.search(r"\bq\d(?:_[a-z0-9]+)*\b", lowered)
-    return match.group(0).upper() if match else "SERVER"
+    return "SERVER"
 
 
 def _infer_precision(model: str, quantization: str) -> str:
@@ -2542,7 +2753,13 @@ def _slug(value: str) -> str:
     return slug or "auto"
 
 
-def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
+def _run_with_progress(
+    config: Path,
+    dry_run: bool,
+    *,
+    auto_export: bool,
+    auto_push: bool,
+) -> dict[str, Any]:
     progress = Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -2741,6 +2958,25 @@ def _run_with_progress(config: Path, dry_run: bool) -> dict[str, Any]:
                 details="task complete",
                 visible=True,
             )
+        elif event_type == "benchmark_saved":
+            task = payload.get("task")
+            metrics_written = payload.get("metrics_written")
+            normalized_rows = payload.get("normalized_rows")
+            exported_results = []
+            if auto_export and not dry_run:
+                exported_results = _export_for_benchmark_payload(payload)
+                rows = exported_results[0]["rows"] if exported_results else normalized_rows
+                progress.console.print(
+                    f"💾 Saved {task} • {metrics_written} metric(s) • "
+                    f"{rows} website row(s)"
+                )
+            else:
+                progress.console.print(
+                    f"💾 Saved {task} • {metrics_written} metric(s) • "
+                    f"{normalized_rows} normalized row(s)"
+                )
+            if auto_push and not dry_run:
+                _safe_commit_and_push_results(payload, exported_results)
         elif event_type == "variant_skipped":
             reason = payload.get("reason")
             progress.console.print(f"⏭️ Skipped {payload.get('variant')} ({reason})")

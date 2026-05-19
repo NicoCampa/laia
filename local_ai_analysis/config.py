@@ -92,6 +92,7 @@ class IFBenchSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     evaluator: str = "allenai_ifbench_loose_v1"
 
 
@@ -121,6 +122,7 @@ class BFCLV4Settings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     include_input_log: bool = False
     exclude_state_log: bool = True
     evaluator: str = "bfcl_eval_prompt_mode_v4"
@@ -154,6 +156,7 @@ class OCRBenchV2Settings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     image_format: str = "PNG"
     evaluator: str = "ocrbench_v2_local_vqa_anls_iou_v1"
     prompt_template: str = "{question}\nAnswer directly. Do not explain."
@@ -185,6 +188,7 @@ class MMMUSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     image_format: str = "PNG"
     evaluator: str = "mmmu_official_parse_local_v1"
     multiple_choice_prompt_template: str = (
@@ -212,7 +216,7 @@ class MBPPSettings(BaseModel):
     api_key_env: str | None = None
     timeout_seconds: int = 300
     temperature: float = 0.0
-    max_tokens: int = 1024
+    max_tokens: int = 2048
     top_p: float | None = None
     stop: list[str] | None = Field(default_factory=lambda: ["[DONE]"])
     seed: int | None = None
@@ -222,6 +226,7 @@ class MBPPSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     include_tests_in_prompt: bool = True
     include_challenge_tests: bool = False
     execution_timeout_seconds: float = 5.0
@@ -250,7 +255,7 @@ class RGBSettings(BaseModel):
     api_key_env: str | None = None
     timeout_seconds: int = 300
     temperature: float = 0.2
-    max_tokens: int = 512
+    max_tokens: int = 2048
     top_p: float | None = None
     stop: list[str] | None = None
     seed: int | None = 2333
@@ -260,6 +265,7 @@ class RGBSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     noise_rate: float = 0.8
     passage_num: int = 5
     correct_rate: float = 0.0
@@ -317,6 +323,7 @@ class SimpleQASettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     grader: str = "llm"
     grader_model: str | None = "same"
     grader_provider: str | None = None
@@ -370,6 +377,7 @@ class HarmBenchSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    resume_samples: bool = False
     judge: str = "llm"
     judge_model: str | None = "same"
     judge_provider: str | None = None

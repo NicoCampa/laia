@@ -14,6 +14,13 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import ImagePayload, create_native_client
 from local_ai_analysis.config import MMMUSettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.resume import (
+    cache_key,
+    load_resume_records,
+    maybe_announce_resume,
+    record_matches,
+    sample_file_mode,
+)
 from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
@@ -181,8 +188,14 @@ class MMMURunner:
         invalid_count = 0
         total_runtime = 0.0
         score_rows: list[dict[str, Any]] = []
+        resume_records = (
+            load_resume_records(samples_path, key=_mmmu_record_key)
+            if self.settings.resume_samples
+            else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open(sample_file_mode(resume_records), encoding="utf-8") as sample_file:
             for subject, dataset in datasets:
                 for row_payload in dataset:
                     if (
@@ -194,6 +207,65 @@ class MMMURunner:
                     options = _parse_options(row.get("options"))
                     prompt = render_prompt(self.settings, row, options)
                     images = _image_payloads(row, self.settings.image_format)
+                    row_key = _mmmu_sample_key(
+                        self.settings,
+                        subject=subject,
+                        row=row,
+                        prompt=prompt,
+                        image_count=len(images),
+                    )
+                    cached_record = resume_records.get(row_key)
+                    if cached_record and record_matches(
+                        cached_record,
+                        {
+                            "dataset": self.settings.dataset_name,
+                            "dataset_revision": self.settings.dataset_revision,
+                            "split": self.settings.split,
+                            "subject": subject,
+                            "sample_id": row.get("id"),
+                            "question": row.get("question"),
+                            "question_type": row.get("question_type"),
+                            "prompt": prompt,
+                            "image_count": len(images),
+                            "evaluator": self.settings.evaluator,
+                        },
+                    ):
+                        if (
+                            cached_record.get("invalid")
+                            and str(row.get("question_type") or "") == "multiple-choice"
+                        ):
+                            score_response(
+                                row,
+                                str(cached_record.get("parsed_output") or ""),
+                                options,
+                                self._rng,
+                            )
+                        invalid = bool(cached_record.get("invalid"))
+                        correct = bool(cached_record.get("correct"))
+                        invalid_count += int(invalid)
+                        total_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                        completed_samples += 1
+                        score_rows.append(
+                            {
+                                "subject": subject,
+                                "domain": SUBJECT_TO_DOMAIN.get(subject, "Other"),
+                                "question_type": row.get("question_type"),
+                                "correct": correct,
+                                "invalid": invalid,
+                            }
+                        )
+                        continue
+                    resume_announced = maybe_announce_resume(
+                        progress_callback=progress_callback,
+                        announced=resume_announced,
+                        task="mmmu",
+                        variant=variant.name,
+                        completed_samples=completed_samples,
+                        total_samples=total_samples,
+                        correct_samples=sum(int(row["correct"]) for row in score_rows),
+                        invalid_samples=invalid_count,
+                        runtime_seconds=total_runtime,
+                    )
                     response = self.client.generate(
                         model=model,
                         prompt=prompt,
@@ -242,6 +314,7 @@ class MMMURunner:
                         "topic_difficulty": row.get("topic_difficulty"),
                         "img_type": row.get("img_type"),
                         "image_count": len(images),
+                        "image_format": self.settings.image_format,
                         "prompt": prompt,
                         "raw_output": raw_output,
                         "parsed_output": parsed_output,
@@ -256,6 +329,7 @@ class MMMURunner:
                     sample_file.write(
                         json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                     )
+                    sample_file.flush()
 
                     if progress_callback:
                         progress_callback(
@@ -351,6 +425,41 @@ class MMMURunner:
         return min(total, self.settings.sample_limit)
 
 
+def _mmmu_sample_key(
+    settings: MMMUSettings,
+    *,
+    subject: str,
+    row: dict[str, Any],
+    prompt: str,
+    image_count: int,
+) -> str:
+    return cache_key(
+        settings.dataset_name,
+        settings.dataset_revision,
+        settings.split,
+        subject,
+        row.get("id"),
+        row.get("question"),
+        row.get("question_type"),
+        prompt,
+        image_count,
+        settings.evaluator,
+    )
+
+
+def _mmmu_record_key(record: dict[str, Any]) -> str | None:
+    return cache_key(
+        record.get("dataset"),
+        record.get("dataset_revision"),
+        record.get("split"),
+        record.get("subject"),
+        record.get("sample_id"),
+        record.get("question"),
+        record.get("question_type"),
+        record.get("prompt"),
+        record.get("image_count"),
+        record.get("evaluator"),
+    )
 def render_prompt(settings: MMMUSettings, row: dict[str, Any], options: list[str]) -> str:
     question = str(row.get("question") or "")
     if _image_payloads_available(row):

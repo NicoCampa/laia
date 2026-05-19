@@ -12,6 +12,13 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import HarmBenchSettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.resume import (
+    cache_key,
+    load_resume_records,
+    maybe_announce_resume,
+    record_matches,
+    sample_file_mode,
+)
 from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
@@ -153,14 +160,69 @@ class HarmBenchRunner:
         token_totals: dict[str, int] = {}
         functional_counts: dict[str, dict[str, int]] = {}
         semantic_counts: dict[str, dict[str, int]] = {}
+        completed_samples = 0
+        resume_records = (
+            load_resume_records(samples_path, key=_harmbench_record_key)
+            if self.settings.resume_samples
+            else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open(sample_file_mode(resume_records), encoding="utf-8") as sample_file:
             for index, row in enumerate(rows, start=1):
                 behavior = str(row.get("Behavior") or "")
                 context = str(row.get("ContextString") or "").strip()
                 functional_category = _normalize_category(row.get("FunctionalCategory"))
                 semantic_category = str(row.get("SemanticCategory") or "unknown")
                 prompt = render_prompt(self.settings.prompt_template, behavior, context)
+                row_key = _harmbench_sample_key(
+                    self.settings,
+                    row=row,
+                    functional_category=functional_category,
+                    semantic_category=semantic_category,
+                    behavior=behavior,
+                    context=context,
+                    prompt=prompt,
+                    judge_model=judge_model,
+                )
+                cached_record = resume_records.get(row_key)
+                if cached_record and record_matches(
+                    cached_record,
+                    {
+                        "dataset": self.settings.dataset_name,
+                        "dataset_revision": self.settings.dataset_revision,
+                        "behavior_id": row.get("BehaviorID"),
+                        "functional_category": functional_category,
+                        "semantic_category": semantic_category,
+                        "behavior": behavior,
+                        "context": context,
+                        "prompt": prompt,
+                        "judge": self.settings.judge,
+                        "judge_model": judge_model,
+                    },
+                ):
+                    attack_success = bool(cached_record.get("attack_success"))
+                    successful += int(attack_success)
+                    answer_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                    judge_runtime += (
+                        _as_float(cached_record.get("judge_runtime_seconds")) or 0.0
+                    )
+                    _add_usage(token_totals, "answer", cached_record.get("usage"))
+                    _add_usage(token_totals, "judge", cached_record.get("judge_usage"))
+                    _increment_bucket(functional_counts, functional_category, attack_success)
+                    _increment_bucket(semantic_counts, semantic_category, attack_success)
+                    completed_samples += 1
+                    continue
+                resume_announced = maybe_announce_resume(
+                    progress_callback=progress_callback,
+                    announced=resume_announced,
+                    task="harmbench",
+                    variant=variant.name,
+                    completed_samples=completed_samples,
+                    total_samples=total_samples,
+                    correct_samples=completed_samples - successful,
+                    runtime_seconds=answer_runtime + judge_runtime,
+                )
                 response = self.client.generate(
                     model=model,
                     prompt=prompt,
@@ -194,6 +256,7 @@ class HarmBenchRunner:
                     judgement.successful,
                 )
                 _increment_bucket(semantic_counts, semantic_category, judgement.successful)
+                completed_samples += 1
 
                 sample_record = {
                     "dataset": self.settings.dataset_name,
@@ -223,6 +286,7 @@ class HarmBenchRunner:
                 sample_file.write(
                     json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                 )
+                sample_file.flush()
 
                 if progress_callback:
                     safe_score = 0.0 if judgement.successful else 1.0
@@ -232,7 +296,7 @@ class HarmBenchRunner:
                             "task": "harmbench",
                             "variant": variant.name,
                             "language": functional_category,
-                            "completed_samples": index,
+                            "completed_samples": completed_samples,
                             "total_samples": total_samples,
                             "latest_score": safe_score,
                             "latest_correct": not judgement.successful,
@@ -250,7 +314,7 @@ class HarmBenchRunner:
                     model=model,
                     task="harmbench",
                     variant_name=variant.name,
-                    completed_samples=index,
+                    completed_samples=completed_samples,
                     total_samples=total_samples,
                     progress_callback=progress_callback,
                     language=functional_category,
@@ -443,8 +507,10 @@ def build_summary(
         "dataset_revision": settings.dataset_revision,
         "functional_categories": categories,
         "model": model,
+        "max_tokens": settings.max_tokens,
         "judge": settings.judge,
         "judge_model": judge_model,
+        "judge_max_tokens": settings.judge_max_tokens,
         "evaluator": settings.evaluator,
         "total": total,
         "attack_successes": successful,
@@ -548,6 +614,46 @@ def _add_usage(token_totals: dict[str, int], prefix: str, usage: Any) -> None:
         value = usage.get(source)
         if isinstance(value, int):
             token_totals[target] = token_totals.get(target, 0) + value
+
+
+def _harmbench_sample_key(
+    settings: HarmBenchSettings,
+    *,
+    row: dict[str, Any],
+    functional_category: str,
+    semantic_category: str,
+    behavior: str,
+    context: str,
+    prompt: str,
+    judge_model: str,
+) -> str:
+    return cache_key(
+        settings.dataset_name,
+        settings.dataset_revision,
+        row.get("BehaviorID"),
+        functional_category,
+        semantic_category,
+        behavior,
+        context,
+        prompt,
+        settings.judge,
+        judge_model,
+    )
+
+
+def _harmbench_record_key(record: dict[str, Any]) -> str | None:
+    return cache_key(
+        record.get("dataset"),
+        record.get("dataset_revision"),
+        record.get("behavior_id"),
+        record.get("functional_category"),
+        record.get("semantic_category"),
+        record.get("behavior"),
+        record.get("context"),
+        record.get("prompt"),
+        record.get("judge"),
+        record.get("judge_model"),
+    )
 
 
 def _normalize_category(value: Any) -> str:

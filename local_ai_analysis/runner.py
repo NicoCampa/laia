@@ -380,6 +380,8 @@ class BenchmarkRunner:
         *,
         run_id: str,
         variant_id: str,
+        variant_name: str,
+        task: str,
         metrics: list[MetricResult],
     ) -> int:
         for metric in metrics:
@@ -405,6 +407,32 @@ class BenchmarkRunner:
             )
         metrics_written = len(metrics)
         self._metrics_written += metrics_written
+        normalized_rows = refresh_normalized_results(self.db)
+        self.events.write(
+            "benchmark_saved",
+            {
+                "run_id": run_id,
+                "variant_id": variant_id,
+                "variant": variant_name,
+                "task": task,
+                "metrics_written": metrics_written,
+                "total_metrics_written": self._metrics_written,
+                "normalized_rows": normalized_rows,
+            },
+        )
+        self._progress(
+            "benchmark_saved",
+            {
+                "run_id": run_id,
+                "variant_id": variant_id,
+                "variant": variant_name,
+                "task": task,
+                "metrics_written": metrics_written,
+                "total_metrics_written": self._metrics_written,
+                "normalized_rows": normalized_rows,
+                "db_path": str(self.config.run.output_db),
+            },
+        )
         return metrics_written
 
     def _run_variant_metrics(
@@ -421,11 +449,15 @@ class BenchmarkRunner:
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress(
                 "task_completed", {"task": "global-mmlu-lite", "variant": variant.name}
+            )
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="global-mmlu-lite",
+                metrics=metrics,
             )
         if self.config.ifbench.enabled:
             self._progress("task_started", {"task": "ifbench", "variant": variant.name})
@@ -433,80 +465,112 @@ class BenchmarkRunner:
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "ifbench", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="ifbench",
+                metrics=metrics,
+            )
         if self.config.bfcl_v4.enabled:
             self._progress("task_started", {"task": "bfcl-v4", "variant": variant.name})
             metrics = BFCLV4Runner(self.config.bfcl_v4).run(
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "bfcl-v4", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="bfcl-v4",
+                metrics=metrics,
+            )
         if self.config.ocrbench_v2.enabled:
             self._progress("task_started", {"task": "ocrbench-v2", "variant": variant.name})
             metrics = OCRBenchV2Runner(self.config.ocrbench_v2).run(
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "ocrbench-v2", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="ocrbench-v2",
+                metrics=metrics,
+            )
         if self.config.mmmu.enabled:
             self._progress("task_started", {"task": "mmmu", "variant": variant.name})
             metrics = MMMURunner(self.config.mmmu).run(
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "mmmu", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="mmmu",
+                metrics=metrics,
+            )
         if self.config.mbpp.enabled:
             self._progress("task_started", {"task": "mbpp", "variant": variant.name})
             metrics = MBPPRunner(self.config.mbpp).run(
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "mbpp", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="mbpp",
+                metrics=metrics,
+            )
         if self.config.rgb.enabled:
             self._progress("task_started", {"task": "rgb", "variant": variant.name})
             metrics = RGBRunner(self.config.rgb).run(
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "rgb", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="rgb",
+                metrics=metrics,
+            )
         if self.config.simpleqa.enabled:
             self._progress("task_started", {"task": "simpleqa", "variant": variant.name})
             metrics = SimpleQARunner(self.config.simpleqa).run(
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "simpleqa", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="simpleqa",
+                metrics=metrics,
+            )
         if self.config.harmbench.enabled:
             self._progress("task_started", {"task": "harmbench", "variant": variant.name})
             metrics = HarmBenchRunner(self.config.harmbench).run(
                 variant,
                 progress_callback=self._progress,
             )
-            metrics_written += self._record_metrics(
-                run_id=run_id, variant_id=variant_id, metrics=metrics
-            )
             self._progress("task_completed", {"task": "harmbench", "variant": variant.name})
+            metrics_written += self._record_metrics(
+                run_id=run_id,
+                variant_id=variant_id,
+                variant_name=variant.name,
+                task="harmbench",
+                metrics=metrics,
+            )
         return metrics_written
 
     def _task_for_metric(self, metric: MetricResult) -> str:

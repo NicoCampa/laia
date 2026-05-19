@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import time
 from typing import Any, Callable
 
 
@@ -56,16 +54,17 @@ def reset_runtime(
     reason: str,
 ) -> None:
     reset_error = None
+    cooldown_seconds = max(0.0, float(getattr(settings, "restart_cooldown_seconds", 0.0) or 0.0))
     try:
         instance_id = client.reset_model_runtime(
             model,
             request_extra=getattr(settings, "request_extra", None),
+            cooldown_seconds=cooldown_seconds,
         )
     except Exception as exc:
         instance_id = None
         reset_error = str(exc)
 
-    cooldown_seconds = max(0.0, float(getattr(settings, "restart_cooldown_seconds", 0.0) or 0.0))
     if progress_callback:
         progress_callback(
             "runtime_cache_reset",
@@ -82,5 +81,3 @@ def reset_runtime(
                 "error": reset_error,
             },
         )
-    if cooldown_seconds > 0:
-        time.sleep(cooldown_seconds)

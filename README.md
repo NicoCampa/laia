@@ -101,6 +101,7 @@ laia ollama qwen3.5:0.8b-mlx-bf16 --dry-run --no-auto-export
 laia lmstudio exact-model-id --base-url http://127.0.0.1:1234
 laia lmstudio exact-model-id --reasoning-effort high
 laia lmstudio exact-model-id --context-length 8192
+laia lmstudio exact-model-id --benchmark text --resume-samples
 laia omlx exact-model-id --base-url http://127.0.0.1:8000
 laia omlx exact-model-id --api-key-env OMLX_API_KEY
 laia openai gpt-5.4-nano --benchmark text
@@ -177,6 +178,12 @@ Benchmark suite aliases:
 You can still pass an individual benchmark or a comma-separated list.
 Backward-compatible aliases are kept: `core` maps to `text`, `all` maps to
 `suite`, and `judged` maps to `judge`.
+
+Long-running benchmarks can be resumed with `--resume-samples`. LAIA reuses
+matching rows from the benchmark's existing `samples.jsonl` file and continues
+from the remaining samples. The resume match includes dataset identity, split,
+sample id, and rendered prompt, so changing prompts or benchmark settings starts
+new sample rows instead of silently mixing incompatible runs.
 
 ## Outputs
 

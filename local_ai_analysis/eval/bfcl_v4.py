@@ -15,6 +15,13 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import GenerationResponse, create_native_client
 from local_ai_analysis.config import BFCLV4Settings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.resume import (
+    cache_key,
+    load_resume_records,
+    maybe_announce_resume,
+    record_matches,
+    sample_file_mode,
+)
 from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
@@ -117,11 +124,52 @@ class BFCLV4Runner:
         }
         total_runtime = 0.0
         completed = 0
+        resume_records = (
+            load_resume_records(samples_path, key=_bfcl_record_key)
+            if self.settings.resume_samples
+            else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open(sample_file_mode(resume_records), encoding="utf-8") as sample_file:
             for category, entries in selected_entries.items():
                 ground_truth_entries = _ground_truth_by_id(category, modules)
                 for entry in entries:
+                    row_key = _bfcl_sample_key(self.settings, category, entry)
+                    cached_record = resume_records.get(row_key)
+                    if cached_record and record_matches(
+                        cached_record,
+                        {
+                            "benchmark": self.settings.version,
+                            "category": category,
+                            "sample_id": entry["id"],
+                            "question": entry.get("question"),
+                            "function": entry.get("function"),
+                        },
+                    ):
+                        valid = bool(cached_record.get("valid"))
+                        category_score = category_scores[category]
+                        category_score.total += 1
+                        category_score.correct += int(valid)
+                        category_score.invalid += int(_cached_bfcl_invalid(cached_record))
+                        total_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                        completed += 1
+                        continue
+                    resume_announced = maybe_announce_resume(
+                        progress_callback=progress_callback,
+                        announced=resume_announced,
+                        task="bfcl-v4",
+                        variant=variant.name,
+                        completed_samples=completed,
+                        total_samples=total_samples,
+                        correct_samples=sum(
+                            score.correct for score in category_scores.values()
+                        ),
+                        invalid_samples=sum(
+                            score.invalid for score in category_scores.values()
+                        ),
+                        runtime_seconds=total_runtime,
+                    )
                     completed += 1
                     entry_copy = copy.deepcopy(entry)
                     inference_result, metadata, inference_error = _run_inference(
@@ -166,13 +214,16 @@ class BFCLV4Runner:
                         "valid": valid,
                         "error": score_payload.get("error"),
                         "error_type": score_payload.get("error_type"),
+                        "invalid": _is_invalid_score(score_payload),
                         "runtime_seconds": runtime_seconds,
                         "usage": _metadata_usage(metadata),
                         "metadata": metadata,
+                        "evaluator": self.settings.evaluator,
                     }
                     sample_file.write(
                         json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                     )
+                    sample_file.flush()
 
                     if progress_callback:
                         progress_callback(
@@ -228,6 +279,37 @@ class BFCLV4Runner:
 
     def _configured_model_name(self, variant: VariantConfig) -> str:
         return variant.api_model or variant.model_repo or variant.name
+
+
+def _bfcl_sample_key(
+    settings: BFCLV4Settings,
+    category: str,
+    entry: dict[str, Any],
+) -> str:
+    return cache_key(
+        settings.version,
+        category,
+        entry.get("id"),
+        entry.get("question"),
+        entry.get("function"),
+    )
+
+
+def _bfcl_record_key(record: dict[str, Any]) -> str | None:
+    return cache_key(
+        record.get("benchmark"),
+        record.get("category"),
+        record.get("sample_id"),
+        record.get("question"),
+        record.get("function"),
+    )
+
+
+def _cached_bfcl_invalid(record: dict[str, Any]) -> bool:
+    if "invalid" in record:
+        return bool(record.get("invalid"))
+    error_type = str(record.get("error_type") or "")
+    return "decoder" in error_type or "inference" in error_type
 
 
 def build_summary(

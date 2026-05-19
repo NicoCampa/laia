@@ -17,6 +17,13 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import MBPPSettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.resume import (
+    cache_key,
+    load_resume_records,
+    maybe_announce_resume,
+    record_matches,
+    sample_file_mode,
+)
 from local_ai_analysis.eval.runtime import maybe_reset_runtime
 from local_ai_analysis.metrics import MetricResult
 
@@ -122,12 +129,56 @@ class MBPPRunner:
 
         total_runtime = 0.0
         score_rows: list[dict[str, Any]] = []
+        completed_samples = 0
+        resume_records = (
+            load_resume_records(samples_path, key=_mbpp_record_key)
+            if self.settings.resume_samples
+            else {}
+        )
+        resume_announced = False
 
-        with samples_path.open("w", encoding="utf-8") as sample_file:
+        with samples_path.open(sample_file_mode(resume_records), encoding="utf-8") as sample_file:
             for index, row in enumerate(rows, start=1):
                 prompt_text = _prompt_text(row)
                 tests = _test_list(row, include_challenge=self.settings.include_challenge_tests)
                 prompt = render_prompt(self.settings, prompt_text, tests)
+                row_key = _mbpp_sample_key(self.settings, row, prompt)
+                cached_record = resume_records.get(row_key)
+                if cached_record and record_matches(
+                    cached_record,
+                    {
+                        "dataset": self.settings.dataset_name,
+                        "dataset_config": self.settings.dataset_config,
+                        "dataset_revision": self.settings.dataset_revision,
+                        "split": self.settings.split,
+                        "task_id": row.get("task_id"),
+                        "prompt": prompt,
+                        "include_tests_in_prompt": self.settings.include_tests_in_prompt,
+                        "include_challenge_tests": self.settings.include_challenge_tests,
+                    },
+                ):
+                    score_rows.append(
+                        {
+                            "task_id": cached_record.get("task_id"),
+                            "passed": bool(cached_record.get("passed")),
+                            "invalid": bool(cached_record.get("invalid")),
+                            "error_type": cached_record.get("error_type"),
+                        }
+                    )
+                    total_runtime += _as_float(cached_record.get("runtime_seconds")) or 0.0
+                    completed_samples += 1
+                    continue
+                resume_announced = maybe_announce_resume(
+                    progress_callback=progress_callback,
+                    announced=resume_announced,
+                    task="mbpp",
+                    variant=variant.name,
+                    completed_samples=completed_samples,
+                    total_samples=total_samples,
+                    correct_samples=sum(int(row["passed"]) for row in score_rows),
+                    invalid_samples=sum(int(row["invalid"]) for row in score_rows),
+                    runtime_seconds=total_runtime,
+                )
                 response = self.client.generate(
                     model=model,
                     prompt=prompt,
@@ -153,6 +204,7 @@ class MBPPRunner:
                 )
                 total_runtime += response.runtime_seconds + execution.runtime_seconds
                 invalid = execution.error_type in {"no_code", "syntax_error"}
+                completed_samples += 1
                 score_rows.append(
                     {
                         "task_id": row.get("task_id"),
@@ -193,6 +245,7 @@ class MBPPRunner:
                 sample_file.write(
                     json.dumps(sample_record, ensure_ascii=False, default=str) + "\n"
                 )
+                sample_file.flush()
 
                 if progress_callback:
                     progress_callback(
@@ -201,7 +254,7 @@ class MBPPRunner:
                             "task": "mbpp",
                             "variant": variant.name,
                             "language": "python",
-                            "completed_samples": index,
+                            "completed_samples": completed_samples,
                             "total_samples": total_samples,
                             "latest_score": 1.0 if execution.passed else 0.0,
                             "latest_correct": execution.passed,
@@ -221,7 +274,7 @@ class MBPPRunner:
                     model=model,
                     task="mbpp",
                     variant_name=variant.name,
-                    completed_samples=index,
+                    completed_samples=completed_samples,
                     total_samples=total_samples,
                     progress_callback=progress_callback,
                     language="python",
@@ -510,6 +563,32 @@ def _setup_code(row: dict[str, Any]) -> str:
     if setup:
         setup_parts.append(setup)
     return "\n".join(setup_parts)
+
+
+def _mbpp_sample_key(settings: MBPPSettings, row: dict[str, Any], prompt: str) -> str:
+    return cache_key(
+        settings.dataset_name,
+        settings.dataset_config,
+        settings.dataset_revision,
+        settings.split,
+        row.get("task_id"),
+        prompt,
+        settings.include_tests_in_prompt,
+        settings.include_challenge_tests,
+    )
+
+
+def _mbpp_record_key(record: dict[str, Any]) -> str | None:
+    return cache_key(
+        record.get("dataset"),
+        record.get("dataset_config"),
+        record.get("dataset_revision"),
+        record.get("split"),
+        record.get("task_id"),
+        record.get("prompt"),
+        record.get("include_tests_in_prompt"),
+        record.get("include_challenge_tests"),
+    )
 
 
 def _strip_reasoning(text: str) -> str:

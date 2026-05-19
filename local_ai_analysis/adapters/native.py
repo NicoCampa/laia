@@ -106,6 +106,7 @@ class NativeClient:
         self,
         model: str,
         request_extra: dict[str, Any] | None = None,
+        cooldown_seconds: float = 0.0,
     ) -> str | None:
         return None
 
@@ -392,6 +393,7 @@ class LMStudioNativeClient(NativeClient):
         self,
         model: str,
         request_extra: dict[str, Any] | None = None,
+        cooldown_seconds: float = 0.0,
     ) -> str | None:
         self._models_payload = None
         instance_id = None
@@ -412,6 +414,9 @@ class LMStudioNativeClient(NativeClient):
             payload={"instance_id": instance_id},
             headers=self._headers(),
         )
+        cooldown = max(0.0, float(cooldown_seconds or 0.0))
+        if cooldown > 0:
+            time.sleep(cooldown)
         load_payload: dict[str, Any] = {"model": model}
         if request_extra:
             load_payload.update(request_extra)
