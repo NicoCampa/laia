@@ -746,7 +746,6 @@ function IndexPlotCard({
               style={{ "--provider-color": providerColor(row) } as CSSProperties}
             >
               <div className="index-column-track">
-                <span className="index-column-rank">{index + 1}</span>
                 <span className="index-column-bar">
                   <i
                     style={{
