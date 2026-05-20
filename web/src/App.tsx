@@ -8,12 +8,14 @@ import {
   Eye,
   FileText,
   Gauge,
+  Info,
+  ExternalLink,
   Lightbulb,
   LightbulbOff,
-  ListFilter,
   Search,
   ShieldCheck,
   Table2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -59,8 +61,14 @@ type LeaderboardRow = {
   benchmark_runtime_seconds?: number | null;
   benchmark_samples?: number | null;
   benchmark_total_tokens?: number | null;
+  benchmark_prompt_tokens?: number | null;
+  benchmark_completion_tokens?: number | null;
+  benchmark_reasoning_tokens?: number | null;
+  benchmark_total_cost_usd?: number | null;
+  benchmark_p95_latency_seconds?: number | null;
   benchmark_output_tokens_per_second?: number | null;
   benchmark_truncated_rate?: number | null;
+  benchmark_truncated_count?: number | null;
 };
 
 type Payload = {
@@ -69,7 +77,7 @@ type Payload = {
   leaderboard: LeaderboardRow[];
 };
 
-type Page = "leaderboard" | "benchmarks" | "efficiency" | "table" | "methodology";
+type Page = "leaderboard" | "benchmarks" | "efficiency" | "models" | "methodology";
 
 type Filters = {
   query: string;
@@ -93,7 +101,7 @@ const PAGE_LABELS: Record<Page, string> = {
   leaderboard: "Leaderboard",
   benchmarks: "Benchmarks",
   efficiency: "Efficiency",
-  table: "Table",
+  models: "Models",
   methodology: "Methodology",
 };
 
@@ -127,7 +135,7 @@ const TEXT_CAPABILITIES: Capability[] = [
     label: "Knowledge",
     benchmark: "Global MMLU Lite",
     metricLabel: "Pass@1",
-    weight: 25,
+    weight: 20,
     icon: <BookOpen size={16} />,
     value: (row) => numeric(row.global_mmlu_lite_pass_at_1),
     description: "Academic and factual breadth across multilingual subjects.",
@@ -146,7 +154,7 @@ const TEXT_CAPABILITIES: Capability[] = [
   },
   {
     id: "tool-calling",
-    label: "Tool Calling",
+    label: "Tools",
     benchmark: "BFCL v4",
     metricLabel: "Selected accuracy",
     weight: 20,
@@ -171,7 +179,7 @@ const TEXT_CAPABILITIES: Capability[] = [
     label: "RAG",
     benchmark: "RGB",
     metricLabel: "All rate",
-    weight: 15,
+    weight: 20,
     icon: <Database size={16} />,
     value: (row) => numeric(row.rgb_all_rate),
     description: "Use retrieved evidence, reject noise, and detect factual errors.",
@@ -215,11 +223,11 @@ const EXTRA_CAPABILITIES: Capability[] = [
 const CAPABILITIES = [...TEXT_CAPABILITIES, ...EXTRA_CAPABILITIES];
 
 const LAIA_INDEX_WEIGHTS = {
-  global_mmlu_lite_pass_at_1: 0.25,
+  global_mmlu_lite_pass_at_1: 0.2,
   ifbench_prompt_level_loose: 0.2,
   bfcl_v4_selected_accuracy: 0.2,
   mbpp_pass_at_1: 0.2,
-  rgb_all_rate: 0.15,
+  rgb_all_rate: 0.2,
 } satisfies Partial<Record<keyof LeaderboardRow, number>>;
 
 const MERGED_BENCHMARK_METRICS = [
@@ -259,9 +267,13 @@ const RAW_TABLE_COLUMNS = [
   "simpleqa_f1",
   "harmbench_refusal_rate",
   "benchmark_samples",
+  "benchmark_runtime_seconds",
   "benchmark_total_tokens",
+  "benchmark_prompt_tokens",
+  "benchmark_completion_tokens",
   "benchmark_output_tokens_per_second",
   "benchmark_truncated_rate",
+  "benchmark_total_cost_usd",
   "run_uuid",
 ];
 
@@ -270,8 +282,6 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("leaderboard");
   const [filters, setFilters] = useState<Filters>(emptyFilters);
-  const [showFilters, setShowFilters] = useState(false);
-  const [showAllVersions, setShowAllVersions] = useState(false);
 
   useEffect(() => {
     loadPayload()
@@ -290,12 +300,8 @@ export function App() {
     [comparableRows, filters],
   );
   const leaderboardRows = useMemo(
-    () => (
-      showAllVersions
-        ? filteredRows
-        : filteredRows.filter((row) => isFourBitRow(row) || isHostedOpenAIRow(row))
-    ).sort((a, b) => scoreForRank(b) - scoreForRank(a)),
-    [filteredRows, showAllVersions],
+    () => filteredRows.filter((row) => isFourBitRow(row) || isHostedOpenAIRow(row)).sort((a, b) => scoreForRank(b) - scoreForRank(a)),
+    [filteredRows],
   );
   const options = useMemo(() => optionSets(comparableRows), [comparableRows]);
 
@@ -316,41 +322,20 @@ export function App() {
           <p className="eyebrow">Local AI Analysis</p>
           <h1>{PAGE_LABELS[page]}</h1>
           <p>
-            Compare local and hosted models by LAIA Index, with capability detail kept in the
-            benchmark and table views. Updated {formatDate(payload.generated_at)}.
+            Compare local and hosted models by LAIA Index, benchmark coverage, quantization, and
+            reproducible run metadata. Updated {formatDate(payload.generated_at)}.
           </p>
-        </div>
-        <div className="hero-stats" aria-label="Dataset summary">
-          <Stat label="Published runs" value={String(comparableRows.length)} />
-          <Stat label="4 bit rows" value={String(comparableRows.filter(isFourBitRow).length)} />
-          <Stat label="Labs" value={String(new Set(comparableRows.map(providerLabel)).size)} />
         </div>
       </section>
 
-      {page !== "methodology" && (
-        <section className="toolbar" aria-label="Page controls">
-          <button
-            className={`version-toggle-button ${showAllVersions ? "active" : ""}`}
-            type="button"
-            onClick={() => setShowAllVersions((current) => !current)}
-          >
-            {showAllVersions ? "Show 4 bit only" : "Show all versions"}
-          </button>
-          <button className="text-button" type="button" onClick={() => setShowFilters(!showFilters)}>
-            <ListFilter size={15} aria-hidden="true" />
-            {showFilters ? "Hide filters" : "Show filters"}
-          </button>
-        </section>
-      )}
-
-      {showFilters && page !== "methodology" && (
+      {page === "models" && (
         <FilterPanel filters={filters} options={options} onChange={setFilters} />
       )}
 
       {page === "leaderboard" && <LeaderboardPage rows={leaderboardRows} />}
       {page === "benchmarks" && <BenchmarksPage rows={leaderboardRows} />}
       {page === "efficiency" && <EfficiencyPage rows={leaderboardRows} />}
-      {page === "table" && <TablePage rows={leaderboardRows} allRows={publishableRows} />}
+      {page === "models" && <ModelsPage rows={leaderboardRows} allRows={publishableRows} />}
       {page === "methodology" && <MethodologyPage />}
 
       <footer className="footer">
@@ -380,7 +365,7 @@ function SiteHeader({
   page: Page;
   onNavigate: (page: Page) => void;
 }) {
-  const pages: Page[] = ["leaderboard", "benchmarks", "efficiency", "table", "methodology"];
+  const pages: Page[] = ["leaderboard", "benchmarks", "efficiency", "models", "methodology"];
   return (
     <header className="site-header">
       <button className="site-mark" type="button" onClick={() => onNavigate("leaderboard")}>
@@ -401,15 +386,6 @@ function SiteHeader({
       </nav>
       <time dateTime={generatedAt}>Updated {formatDate(generatedAt)}</time>
     </header>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </div>
   );
 }
 
@@ -527,6 +503,8 @@ function LeaderboardPage({ rows }: { rows: LeaderboardRow[] }) {
         />
       </div>
       <ProviderLegend rows={rows} />
+      <LaiaFormulaNote />
+      <LandscapeSection rows={rows} />
 
       <div className="section-heading">
         <div>
@@ -546,6 +524,153 @@ function LeaderboardPage({ rows }: { rows: LeaderboardRow[] }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function LaiaFormulaNote() {
+  return (
+    <section className="laia-note" aria-label="LAIA Index formula">
+      <strong>LAIA Index</strong>
+      {TEXT_CAPABILITIES.map((capability) => (
+        <span key={capability.id}>{capability.label} {capability.weight} pts</span>
+      ))}
+      <em>Judge and vision benchmarks are reported separately.</em>
+    </section>
+  );
+}
+
+function LandscapeSection({ rows }: { rows: LeaderboardRow[] }) {
+  const points = rows
+    .map((row) => ({ row, x: modelSizeGb(row), y: numeric(row.model_intelligence_score) }))
+    .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
+  if (points.length < 2) return null;
+
+  return (
+    <section className="landscape-section">
+      <div className="section-heading compact">
+        <div>
+          <p className="eyebrow">Model Landscape</p>
+          <h2>Score versus footprint</h2>
+        </div>
+        <p>Higher and further left is better: stronger LAIA Index with less local memory.</p>
+      </div>
+      <div className="landscape-grid">
+        <SizeIntelligencePlot rows={rows} />
+        <CompactEfficiencyRanking rows={rows} />
+      </div>
+    </section>
+  );
+}
+
+function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
+  const points = rows
+    .map((row) => ({ row, x: modelSizeGb(row), y: numeric(row.model_intelligence_score) }))
+    .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
+  const width = 620;
+  const height = 330;
+  const pad = { top: 22, right: 24, bottom: 44, left: 54 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const maxX = Math.max(1, Math.ceil(Math.max(...points.map((p) => p.x)) * 1.08));
+  const maxY = Math.max(0.12, Math.ceil(Math.max(...points.map((p) => p.y)) * 120) / 100);
+  const xFor = (x: number) => pad.left + (x / maxX) * plotW;
+  const yFor = (y: number) => pad.top + plotH - (y / maxY) * plotH;
+  const labeled = new Set([...points].sort((a, b) => b.y - a.y).slice(0, 7).map((p) => p.row.variant_id));
+
+  return (
+    <article className="landscape-panel">
+      <div className="panel-heading">
+        <span className="metric-icon"><Gauge size={16} /></span>
+        <div>
+          <h3>Intelligence vs GB</h3>
+          <p>Model footprint from exported file size when available.</p>
+        </div>
+      </div>
+      <div className="landscape-scatter">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index versus model size in GB">
+          {[0, maxX / 2, maxX].map((tick) => (
+            <g key={`landscape-x-${tick}`}>
+              <line className="grid-line" x1={xFor(tick)} x2={xFor(tick)} y1={pad.top} y2={pad.top + plotH} />
+              <text className="axis-label" x={xFor(tick)} y={height - 16} textAnchor="middle">
+                {tick === 0 ? "0" : `${tick.toFixed(tick < 10 ? 1 : 0)} GB`}
+              </text>
+            </g>
+          ))}
+          {[0, maxY / 2, maxY].map((tick) => (
+            <g key={`landscape-y-${tick}`}>
+              <line className="grid-line" x1={pad.left} x2={pad.left + plotW} y1={yFor(tick)} y2={yFor(tick)} />
+              <text className="axis-label" x={pad.left - 9} y={yFor(tick) + 4} textAnchor="end">
+                {formatPoints(tick)}
+              </text>
+            </g>
+          ))}
+          <text className="axis-title" x={pad.left + plotW / 2} y={height - 2} textAnchor="middle">Model size in GB</text>
+          <text className="axis-title" x={12} y={pad.top + plotH / 2} textAnchor="middle" transform={`rotate(-90 12 ${pad.top + plotH / 2})`}>
+            LAIA Index
+          </text>
+          {points.map((point) => {
+            const isLabeled = labeled.has(point.row.variant_id);
+            return (
+              <g key={`landscape-${point.row.variant_id}`}>
+                <circle
+                  className={`scatter-point quant-${quantizationTone(point.row)}`}
+                  cx={xFor(point.x)}
+                  cy={yFor(point.y)}
+                  r={isLabeled ? 6 : 4.5}
+                  style={{ fill: providerColor(point.row) }}
+                >
+                  <title>{displayModelName(point.row)} · {formatPoints(point.y)} · {formatModelSize(point.row)}</title>
+                </circle>
+                {isLabeled && (
+                  <text className="point-label" x={xFor(point.x) + 9} y={yFor(point.y) - 8}>
+                    {shortModelLabel(point.row)}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </article>
+  );
+}
+
+function CompactEfficiencyRanking({ rows }: { rows: LeaderboardRow[] }) {
+  const items = rows
+    .map((row) => {
+      const size = modelSizeGb(row);
+      const score = numeric(row.model_intelligence_score);
+      return size && score ? { row, value: (score * 100) / size } : null;
+    })
+    .filter((item): item is { row: LeaderboardRow; value: number } => item !== null)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8);
+  const max = Math.max(...items.map((item) => item.value), 0.01);
+
+  return (
+    <article className="landscape-panel">
+      <div className="panel-heading">
+        <span className="metric-icon"><BarChart3 size={16} /></span>
+        <div>
+          <h3>Best points per GB</h3>
+          <p>Compact models that preserve benchmark value.</p>
+        </div>
+      </div>
+      <div className="compact-efficiency-list">
+        {items.map(({ row, value }, index) => (
+          <div className="compact-efficiency-row" key={`compact-eff-${row.variant_id}`}>
+            <span className="bar-rank">{String(index + 1).padStart(2, "0")}</span>
+            <LabIcon row={row} />
+            <div>
+              <strong>{displayModelName(row)}</strong>
+              <small>{quantizationLabel(row)} · {formatModelSize(row)}</small>
+            </div>
+            <div className="efficiency-bar"><span style={{ width: `${(value / max) * 100}%` }} /></div>
+            <b>{value.toFixed(1)}</b>
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -581,6 +706,7 @@ function IndexPlotCard({
   onParameterLimitChange: (value: string) => void;
   onGbLimitChange: (value: string) => void;
 }) {
+  const maxScore = Math.max(...rows.map((row) => numeric(row.model_intelligence_score) ?? 0), 0.01);
   return (
     <section className="index-plot-card intelligence-card">
       <div className="index-plot-heading">
@@ -612,21 +738,29 @@ function IndexPlotCard({
         {rows.length === 0 && <p className="empty-note">No rows match the selected size limits.</p>}
         {rows.map((row, index) => {
           const score = numeric(row.model_intelligence_score);
+          const height = score === null ? 0 : Math.max(4, (score / maxScore) * 100);
           return (
             <article
-              className={`index-plot-row ${rowToneClass(row)}`}
+              className={`index-plot-column ${rowToneClass(row)}`}
               key={`${title}-${row.variant_id}`}
               style={{ "--provider-color": providerColor(row) } as CSSProperties}
             >
-              <div className="rank-number">{String(index + 1).padStart(2, "0")}</div>
-              <ModelIdentity row={row} />
-              <div className="index-plot-bar">
-                <ScoreBar value={score} tone="laia" />
-                <strong>{formatPoints(score)}</strong>
+              <div className="index-column-track">
+                <span className="index-column-rank">{index + 1}</span>
+                <span className="index-column-bar">
+                  <i
+                    style={{
+                      height: `${height}%`,
+                      background: isHostedOpenAIRow(row) ? "var(--ink)" : providerColor(row),
+                    }}
+                  />
+                </span>
+                <strong>{formatIndexNumber(score ?? 0)}</strong>
               </div>
-              <div className="index-plot-meta">
-                <span>{displayParameter(row)}</span>
-                <span>{formatModelSize(row)}</span>
+              <div className="index-column-label">
+                <LabIcon row={row} />
+                <b>{shortModelLabel(row)}</b>
+                <span>{quantizationLabel(row)} · {formatModelSize(row)}</span>
               </div>
             </article>
           );
@@ -697,9 +831,9 @@ function CapabilityStrip({
   const items = [
     {
       id: "laia",
-      label: "LAIA",
+      label: "LAIA Index",
       normalized: numeric(row.model_intelligence_score),
-      display: (value: number | null) => (value === null ? "n/a" : formatIndexNumber(value)),
+      display: (value: number | null) => formatPoints(value),
       tone: "laia",
       aria: `LAIA Index: ${formatPoints(numeric(row.model_intelligence_score))}`,
     },
@@ -709,7 +843,7 @@ function CapabilityStrip({
         id: capability.id,
         label: capability.label,
         normalized: value,
-        display: (itemValue: number | null) => (itemValue === null ? "n/a" : `${Math.round(itemValue * 100)}`),
+        display: (itemValue: number | null) => formatPercent(itemValue),
         tone: "default",
         aria: `${capability.label}: ${formatPercent(value)}`,
       };
@@ -718,7 +852,7 @@ function CapabilityStrip({
       id: "size",
       label: "GB",
       normalized: size === null || !maxModelSizeGb ? null : size / maxModelSizeGb,
-      display: () => (size === null ? "n/a" : size.toFixed(size < 10 ? 1 : 0)),
+      display: () => (size === null ? "n/a" : formatModelSize(row)),
       tone: "size",
       aria: `Model footprint: ${formatModelSize(row)}`,
     },
@@ -728,18 +862,18 @@ function CapabilityStrip({
     <div className={`capability-strip ${compact ? "compact" : ""}`}>
       {items.map((item) => {
         const normalized = item.normalized;
-        const height = normalized === null ? 100 : Math.max(7, Math.min(100, normalized * 100));
+        const width = normalized === null ? 0 : Math.max(2, Math.min(100, normalized * 100));
         return (
           <div className={`mini-capability mini-${item.tone}`} key={item.id}>
+            <span>{item.label}</span>
             <div className="mini-bar-track" aria-label={item.aria}>
               <div
                 className={`mini-bar-fill ${normalized === null ? "missing" : ""}`}
-                style={{ height: `${height}%` }}
+                style={{ width: `${width}%` }}
               >
-                <b>{item.display(normalized)}</b>
               </div>
+              <b>{item.display(normalized)}</b>
             </div>
-            <span>{item.label}</span>
           </div>
         );
       })}
@@ -955,16 +1089,53 @@ function EfficiencyBars({ rows }: { rows: LeaderboardRow[] }) {
   );
 }
 
-function TablePage({ rows, allRows }: { rows: LeaderboardRow[]; allRows: LeaderboardRow[] }) {
+function ModelsPage({ rows, allRows }: { rows: LeaderboardRow[]; allRows: LeaderboardRow[] }) {
+  const [selectedRow, setSelectedRow] = useState<LeaderboardRow | null>(null);
   const tableRows = rows.length ? rows : allRows;
   return (
-    <section className="page-grid">
+    <section className="page-grid models-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Full Table</p>
-          <h2>All exported metrics</h2>
+          <p className="eyebrow">Model Registry</p>
+          <h2>Models, quantization, and run coverage</h2>
         </div>
-        <p>Detailed row-level view for verification and debugging.</p>
+        <p>Every visible model version with source links, benchmark coverage, and raw metrics for verification.</p>
+      </div>
+
+      <div className="model-registry">
+        {tableRows.map((row) => (
+          <article
+            className={`model-registry-row ${rowToneClass(row)}`}
+            key={`registry-${row.normalized_result_id ?? row.variant_id}`}
+            style={{ "--provider-color": providerColor(row) } as CSSProperties}
+          >
+            <ModelIdentity row={row} />
+            <div className="registry-metrics">
+              <MetricPill label="Size" value={formatModelSize(row)} />
+              <MetricPill label="LAIA" value={formatPoints(numeric(row.model_intelligence_score))} />
+              <MetricPill label="Coverage" value={coverageLabel(row)} />
+              <MetricPill label="Truncation" value={formatTruncation(row).replace("trunc ", "")} />
+            </div>
+            <BenchmarkCoverage row={row} />
+            <div className="registry-actions">
+              <ModelSourceLink row={row} />
+              <button className="details-button" type="button" onClick={() => setSelectedRow(row)}>
+                <Info size={14} aria-hidden="true" />
+                Details
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {selectedRow && <ModelDetailsDrawer row={selectedRow} onClose={() => setSelectedRow(null)} />}
+
+      <div className="section-heading compact">
+        <div>
+          <p className="eyebrow">Full Data Table</p>
+          <h2>Raw exported metrics</h2>
+        </div>
+        <p>Column-level view for debugging benchmark output, tokens, cost, and truncation.</p>
       </div>
       <div className="full-table-shell">
         <table>
@@ -985,6 +1156,106 @@ function TablePage({ rows, allRows }: { rows: LeaderboardRow[]; allRows: Leaderb
         </table>
       </div>
     </section>
+  );
+}
+
+function MetricPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="metric-pill">
+      <small>{label}</small>
+      <b>{value}</b>
+    </span>
+  );
+}
+
+function BenchmarkCoverage({ row }: { row: LeaderboardRow }) {
+  return (
+    <div className="benchmark-coverage" aria-label="Benchmark coverage">
+      {CAPABILITIES.map((capability) => {
+        const complete = capability.value(row) !== null;
+        return (
+          <span className={complete ? "complete" : "missing"} key={`coverage-${row.variant_id}-${capability.id}`}>
+            {capability.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function ModelSourceLink({ row }: { row: LeaderboardRow }) {
+  const link = modelSourceLink(row);
+  if (!link.href) {
+    return <span className="source-link disabled">{link.label}</span>;
+  }
+  return (
+    <a className={`source-link ${link.kind}`} href={link.href} target="_blank" rel="noreferrer">
+      {link.label}
+      <ExternalLink size={13} aria-hidden="true" />
+    </a>
+  );
+}
+
+function ModelDetailsDrawer({ row, onClose }: { row: LeaderboardRow; onClose: () => void }) {
+  const link = modelSourceLink(row);
+  return (
+    <div className="drawer-backdrop" role="presentation">
+      <aside className="model-drawer" aria-label={`${displayModelName(row)} details`}>
+        <div className="drawer-heading">
+          <ModelIdentity row={row} />
+          <button className="drawer-close" type="button" onClick={onClose} aria-label="Close model details">
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="drawer-section">
+          <h3>Model</h3>
+          <dl>
+            <DetailItem label="Provider" value={providerLabel(row)} />
+            <DetailItem label="Parameters" value={displayParameter(row)} />
+            <DetailItem label="Quantization" value={quantizationLabel(row)} />
+            <DetailItem label="File size" value={formatModelSize(row)} />
+            <DetailItem label="Backend" value={String(row.backend_name ?? "n/a")} />
+            <DetailItem label="Reasoning" value={reasoningKey(row) === "off" ? "Disabled" : reasoningValue(row)} />
+            <DetailItem label="API model" value={apiModel(row) ?? "n/a"} />
+            <DetailItem label="Source" value={link.label} />
+          </dl>
+          {link.href && (
+            <a className={`source-link ${link.kind}`} href={link.href} target="_blank" rel="noreferrer">
+              Open source link
+              <ExternalLink size={13} aria-hidden="true" />
+            </a>
+          )}
+        </div>
+        <div className="drawer-section">
+          <h3>Benchmark Coverage</h3>
+          <BenchmarkCoverage row={row} />
+        </div>
+        <div className="drawer-section">
+          <h3>Run Signals</h3>
+          <dl>
+            <DetailItem label="Samples" value={formatSamples(row).replace(" samples", "")} />
+            <DetailItem label="Runtime" value={formatSeconds(numeric(row.benchmark_runtime_seconds))} />
+            <DetailItem label="Total tokens" value={formatCount(numeric(row.benchmark_total_tokens))} />
+            <DetailItem label="Prompt tokens" value={formatCount(numeric(row.benchmark_prompt_tokens))} />
+            <DetailItem label="Completion tokens" value={formatCount(numeric(row.benchmark_completion_tokens))} />
+            <DetailItem label="Reasoning tokens" value={formatCount(numeric(row.benchmark_reasoning_tokens))} />
+            <DetailItem label="Output tok/s" value={formatNumber(numeric(row.benchmark_output_tokens_per_second))} />
+            <DetailItem label="P95 latency" value={formatSeconds(numeric(row.benchmark_p95_latency_seconds))} />
+            <DetailItem label="Truncated" value={formatTruncation(row).replace("trunc ", "")} />
+            <DetailItem label="Total cost" value={formatUsd(numeric(row.benchmark_total_cost_usd))} />
+          </dl>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </>
   );
 }
 
@@ -1014,6 +1285,47 @@ function MethodologyPage() {
           </article>
         ))}
       </div>
+
+      <section className="method-section">
+        <div>
+          <p className="eyebrow">LAIA Formula</p>
+          <h3>100 points from non-judge text benchmarks</h3>
+        </div>
+        <div className="formula-grid">
+          {TEXT_CAPABILITIES.map((capability) => (
+            <article key={`formula-${capability.id}`}>
+              <span>{capability.weight} pts</span>
+              <strong>{capability.label}</strong>
+              <small>{capability.benchmark} · {capability.metricLabel}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="method-section">
+        <div>
+          <p className="eyebrow">Interpretation</p>
+          <h3>What is included and what is not</h3>
+        </div>
+        <div className="method-copy-grid">
+          <article>
+            <h4>Included in LAIA</h4>
+            <p>Global MMLU Lite, IFBench, BFCL v4, MBPP, and RGB are treated as the core text suite. They do not require an external LLM judge for the final score.</p>
+          </article>
+          <article>
+            <h4>Reported separately</h4>
+            <p>Vision, factuality, and safety have different evaluation assumptions. They remain visible in benchmark pages without changing the headline LAIA Index.</p>
+          </article>
+          <article>
+            <h4>Quantization</h4>
+            <p>4-bit, 8-bit, and 16-bit/BF16 rows are separate model versions. The public default shows 4-bit local models plus hosted references; all versions can be revealed.</p>
+          </article>
+          <article>
+            <h4>Reproducibility</h4>
+            <p>The site surfaces sample counts, truncation, token usage, runtime, and source metadata so unusual runs can be inspected instead of hidden.</p>
+          </article>
+        </div>
+      </section>
     </section>
   );
 }
@@ -1044,7 +1356,7 @@ function LabIcon({ row }: { row: LeaderboardRow }) {
     return <span className="lab-icon fallback">{labInitials(row)}</span>;
   }
   return (
-    <span className="lab-icon">
+    <span className={`lab-icon lab-${key}`}>
       <img src={src} alt="" onError={() => setCandidateIndex((index) => index + 1)} />
     </span>
   );
@@ -1232,6 +1544,12 @@ function displayModelName(row: LeaderboardRow) {
   return formatModelName(apiName || row.base_model_name || row.variant_name);
 }
 
+function shortModelLabel(row: LeaderboardRow) {
+  return displayModelName(row)
+    .replace(/\s+Instruct\b/i, "")
+    .replace(/\s+Reasoning\b/i, "");
+}
+
 function formatModelName(value: string) {
   const lastSegment = value.split("/").pop() ?? value;
   const withoutQuantSuffix = lastSegment.split("@")[0];
@@ -1296,17 +1614,17 @@ function providerColor(row: LeaderboardRow) {
 function providerColorName(provider: string) {
   const colors: Record<string, string> = {
     OpenAI: "#111111",
-    Alibaba: "#356dff",
+    Alibaba: "#6d4cff",
     Google: "#63b35d",
     "Mistral AI": "#ff8a2a",
     Meta: "#4f8dff",
     NVIDIA: "#76b900",
-    "Liquid AI": "#5a72ff",
+    "Liquid AI": "#f2c94c",
     IBM: "#6f84a3",
     AI2: "#b06df5",
     TII: "#e56f52",
     Microsoft: "#2f80ed",
-    "Hugging Face": "#f6c343",
+    "Hugging Face": "#b88700",
   };
   return colors[provider] ?? "#7a7a74";
 }
@@ -1441,7 +1759,61 @@ function formatSamples(row: LeaderboardRow) {
 function formatTruncation(row: LeaderboardRow) {
   const value = numeric(row.benchmark_truncated_rate);
   if (value === null) return "trunc n/a";
-  return `${(value * 100).toFixed(1)}% trunc`;
+  const count = numeric(row.benchmark_truncated_count);
+  return count === null ? `${(value * 100).toFixed(1)}% trunc` : `${(value * 100).toFixed(1)}% trunc · ${count}`;
+}
+
+function coverageLabel(row: LeaderboardRow) {
+  const complete = CAPABILITIES.filter((capability) => capability.value(row) !== null).length;
+  return `${complete}/${CAPABILITIES.length}`;
+}
+
+function modelSourceLink(row: LeaderboardRow) {
+  if (isHostedOpenAIRow(row)) {
+    return { label: "Hosted API", href: "", kind: "hosted" };
+  }
+  const candidates = [
+    row.model_repo,
+    variantConfigValue(row, "model_repo"),
+    apiModel(row),
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  const exactRepo = candidates.find((value) => /^[\w.-]+\/[\w.-]+$/.test(value) && !value.includes("@"));
+  if (exactRepo) {
+    return { label: "Hugging Face", href: `https://huggingface.co/${exactRepo}`, kind: "exact" };
+  }
+  const search = [apiModel(row), displayModelName(row), providerLabel(row)].filter(Boolean).join(" ");
+  if (search.trim()) {
+    return {
+      label: "HF search",
+      href: `https://huggingface.co/models?search=${encodeURIComponent(search)}`,
+      kind: "search",
+    };
+  }
+  return { label: "Source n/a", href: "", kind: "missing" };
+}
+
+function formatSeconds(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  if (value < 60) return `${value.toFixed(1)}s`;
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.round(value % 60);
+  if (minutes < 60) return `${minutes}m ${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+function formatCount(value?: number | null) {
+  return value === null || value === undefined || Number.isNaN(value) ? "n/a" : Math.round(value).toLocaleString();
+}
+
+function formatNumber(value?: number | null) {
+  return value === null || value === undefined || Number.isNaN(value) ? "n/a" : value.toFixed(value < 10 ? 2 : 1);
+}
+
+function formatUsd(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  if (value === 0) return "$0";
+  return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
 }
 
 function formatCell(value: unknown) {

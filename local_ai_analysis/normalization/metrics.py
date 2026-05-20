@@ -9,11 +9,11 @@ from local_ai_analysis.db.repository import LocalAIAnalysisDB
 
 
 MODEL_INTELLIGENCE_WEIGHTS = {
-    "global_mmlu_lite_pass_at_1": 0.25,
+    "global_mmlu_lite_pass_at_1": 0.20,
     "ifbench_prompt_level_loose": 0.20,
     "bfcl_v4_selected_accuracy": 0.20,
     "mbpp_pass_at_1": 0.20,
-    "rgb_all_rate": 0.15,
+    "rgb_all_rate": 0.20,
 }
 
 
