@@ -176,7 +176,7 @@ const TEXT_CAPABILITIES: Capability[] = [
   },
   {
     id: "rag",
-    label: "RAG",
+    label: "Grounding",
     benchmark: "RGB",
     metricLabel: "All rate",
     weight: 20,
