@@ -449,10 +449,6 @@ p {
   align-items: end;
   min-height: 360px;
   border-top: 1px solid var(--line);
-  background:
-    linear-gradient(to bottom, transparent 24%, rgba(17, 17, 17, 0.08) 24%, transparent calc(24% + 1px)),
-    linear-gradient(to bottom, transparent 49%, rgba(17, 17, 17, 0.08) 49%, transparent calc(49% + 1px)),
-    linear-gradient(to bottom, transparent 74%, rgba(17, 17, 17, 0.08) 74%, transparent calc(74% + 1px));
   overflow-x: auto;
   padding: 18px 0 4px;
 }
