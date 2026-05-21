@@ -13,19 +13,28 @@ def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
     db = LocalAIAnalysisDB(db_path)
     try:
         db.init_schema()
-        rows = [
-            _public_row(row)
-            for row in db.leaderboard_rows()
-            if row.get("global_mmlu_lite_pass_at_1") is not None
-            or row.get("ifbench_prompt_level_loose") is not None
-            or row.get("bfcl_v4_selected_accuracy") is not None
-            or row.get("ocrbench_v2_score") is not None
-            or row.get("mmmu_accuracy") is not None
-            or row.get("mbpp_pass_at_1") is not None
-            or row.get("rgb_all_rate") is not None
-            or row.get("simpleqa_f1") is not None
-            or row.get("harmbench_refusal_rate") is not None
-        ]
+        language_breakdowns = _global_mmlu_language_breakdowns(db)
+        rows = []
+        for row in db.leaderboard_rows():
+            if not (
+                row.get("global_mmlu_lite_pass_at_1") is not None
+                or row.get("ifbench_prompt_level_loose") is not None
+                or row.get("bfcl_v4_selected_accuracy") is not None
+                or row.get("ocrbench_v2_score") is not None
+                or row.get("mmmu_accuracy") is not None
+                or row.get("mbpp_pass_at_1") is not None
+                or row.get("rgb_all_rate") is not None
+                or row.get("simpleqa_f1") is not None
+                or row.get("harmbench_refusal_rate") is not None
+            ):
+                continue
+            public = _public_row(row)
+            language_breakdown = language_breakdowns.get(
+                (str(row.get("variant_id")), str(row.get("run_uuid")))
+            )
+            if language_breakdown:
+                public["global_mmlu_lite_language_scores"] = language_breakdown
+            rows.append(public)
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "tagline": "Reproducible local benchmark results for API-served AI models.",
@@ -162,3 +171,96 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
         "metadata_json",
     ]
     return {key: row.get(key) for key in keys}
+
+
+def _global_mmlu_language_breakdowns(
+    db: LocalAIAnalysisDB,
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    rows = db.conn.execute(
+        """
+        SELECT r.variant_id, br.run_uuid, r.raw_json
+        FROM benchmark_result r
+        JOIN benchmark_run br ON r.run_id = br.id
+        WHERE r.metric_name = 'global_mmlu_lite_pass_at_1'
+        """
+    ).fetchall()
+    breakdowns: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for variant_id, run_uuid, raw_json in rows:
+        try:
+            raw = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+        except json.JSONDecodeError:
+            continue
+        summary = raw.get("summary") if isinstance(raw, dict) else None
+        if not isinstance(summary, dict):
+            continue
+        languages = [str(language) for language in summary.get("languages") or []]
+        language_accuracy = summary.get("language_accuracy") or {}
+        if not languages or not isinstance(language_accuracy, dict):
+            continue
+        sample_counts = _global_mmlu_sample_counts(
+            summary.get("samples_path"),
+            project_root=db.db_path.parent.parent,
+        )
+        language_scores: list[dict[str, Any]] = []
+        for language in languages:
+            value = language_accuracy.get(language)
+            if value is None:
+                continue
+            counts = sample_counts.get(language, {})
+            language_scores.append(
+                {
+                    "language": language,
+                    "accuracy": value,
+                    "correct": counts.get("correct"),
+                    "total": counts.get("total"),
+                    "invalid": counts.get("invalid"),
+                    "invalid_rate": (
+                        counts["invalid"] / counts["total"]
+                        if counts.get("total")
+                        else None
+                    ),
+                }
+            )
+        if language_scores:
+            breakdowns[(str(variant_id), str(run_uuid))] = language_scores
+    return breakdowns
+
+
+def _global_mmlu_sample_counts(
+    samples_path_value: Any,
+    *,
+    project_root: Path,
+) -> dict[str, dict[str, int]]:
+    if not samples_path_value:
+        return {}
+    samples_path = Path(str(samples_path_value))
+    candidates = [samples_path]
+    if not samples_path.is_absolute():
+        candidates = [
+            project_root / samples_path,
+            Path.cwd() / samples_path,
+            samples_path,
+        ]
+    existing = next((candidate for candidate in candidates if candidate.exists()), None)
+    if existing is None:
+        return {}
+
+    counts: dict[str, dict[str, int]] = {}
+    with existing.open("r", encoding="utf-8") as sample_file:
+        for line in sample_file:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            language = str(record.get("language") or "")
+            if not language:
+                continue
+            bucket = counts.setdefault(language, {"total": 0, "correct": 0, "invalid": 0})
+            bucket["total"] += 1
+            bucket["correct"] += int(bool(record.get("correct")))
+            bucket["invalid"] += int(bool(record.get("invalid")))
+    return counts

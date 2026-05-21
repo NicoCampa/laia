@@ -69,6 +69,16 @@ type LeaderboardRow = {
   benchmark_output_tokens_per_second?: number | null;
   benchmark_truncated_rate?: number | null;
   benchmark_truncated_count?: number | null;
+  global_mmlu_lite_language_scores?: GlobalMMLULanguageScore[] | null;
+};
+
+type GlobalMMLULanguageScore = {
+  language: string;
+  accuracy: number | null;
+  correct?: number | null;
+  total?: number | null;
+  invalid?: number | null;
+  invalid_rate?: number | null;
 };
 
 type Payload = {
@@ -128,6 +138,161 @@ const INDEX_GB_LIMITS = [
   { label: "Up to 8 GB", value: "8" },
   { label: "Up to 16 GB", value: "16" },
 ];
+
+const LEADERBOARD_CHAPTERS = [
+  { id: "leaderboard-overview", label: "Overview" },
+  { id: "leaderboard-formula", label: "LAIA Formula" },
+  { id: "leaderboard-landscape", label: "Model Landscape" },
+  { id: "leaderboard-rankings", label: "Rankings" },
+];
+
+type BenchmarkMetric = {
+  id: string;
+  label: string;
+  metric: keyof LeaderboardRow;
+  kind?: "score" | "error";
+  note?: string;
+};
+
+type BenchmarkPageConfig = {
+  id: string;
+  title: string;
+  subtitle: string;
+  capability: string;
+  badge: string;
+  metrics: BenchmarkMetric[];
+};
+
+const BENCHMARK_PAGES: BenchmarkPageConfig[] = [
+  {
+    id: "global-mmlu-lite",
+    title: "Knowledge",
+    subtitle: "Global MMLU Lite",
+    capability: "Multilingual academic and factual breadth.",
+    badge: "LAIA",
+    metrics: [
+      { id: "overall", label: "Overall", metric: "global_mmlu_lite_pass_at_1" },
+      { id: "micro", label: "Micro average", metric: "global_mmlu_lite_micro_pass_at_1" },
+      { id: "invalid", label: "Invalid answers", metric: "global_mmlu_lite_invalid_rate", kind: "error" },
+    ],
+  },
+  {
+    id: "ifbench",
+    title: "Instructions",
+    subtitle: "IFBench",
+    capability: "Format, constraint, and instruction-following reliability.",
+    badge: "LAIA",
+    metrics: [
+      { id: "prompt-loose", label: "Prompt loose", metric: "ifbench_prompt_level_loose" },
+      { id: "prompt-strict", label: "Prompt strict", metric: "ifbench_prompt_level_strict" },
+      { id: "instruction-loose", label: "Instruction loose", metric: "ifbench_instruction_level_loose" },
+      { id: "instruction-strict", label: "Instruction strict", metric: "ifbench_instruction_level_strict" },
+    ],
+  },
+  {
+    id: "bfcl-v4",
+    title: "Tools",
+    subtitle: "BFCL v4",
+    capability: "Function selection and structured tool-call accuracy.",
+    badge: "LAIA",
+    metrics: [
+      { id: "selected", label: "Selected", metric: "bfcl_v4_selected_accuracy" },
+      { id: "non-live", label: "Non-live", metric: "bfcl_v4_non_live_accuracy" },
+      { id: "live", label: "Live", metric: "bfcl_v4_live_accuracy" },
+      { id: "multi-turn", label: "Multi-turn", metric: "bfcl_v4_multi_turn_accuracy" },
+      { id: "agentic", label: "Agentic", metric: "bfcl_v4_agentic_accuracy" },
+      { id: "invalid", label: "Invalid calls", metric: "bfcl_v4_invalid_rate", kind: "error" },
+    ],
+  },
+  {
+    id: "mbpp",
+    title: "Coding",
+    subtitle: "MBPP",
+    capability: "Python program synthesis with executable tests.",
+    badge: "LAIA",
+    metrics: [
+      { id: "pass", label: "Pass@1", metric: "mbpp_pass_at_1" },
+      { id: "compile", label: "Compile rate", metric: "mbpp_compile_rate" },
+      { id: "runtime", label: "Runtime errors", metric: "mbpp_runtime_error_rate", kind: "error" },
+      { id: "invalid", label: "Invalid outputs", metric: "mbpp_invalid_rate", kind: "error" },
+    ],
+  },
+  {
+    id: "rgb",
+    title: "Grounding",
+    subtitle: "RGB",
+    capability: "Use retrieved evidence, reject noise, and detect contradictions.",
+    badge: "LAIA",
+    metrics: [
+      { id: "all", label: "Overall", metric: "rgb_all_rate" },
+      { id: "negative-rejection", label: "Negative Rejection", metric: "rgb_rejection_rate" },
+      { id: "fact-check", label: "Fact Check", metric: "rgb_fact_check_rate" },
+      { id: "error-correction", label: "Error Correction", metric: "rgb_error_correction_rate" },
+    ],
+  },
+  {
+    id: "vision",
+    title: "Vision",
+    subtitle: "OCRBench v2 + MMMU",
+    capability: "OCR, chart/document perception, and multimodal reasoning.",
+    badge: "Separate",
+    metrics: [
+      { id: "ocr-micro", label: "OCRBench micro", metric: "ocrbench_v2_micro_score" },
+      { id: "ocr-en", label: "OCR English", metric: "ocrbench_v2_en_score" },
+      { id: "ocr-cn", label: "OCR Chinese", metric: "ocrbench_v2_cn_score" },
+      { id: "mmmu", label: "MMMU", metric: "mmmu_accuracy" },
+      { id: "mmmu-mcq", label: "MMMU multiple choice", metric: "mmmu_multiple_choice_accuracy" },
+      { id: "mmmu-open", label: "MMMU open", metric: "mmmu_open_accuracy" },
+    ],
+  },
+  {
+    id: "simpleqa",
+    title: "Factuality",
+    subtitle: "SimpleQA",
+    capability: "Short-answer factual accuracy and hallucination behavior.",
+    badge: "Judge",
+    metrics: [
+      { id: "f1", label: "F1", metric: "simpleqa_f1" },
+      { id: "correct", label: "Correct", metric: "simpleqa_correct_rate" },
+      { id: "hallucination", label: "Hallucination", metric: "simpleqa_hallucination_rate", kind: "error" },
+      { id: "not-attempted", label: "Not attempted", metric: "simpleqa_not_attempted_rate", kind: "error" },
+    ],
+  },
+  {
+    id: "harmbench",
+    title: "Safety",
+    subtitle: "HarmBench",
+    capability: "Refusal behavior on harmful requests.",
+    badge: "Judge",
+    metrics: [
+      { id: "refusal", label: "Refusal rate", metric: "harmbench_refusal_rate" },
+      { id: "attack-success", label: "Attack success", metric: "harmbench_attack_success_rate", kind: "error" },
+    ],
+  },
+];
+
+const GLOBAL_MMLU_LANGUAGE_LABELS: Record<string, string> = {
+  ar: "Arabic",
+  bn: "Bengali",
+  ca: "Catalan",
+  cs: "Czech",
+  cy: "Welsh",
+  de: "German",
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  hi: "Hindi",
+  id: "Indonesian",
+  it: "Italian",
+  ja: "Japanese",
+  ko: "Korean",
+  my: "Burmese",
+  pt: "Portuguese",
+  sq: "Albanian",
+  sw: "Swahili",
+  yo: "Yoruba",
+  zh: "Chinese",
+};
 
 const TEXT_CAPABILITIES: Capability[] = [
   {
@@ -282,6 +447,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<Page>("leaderboard");
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
 
   useEffect(() => {
     loadPayload()
@@ -332,10 +498,25 @@ export function App() {
         <FilterPanel filters={filters} options={options} onChange={setFilters} />
       )}
 
-      {page === "leaderboard" && <LeaderboardPage rows={leaderboardRows} />}
+      {page === "leaderboard" && (
+        <LeaderboardPage
+          rows={leaderboardRows}
+          onOpenModel={(row) => {
+            setSelectedModelId(row.variant_id);
+            setPage("models");
+          }}
+        />
+      )}
       {page === "benchmarks" && <BenchmarksPage rows={leaderboardRows} />}
       {page === "efficiency" && <EfficiencyPage rows={leaderboardRows} />}
-      {page === "models" && <ModelsPage rows={leaderboardRows} allRows={publishableRows} />}
+      {page === "models" && (
+        <ModelsPage
+          rows={leaderboardRows}
+          allRows={publishableRows}
+          selectedModelId={selectedModelId}
+          onSelectedModelIdChange={setSelectedModelId}
+        />
+      )}
       {page === "methodology" && <MethodologyPage />}
 
       <footer className="footer">
@@ -474,12 +655,20 @@ function Select({
   );
 }
 
-function LeaderboardPage({ rows }: { rows: LeaderboardRow[] }) {
+function LeaderboardPage({
+  rows,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
   const [parameterLimit, setParameterLimit] = useState("all");
   const [gbLimit, setGbLimit] = useState("all");
+  const [excludeClosedSource, setExcludeClosedSource] = useState(false);
+  const activeChapter = useScrollSpy(LEADERBOARD_CHAPTERS.map((chapter) => chapter.id));
   const chartRows = useMemo(
-    () => topIndexRows(rows, parameterLimit, gbLimit),
-    [rows, parameterLimit, gbLimit],
+    () => topIndexRows(rows, parameterLimit, gbLimit, excludeClosedSource),
+    [rows, parameterLimit, gbLimit, excludeClosedSource],
   );
   const maxModelSize = useMemo(
     () => Math.max(...rows.map(modelSizeGb).filter((size): size is number => size !== null), 0.01),
@@ -487,44 +676,111 @@ function LeaderboardPage({ rows }: { rows: LeaderboardRow[] }) {
   );
 
   return (
-    <section className="page-grid leaderboard-view">
-      <div className="highlights-heading">
-        <h2>Highlights</h2>
-      </div>
-      <div className="highlight-grid single-highlight">
-        <IndexPlotCard
-          title="Intelligence Index"
-          subtitle="Text intelligence points · Higher is better"
-          rows={chartRows}
-          parameterLimit={parameterLimit}
-          gbLimit={gbLimit}
-          onParameterLimitChange={setParameterLimit}
-          onGbLimitChange={setGbLimit}
-        />
-      </div>
-      <ProviderLegend rows={rows} />
-      <LaiaFormulaNote />
-      <LandscapeSection rows={rows} />
+    <section className="leaderboard-shell">
+      <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
+      <div className="page-grid leaderboard-view">
+        <section className="chapter-section" id="leaderboard-overview">
+          <div className="highlights-heading">
+            <h2>Highlights</h2>
+          </div>
+          <div className="highlight-grid single-highlight">
+            <IndexPlotCard
+              title="Intelligence Index"
+              subtitle="Text intelligence points · Higher is better"
+              rows={chartRows}
+              parameterLimit={parameterLimit}
+              gbLimit={gbLimit}
+              excludeClosedSource={excludeClosedSource}
+              onParameterLimitChange={setParameterLimit}
+              onGbLimitChange={setGbLimit}
+              onExcludeClosedSourceChange={setExcludeClosedSource}
+              onOpenModel={onOpenModel}
+            />
+          </div>
+          <ProviderLegend rows={rows} />
+        </section>
 
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Capability Ranking</p>
-          <h2>Models ranked by LAIA Index</h2>
-        </div>
-        <p>Default view shows 4-bit local rows and hosted OpenAI references.</p>
-      </div>
-      <div className="ranking-list">
-        {rows.map((row, index) => (
-          <LeaderboardRowCard
-            row={row}
-            rank={index + 1}
-            maxModelSizeGb={maxModelSize}
-            key={row.normalized_result_id ?? row.variant_id}
-          />
-        ))}
+        <section className="chapter-section" id="leaderboard-formula">
+          <LaiaFormulaNote />
+        </section>
+
+        <LandscapeSection rows={rows} />
+
+        <section className="chapter-section" id="leaderboard-rankings">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Capability Ranking</p>
+              <h2>Models ranked by LAIA Index</h2>
+            </div>
+            <p>Default view shows 4-bit local rows and hosted OpenAI references.</p>
+          </div>
+          <div className="ranking-list">
+            {rows.map((row, index) => (
+              <LeaderboardRowCard
+                row={row}
+                rank={index + 1}
+                maxModelSizeGb={maxModelSize}
+                key={row.normalized_result_id ?? row.variant_id}
+              />
+            ))}
+          </div>
+        </section>
       </div>
     </section>
   );
+}
+
+function ChapterNav({
+  chapters,
+  activeId,
+}: {
+  chapters: { id: string; label: string }[];
+  activeId: string;
+}) {
+  return (
+    <nav className="chapter-nav" aria-label="Leaderboard chapters">
+      <strong>Chapters</strong>
+      {chapters.map((chapter) => (
+        <a className={activeId === chapter.id ? "active" : ""} href={`#${chapter.id}`} key={chapter.id}>
+          {chapter.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function useScrollSpy(sectionIds: string[]) {
+  const [activeId, setActiveId] = useState(sectionIds[0] ?? "");
+
+  useEffect(() => {
+    const visibleSections = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            visibleSections.set(entry.target.id, entry.intersectionRatio);
+          } else {
+            visibleSections.delete(entry.target.id);
+          }
+        }
+        const nextActive = [...visibleSections.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+        if (nextActive) setActiveId(nextActive);
+      },
+      {
+        rootMargin: "-18% 0px -58% 0px",
+        threshold: [0.08, 0.24, 0.48, 0.72],
+      },
+    );
+
+    for (const id of sectionIds) {
+      const element = document.getElementById(id);
+      if (element) observer.observe(element);
+    }
+
+    return () => observer.disconnect();
+  }, [sectionIds.join("|")]);
+
+  return activeId;
 }
 
 function LaiaFormulaNote() {
@@ -546,7 +802,7 @@ function LandscapeSection({ rows }: { rows: LeaderboardRow[] }) {
   if (points.length < 2) return null;
 
   return (
-    <section className="landscape-section">
+    <section className="landscape-section chapter-section" id="leaderboard-landscape">
       <div className="section-heading compact">
         <div>
           <p className="eyebrow">Model Landscape</p>
@@ -695,16 +951,22 @@ function IndexPlotCard({
   rows,
   parameterLimit,
   gbLimit,
+  excludeClosedSource,
   onParameterLimitChange,
   onGbLimitChange,
+  onExcludeClosedSourceChange,
+  onOpenModel,
 }: {
   title: string;
   subtitle: string;
   rows: LeaderboardRow[];
   parameterLimit: string;
   gbLimit: string;
+  excludeClosedSource: boolean;
   onParameterLimitChange: (value: string) => void;
   onGbLimitChange: (value: string) => void;
+  onExcludeClosedSourceChange: (value: boolean) => void;
+  onOpenModel: (row: LeaderboardRow) => void;
 }) {
   const maxScore = Math.max(...rows.map((row) => numeric(row.model_intelligence_score) ?? 0), 0.01);
   return (
@@ -732,6 +994,16 @@ function IndexPlotCard({
               ))}
             </select>
           </label>
+          <label>
+            <span>Source</span>
+            <button
+              className={`index-filter-toggle ${excludeClosedSource ? "active" : ""}`}
+              type="button"
+              onClick={() => onExcludeClosedSourceChange(!excludeClosedSource)}
+            >
+              {excludeClosedSource ? "Closed source hidden" : "Exclude closed source"}
+            </button>
+          </label>
         </div>
       </div>
       <div className="index-plot-list" aria-label={title}>
@@ -740,10 +1012,13 @@ function IndexPlotCard({
           const score = numeric(row.model_intelligence_score);
           const height = score === null ? 0 : Math.max(4, (score / maxScore) * 100);
           return (
-            <article
+            <button
               className={`index-plot-column ${rowToneClass(row)}`}
               key={`${title}-${row.variant_id}`}
+              type="button"
+              onClick={() => onOpenModel(row)}
               style={{ "--provider-color": providerColor(row) } as CSSProperties}
+              aria-label={`Open ${displayModelName(row)} details`}
             >
               <div className="index-column-track">
                 <span className="index-column-bar">
@@ -761,7 +1036,7 @@ function IndexPlotCard({
                 <b>{shortModelLabel(row)}</b>
                 <span>{quantizationLabel(row)} · {formatModelSize(row)}</span>
               </div>
-            </article>
+            </button>
           );
         })}
       </div>
@@ -881,20 +1156,284 @@ function CapabilityStrip({
 }
 
 function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
+  const [activeBenchmarkId, setActiveBenchmarkId] = useState(BENCHMARK_PAGES[0].id);
+  const activeBenchmark = BENCHMARK_PAGES.find((benchmark) => benchmark.id === activeBenchmarkId) ?? BENCHMARK_PAGES[0];
+  const [activeMetricId, setActiveMetricId] = useState(activeBenchmark.metrics[0].id);
+  const activeMetric = activeBenchmark.metrics.find((metric) => metric.id === activeMetricId) ?? activeBenchmark.metrics[0];
+
+  useEffect(() => {
+    setActiveMetricId((current) => {
+      const stillAvailable = activeBenchmark.metrics.some((metric) => metric.id === current);
+      return stillAvailable ? current : activeBenchmark.metrics[0].id;
+    });
+  }, [activeBenchmark.id]);
+
   return (
-    <section className="page-grid">
+    <section className="page-grid benchmarks-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Benchmark Barplots</p>
-          <h2>Capability by capability</h2>
+          <p className="eyebrow">Benchmark Pages</p>
+          <h2>Capability deep dives</h2>
         </div>
-        <p>Human labels are primary; benchmark names stay visible for reproducibility.</p>
+        <p>Choose a benchmark, then switch between its exported slices and diagnostic metrics.</p>
       </div>
-      {CAPABILITIES.map((capability) => (
-        <BenchmarkBarChart capability={capability} rows={rows} key={capability.id} />
-      ))}
+      <div className="benchmark-tabs" aria-label="Benchmark pages">
+        {BENCHMARK_PAGES.map((benchmark) => (
+          <button
+            className={benchmark.id === activeBenchmark.id ? "active" : ""}
+            key={benchmark.id}
+            type="button"
+            onClick={() => setActiveBenchmarkId(benchmark.id)}
+          >
+            <span>{benchmark.title}</span>
+            <small>{benchmark.subtitle}</small>
+          </button>
+        ))}
+      </div>
+      <BenchmarkDetailPage
+        benchmark={activeBenchmark}
+        activeMetric={activeMetric}
+        onMetricChange={setActiveMetricId}
+        rows={rows}
+      />
     </section>
   );
+}
+
+function BenchmarkDetailPage({
+  benchmark,
+  activeMetric,
+  onMetricChange,
+  rows,
+}: {
+  benchmark: BenchmarkPageConfig;
+  activeMetric: BenchmarkMetric;
+  onMetricChange: (id: string) => void;
+  rows: LeaderboardRow[];
+}) {
+  return (
+    <section className="benchmark-detail">
+      <div className="benchmark-detail-heading">
+        <div>
+          <p className="eyebrow">{benchmark.badge}</p>
+          <h3>{benchmark.title}</h3>
+          <p>{benchmark.subtitle} · {benchmark.capability}</p>
+        </div>
+        <div className="metric-tabs" aria-label={`${benchmark.title} metrics`}>
+          {benchmark.metrics.map((metric) => (
+            <button
+              className={metric.id === activeMetric.id ? "active" : ""}
+              type="button"
+              key={metric.id}
+              onClick={() => onMetricChange(metric.id)}
+            >
+              {metric.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <BenchmarkTopPlot benchmark={benchmark} metric={activeMetric} rows={rows} />
+      <div className="benchmark-small-multiples">
+        {benchmark.metrics
+          .filter((metric) => metric.id !== activeMetric.id)
+          .map((metric) => (
+            <BenchmarkMiniPlot benchmark={benchmark} metric={metric} rows={rows} key={`${benchmark.id}-${metric.id}`} />
+          ))}
+      </div>
+      {benchmark.id === "global-mmlu-lite" && <GlobalMMLULanguageSection rows={rows} />}
+    </section>
+  );
+}
+
+function GlobalMMLULanguageSection({ rows }: { rows: LeaderboardRow[] }) {
+  const languageCodes = useMemo(() => {
+    const codes = new Set<string>();
+    rows.forEach((row) => {
+      row.global_mmlu_lite_language_scores?.forEach((score) => {
+        if (score.language && score.accuracy !== null) {
+          codes.add(score.language);
+        }
+      });
+    });
+    return Array.from(codes).sort((a, b) => languageLabel(a).localeCompare(languageLabel(b)));
+  }, [rows]);
+  const [selectedLanguage, setSelectedLanguage] = useState("all");
+  const shownLanguages =
+    selectedLanguage === "all" ? languageCodes : languageCodes.filter((language) => language === selectedLanguage);
+
+  useEffect(() => {
+    if (selectedLanguage !== "all" && !languageCodes.includes(selectedLanguage)) {
+      setSelectedLanguage("all");
+    }
+  }, [languageCodes, selectedLanguage]);
+
+  if (!languageCodes.length) {
+    return (
+      <p className="benchmark-data-note">
+        No exported language-level Global MMLU Lite rows are available yet for the current results file.
+      </p>
+    );
+  }
+
+  return (
+    <section className="language-section">
+      <div className="benchmark-plot-title">
+        <div>
+          <h4>Language breakdown</h4>
+          <p>Top models by Global MMLU Lite language slice.</p>
+        </div>
+        <label className="language-filter">
+          <span>Language</span>
+          <select value={selectedLanguage} onChange={(event) => setSelectedLanguage(event.target.value)}>
+            <option value="all">All languages</option>
+            {languageCodes.map((language) => (
+              <option value={language} key={language}>
+                {languageLabel(language)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="language-grid">
+        {shownLanguages.map((language) => (
+          <GlobalMMLULanguagePlot rows={rows} language={language} key={language} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GlobalMMLULanguagePlot({ rows, language }: { rows: LeaderboardRow[]; language: string }) {
+  const items = rows
+    .map((row) => {
+      const score = row.global_mmlu_lite_language_scores?.find((item) => item.language === language);
+      return { row, score, value: numeric(score?.accuracy) };
+    })
+    .filter((item): item is { row: LeaderboardRow; score: GlobalMMLULanguageScore; value: number } => item.value !== null)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8);
+  const max = Math.max(...items.map((item) => item.value), 0.01);
+
+  return (
+    <article className="language-card">
+      <div className="language-card-heading">
+        <h5>{languageLabel(language)}</h5>
+        <span>{language.toUpperCase()}</span>
+      </div>
+      <div className="language-column-plot">
+        {items.length ? items.map(({ row, score, value }) => (
+          <button
+            className={`language-column ${rowToneClass(row)}`}
+            key={`${language}-${row.variant_id}`}
+            type="button"
+            title={`${displayModelName(row)} · ${formatPercent(value)} · ${formatLanguageCounts(score)}`}
+          >
+            <div className="language-column-track">
+              <i
+                style={{
+                  height: `${Math.max(5, (value / max) * 100)}%`,
+                  background: providerColor(row),
+                }}
+              />
+              <b>{Math.round(value * 100)}</b>
+            </div>
+            <LabIcon row={row} />
+            <small>{shortModelLabel(row)}</small>
+          </button>
+        )) : <span className="empty-note">n/a</span>}
+      </div>
+    </article>
+  );
+}
+
+function BenchmarkTopPlot({
+  benchmark,
+  metric,
+  rows,
+}: {
+  benchmark: BenchmarkPageConfig;
+  metric: BenchmarkMetric;
+  rows: LeaderboardRow[];
+}) {
+  const items = benchmarkMetricItems(rows, metric).slice(0, 12);
+  const max = Math.max(...items.map((item) => item.value), 0.01);
+  return (
+    <section className="benchmark-top-plot">
+      <div className="benchmark-plot-title">
+        <div>
+          <h4>{metric.label}</h4>
+          <p>{benchmark.subtitle} · Top completed rows</p>
+        </div>
+        <span>{metric.kind === "error" ? "Lower is better" : "Higher is better"}</span>
+      </div>
+      <div className="benchmark-column-plot">
+        {items.length ? items.map(({ row, value }) => (
+          <button
+            className={`benchmark-column ${rowToneClass(row)}`}
+            type="button"
+            key={`${benchmark.id}-${metric.id}-${row.variant_id}`}
+            style={{ "--provider-color": providerColor(row) } as CSSProperties}
+            title={`${displayModelName(row)} · ${formatPercent(value)}`}
+          >
+            <div className="benchmark-column-track">
+              <span
+                style={{
+                  height: `${Math.max(4, (value / max) * 100)}%`,
+                  background: metric.kind === "error" ? "var(--orange)" : providerColor(row),
+                }}
+              />
+              <b>{formatPercent(value)}</b>
+            </div>
+            <LabIcon row={row} />
+            <strong>{shortModelLabel(row)}</strong>
+            <small>{quantizationLabel(row)}</small>
+          </button>
+        )) : <p className="empty-note">No completed rows for this metric yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function BenchmarkMiniPlot({
+  benchmark,
+  metric,
+  rows,
+}: {
+  benchmark: BenchmarkPageConfig;
+  metric: BenchmarkMetric;
+  rows: LeaderboardRow[];
+}) {
+  const items = benchmarkMetricItems(rows, metric).slice(0, 8);
+  const max = Math.max(...items.map((item) => item.value), 0.01);
+  return (
+    <article className="benchmark-mini-card">
+      <h4>{metric.label}</h4>
+      <p>{benchmark.subtitle}</p>
+      <div className="mini-column-plot">
+        {items.length ? items.map(({ row, value }) => (
+          <span
+            className="mini-column"
+            key={`${benchmark.id}-${metric.id}-mini-${row.variant_id}`}
+            title={`${displayModelName(row)} · ${formatPercent(value)}`}
+          >
+            <i
+              style={{
+                height: `${Math.max(5, (value / max) * 100)}%`,
+                background: metric.kind === "error" ? "var(--orange)" : providerColor(row),
+              }}
+            />
+          </span>
+        )) : <span className="empty-note">n/a</span>}
+      </div>
+    </article>
+  );
+}
+
+function benchmarkMetricItems(rows: LeaderboardRow[], metric: BenchmarkMetric) {
+  return rows
+    .map((row) => ({ row, value: numeric(row[metric.metric]) }))
+    .filter((item): item is { row: LeaderboardRow; value: number } => item.value !== null)
+    .sort((a, b) => metric.kind === "error" ? a.value - b.value : b.value - a.value);
 }
 
 function BenchmarkBarChart({ capability, rows }: { capability: Capability; rows: LeaderboardRow[] }) {
@@ -1088,9 +1627,21 @@ function EfficiencyBars({ rows }: { rows: LeaderboardRow[] }) {
   );
 }
 
-function ModelsPage({ rows, allRows }: { rows: LeaderboardRow[]; allRows: LeaderboardRow[] }) {
-  const [selectedRow, setSelectedRow] = useState<LeaderboardRow | null>(null);
+function ModelsPage({
+  rows,
+  allRows,
+  selectedModelId,
+  onSelectedModelIdChange,
+}: {
+  rows: LeaderboardRow[];
+  allRows: LeaderboardRow[];
+  selectedModelId: string | null;
+  onSelectedModelIdChange: (value: string | null) => void;
+}) {
   const tableRows = rows.length ? rows : allRows;
+  const selectedRow = selectedModelId
+    ? tableRows.find((row) => row.variant_id === selectedModelId) ?? null
+    : null;
   return (
     <section className="page-grid models-page">
       <div className="section-heading">
@@ -1118,7 +1669,7 @@ function ModelsPage({ rows, allRows }: { rows: LeaderboardRow[]; allRows: Leader
             <BenchmarkCoverage row={row} />
             <div className="registry-actions">
               <ModelSourceLink row={row} />
-              <button className="details-button" type="button" onClick={() => setSelectedRow(row)}>
+              <button className="details-button" type="button" onClick={() => onSelectedModelIdChange(row.variant_id)}>
                 <Info size={14} aria-hidden="true" />
                 Details
               </button>
@@ -1127,7 +1678,7 @@ function ModelsPage({ rows, allRows }: { rows: LeaderboardRow[]; allRows: Leader
         ))}
       </div>
 
-      {selectedRow && <ModelDetailsDrawer row={selectedRow} onClose={() => setSelectedRow(null)} />}
+      {selectedRow && <ModelDetailsDrawer row={selectedRow} onClose={() => onSelectedModelIdChange(null)} />}
 
       <div className="section-heading compact">
         <div>
@@ -1440,7 +1991,12 @@ function applyFilters(rows: LeaderboardRow[], filters: Filters) {
   });
 }
 
-function topIndexRows(rows: LeaderboardRow[], parameterLimit: string, gbLimit: string) {
+function topIndexRows(
+  rows: LeaderboardRow[],
+  parameterLimit: string,
+  gbLimit: string,
+  excludeClosedSource: boolean,
+) {
   const maxParameters = parameterLimit === "all" ? null : Number(parameterLimit);
   const maxGb = gbLimit === "all" ? null : Number(gbLimit);
   return rows
@@ -1451,6 +2007,7 @@ function topIndexRows(rows: LeaderboardRow[], parameterLimit: string, gbLimit: s
       return (
         score !== null &&
         score > 0 &&
+        (!excludeClosedSource || !isHostedOpenAIRow(row)) &&
         (maxParameters === null || (parameters !== null && parameters <= maxParameters)) &&
         (maxGb === null || (size !== null && size <= maxGb))
       );
@@ -1831,6 +2388,16 @@ function humanizeColumn(value: string) {
 
 function formatPercent(value?: number | null) {
   return value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${(value * 100).toFixed(1)}%`;
+}
+
+function languageLabel(language: string) {
+  return GLOBAL_MMLU_LANGUAGE_LABELS[language] ?? language.toUpperCase();
+}
+
+function formatLanguageCounts(score: GlobalMMLULanguageScore) {
+  if (score.correct === null || score.correct === undefined || !score.total) return "sample count n/a";
+  const invalid = score.invalid ? ` · ${score.invalid} invalid` : "";
+  return `${score.correct}/${score.total}${invalid}`;
 }
 
 function formatPoints(value?: number | null) {
