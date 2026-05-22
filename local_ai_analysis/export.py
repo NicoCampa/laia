@@ -14,6 +14,7 @@ def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
     try:
         db.init_schema()
         language_breakdowns = _global_mmlu_language_breakdowns(db)
+        rgb_language_breakdowns = _rgb_language_breakdowns(db)
         rows = []
         for row in db.leaderboard_rows():
             if not (
@@ -34,6 +35,11 @@ def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
             )
             if language_breakdown:
                 public["global_mmlu_lite_language_scores"] = language_breakdown
+            rgb_language_breakdown = rgb_language_breakdowns.get(
+                (str(row.get("variant_id")), str(row.get("run_uuid")))
+            )
+            if rgb_language_breakdown:
+                public["rgb_language_scores"] = rgb_language_breakdown
             rows.append(public)
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -264,3 +270,138 @@ def _global_mmlu_sample_counts(
             bucket["correct"] += int(bool(record.get("correct")))
             bucket["invalid"] += int(bool(record.get("invalid")))
     return counts
+
+
+def _rgb_language_breakdowns(
+    db: LocalAIAnalysisDB,
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    rows = db.conn.execute(
+        """
+        SELECT r.variant_id, br.run_uuid, r.raw_json
+        FROM benchmark_result r
+        JOIN benchmark_run br ON r.run_id = br.id
+        WHERE r.metric_name = 'rgb_all_rate'
+        """
+    ).fetchall()
+    breakdowns: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for variant_id, run_uuid, raw_json in rows:
+        try:
+            raw = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+        except json.JSONDecodeError:
+            continue
+        summary = raw.get("summary") if isinstance(raw, dict) else None
+        if not isinstance(summary, dict):
+            continue
+
+        language_scores = _rgb_suite_language_scores(summary)
+        if not language_scores:
+            language_scores = _rgb_single_language_scores(summary)
+        if language_scores:
+            breakdowns[(str(variant_id), str(run_uuid))] = language_scores
+    return breakdowns
+
+
+RGB_COMPONENT_WEIGHTS = {
+    "noise_robustness": 0.30,
+    "negative_rejection": 0.25,
+    "information_integration": 0.25,
+    "error_detection": 0.20,
+}
+
+
+def _rgb_suite_language_scores(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    suite_cases = summary.get("suite_cases")
+    if not isinstance(suite_cases, list):
+        return []
+
+    by_language: dict[str, dict[str, Any]] = {}
+    for case in suite_cases:
+        if not isinstance(case, dict):
+            continue
+        language = _rgb_language(case.get("language") or case.get("dataset"))
+        component = str(case.get("component") or "")
+        score = _to_float(case.get("score"))
+        if not language or not component or score is None:
+            continue
+        total = int(_to_float(case.get("total")) or 0)
+        bucket = by_language.setdefault(
+            language,
+            {
+                "total": 0,
+                "component_scores": {},
+                "component_totals": {},
+            },
+        )
+        bucket["total"] += total
+        component_scores = bucket["component_scores"].setdefault(
+            component,
+            {"weighted_score": 0.0, "total": 0},
+        )
+        weight = total or 1
+        component_scores["weighted_score"] += score * weight
+        component_scores["total"] += weight
+        bucket["component_totals"][component] = bucket["component_totals"].get(component, 0) + total
+
+    language_scores: list[dict[str, Any]] = []
+    for language, bucket in by_language.items():
+        components: dict[str, float] = {}
+        weighted_sum = 0.0
+        covered_weight = 0.0
+        for component, values in bucket["component_scores"].items():
+            total = values["total"]
+            if not total:
+                continue
+            component_score = values["weighted_score"] / total
+            components[component] = component_score
+            component_weight = RGB_COMPONENT_WEIGHTS.get(component, 0.0)
+            weighted_sum += component_score * component_weight
+            covered_weight += component_weight
+        if not components or covered_weight == 0:
+            continue
+        language_scores.append(
+            {
+                "language": language,
+                "accuracy": weighted_sum / covered_weight,
+                "total": bucket["total"],
+                "components": components,
+                "component_totals": bucket["component_totals"],
+            }
+        )
+
+    return sorted(language_scores, key=lambda score: str(score["language"]))
+
+
+def _rgb_single_language_scores(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    language = _rgb_language(summary.get("rgb_language") or summary.get("rgb_dataset"))
+    score = _to_float(_first_present(summary.get("rgb_all_rate"), summary.get("rgb_accuracy")))
+    if not language or score is None:
+        return []
+    return [
+        {
+            "language": language,
+            "accuracy": score,
+            "total": _to_float(summary.get("total")),
+        }
+    ]
+
+
+def _rgb_language(value: Any) -> str | None:
+    text = str(value or "").lower()
+    if text in {"en", "english"} or text.startswith("en_") or "_en" in text:
+        return "en"
+    if text in {"zh", "chinese", "cn"} or text.startswith("zh_") or "_zh" in text:
+        return "zh"
+    return None
+
+
+def _to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_present(*values: Any) -> Any:
+    return next((value for value in values if value is not None), None)

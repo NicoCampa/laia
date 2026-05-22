@@ -2,10 +2,8 @@ import {
   BarChart3,
   BookOpen,
   Braces,
-  Brain,
   Code2,
   Database,
-  Eye,
   FileText,
   Gauge,
   Info,
@@ -13,7 +11,6 @@ import {
   Lightbulb,
   LightbulbOff,
   Search,
-  ShieldCheck,
   Table2,
   X,
 } from "lucide-react";
@@ -64,22 +61,39 @@ type LeaderboardRow = {
   benchmark_prompt_tokens?: number | null;
   benchmark_completion_tokens?: number | null;
   benchmark_reasoning_tokens?: number | null;
+  benchmark_input_cost_usd?: number | null;
+  benchmark_output_cost_usd?: number | null;
   benchmark_total_cost_usd?: number | null;
+  benchmark_avg_latency_seconds?: number | null;
+  benchmark_p50_latency_seconds?: number | null;
   benchmark_p95_latency_seconds?: number | null;
+  benchmark_time_to_first_token_seconds?: number | null;
+  benchmark_inter_token_latency_seconds?: number | null;
+  benchmark_end_to_end_latency_seconds?: number | null;
   benchmark_output_tokens_per_second?: number | null;
+  benchmark_total_tokens_per_second?: number | null;
+  benchmark_system_output_throughput_tokens_per_second?: number | null;
   benchmark_truncated_rate?: number | null;
   benchmark_truncated_count?: number | null;
+  started_at?: string | null;
   global_mmlu_lite_language_scores?: GlobalMMLULanguageScore[] | null;
+  rgb_language_scores?: RGBLanguageScore[] | null;
+  merged_run_count?: number | null;
 };
 
-type GlobalMMLULanguageScore = {
+type LanguageBreakdownScore = {
   language: string;
   accuracy: number | null;
   correct?: number | null;
   total?: number | null;
   invalid?: number | null;
   invalid_rate?: number | null;
+  components?: Record<string, number | null>;
+  component_totals?: Record<string, number | null>;
 };
+
+type GlobalMMLULanguageScore = LanguageBreakdownScore;
+type RGBLanguageScore = LanguageBreakdownScore;
 
 type Payload = {
   generated_at: string;
@@ -115,6 +129,14 @@ const PAGE_LABELS: Record<Page, string> = {
   methodology: "Methodology",
 };
 
+const PAGE_COPY: Record<Page, string> = {
+  leaderboard: "Rank local and hosted models by the text-only LAIA Index and its five capability scores.",
+  benchmarks: "Inspect each benchmark slice, language group, category, and diagnostic metric.",
+  efficiency: "Compare score, footprint, quantization, and points per GB for local deployment choices.",
+  models: "Browse every model version with source links, benchmark coverage, run metadata, and raw metrics.",
+  methodology: "Understand the LAIA formula, included benchmarks, excluded judge and vision metrics, and reproducibility settings.",
+};
+
 const emptyFilters: Filters = {
   query: "",
   family: "all",
@@ -140,10 +162,10 @@ const INDEX_GB_LIMITS = [
 ];
 
 const LEADERBOARD_CHAPTERS = [
-  { id: "leaderboard-overview", label: "Overview" },
-  { id: "leaderboard-formula", label: "LAIA Formula" },
-  { id: "leaderboard-landscape", label: "Model Landscape" },
-  { id: "leaderboard-rankings", label: "Rankings" },
+  { id: "leaderboard-landscape", label: "Footprint" },
+  { id: "leaderboard-formula", label: "Formula" },
+  { id: "leaderboard-insights", label: "Insights" },
+  { id: "leaderboard-operations", label: "Run Signals" },
 ];
 
 type BenchmarkMetric = {
@@ -294,6 +316,39 @@ const GLOBAL_MMLU_LANGUAGE_LABELS: Record<string, string> = {
   zh: "Chinese",
 };
 
+const GLOBAL_MMLU_LANGUAGE_REGIONS = [
+  {
+    id: "europe",
+    label: "Europe",
+    languages: ["cy", "de", "en", "es", "fr", "it", "pt", "sq"],
+  },
+  {
+    id: "east-asia",
+    label: "East Asia",
+    languages: ["ja", "ko", "zh"],
+  },
+  {
+    id: "south-asia",
+    label: "South Asia",
+    languages: ["bn", "hi"],
+  },
+  {
+    id: "africa",
+    label: "Africa",
+    languages: ["sw", "yo"],
+  },
+  {
+    id: "middle-east",
+    label: "Middle East",
+    languages: ["ar"],
+  },
+  {
+    id: "southeast-asia",
+    label: "Southeast Asia",
+    languages: ["id", "my"],
+  },
+] as const;
+
 const TEXT_CAPABILITIES: Capability[] = [
   {
     id: "knowledge",
@@ -352,40 +407,14 @@ const TEXT_CAPABILITIES: Capability[] = [
   },
 ];
 
-const EXTRA_CAPABILITIES: Capability[] = [
-  {
-    id: "vision",
-    label: "Vision",
-    benchmark: "MMMU + OCRBench v2",
-    metricLabel: "Average score",
-    icon: <Eye size={16} />,
-    value: (row) => averageMetric(row, ["ocrbench_v2_micro_score", "mmmu_accuracy"]),
-    description: "Multimodal visual reasoning and OCR understanding.",
-    includedInLaia: false,
-  },
-  {
-    id: "factuality",
-    label: "Factuality",
-    benchmark: "SimpleQA",
-    metricLabel: "F1",
-    icon: <Brain size={16} />,
-    value: (row) => numeric(row.simpleqa_f1),
-    description: "Short-answer factuality scored with a judge.",
-    includedInLaia: false,
-  },
-  {
-    id: "safety",
-    label: "Safety",
-    benchmark: "HarmBench",
-    metricLabel: "Refusal rate",
-    icon: <ShieldCheck size={16} />,
-    value: (row) => numeric(row.harmbench_refusal_rate),
-    description: "Refusal behavior on harmful requests.",
-    includedInLaia: false,
-  },
-];
+const RGB_COMPONENT_LABELS: Record<string, string> = {
+  noise_robustness: "Noise",
+  negative_rejection: "Rejection",
+  information_integration: "Integration",
+  error_detection: "Error detection",
+};
 
-const CAPABILITIES = [...TEXT_CAPABILITIES, ...EXTRA_CAPABILITIES];
+const CAPABILITIES = TEXT_CAPABILITIES;
 
 const LAIA_INDEX_WEIGHTS = {
   global_mmlu_lite_pass_at_1: 0.2,
@@ -401,20 +430,77 @@ const MERGED_BENCHMARK_METRICS = [
   "global_mmlu_lite_invalid_rate",
   "ifbench_prompt_level_loose",
   "ifbench_instruction_level_loose",
+  "ifbench_prompt_level_strict",
+  "ifbench_instruction_level_strict",
   "bfcl_v4_selected_accuracy",
   "bfcl_v4_invalid_rate",
+  "bfcl_v4_non_live_accuracy",
+  "bfcl_v4_live_accuracy",
+  "bfcl_v4_multi_turn_accuracy",
+  "bfcl_v4_agentic_accuracy",
   "ocrbench_v2_score",
   "ocrbench_v2_micro_score",
+  "ocrbench_v2_en_score",
+  "ocrbench_v2_cn_score",
   "mmmu_accuracy",
+  "mmmu_invalid_rate",
+  "mmmu_multiple_choice_accuracy",
+  "mmmu_open_accuracy",
   "mbpp_pass_at_1",
   "mbpp_invalid_rate",
+  "mbpp_compile_rate",
+  "mbpp_runtime_error_rate",
   "rgb_all_rate",
   "rgb_rejection_rate",
   "rgb_fact_check_rate",
   "rgb_error_correction_rate",
   "simpleqa_f1",
+  "simpleqa_correct_rate",
+  "simpleqa_incorrect_rate",
+  "simpleqa_hallucination_rate",
+  "simpleqa_not_attempted_rate",
+  "simpleqa_accuracy_given_attempted",
+  "harmbench_attack_success_rate",
   "harmbench_refusal_rate",
 ] satisfies Array<keyof LeaderboardRow>;
+
+const RUN_SIGNAL_SUM_FIELDS = [
+  "benchmark_runtime_seconds",
+  "benchmark_samples",
+  "benchmark_total_tokens",
+  "benchmark_prompt_tokens",
+  "benchmark_completion_tokens",
+  "benchmark_reasoning_tokens",
+  "benchmark_truncated_count",
+  "benchmark_input_cost_usd",
+  "benchmark_output_cost_usd",
+  "benchmark_total_cost_usd",
+] satisfies Array<keyof LeaderboardRow>;
+
+const RUN_SIGNAL_MAX_FIELDS = [
+  "benchmark_p50_latency_seconds",
+  "benchmark_p95_latency_seconds",
+  "benchmark_time_to_first_token_seconds",
+  "benchmark_inter_token_latency_seconds",
+  "benchmark_end_to_end_latency_seconds",
+  "benchmark_system_output_throughput_tokens_per_second",
+] satisfies Array<keyof LeaderboardRow>;
+
+const RAW_SCORE_COLUMNS = new Set<keyof LeaderboardRow>([
+  "model_intelligence_score",
+  ...MERGED_BENCHMARK_METRICS,
+]);
+
+const RAW_ERROR_COLUMNS = new Set<keyof LeaderboardRow>([
+  "benchmark_truncated_rate",
+  "global_mmlu_lite_invalid_rate",
+  "bfcl_v4_invalid_rate",
+  "mbpp_invalid_rate",
+  "mbpp_runtime_error_rate",
+  "mmmu_invalid_rate",
+  "simpleqa_hallucination_rate",
+  "harmbench_attack_success_rate",
+]);
 
 const RAW_TABLE_COLUMNS = [
   "variant_name",
@@ -427,10 +513,6 @@ const RAW_TABLE_COLUMNS = [
   "bfcl_v4_selected_accuracy",
   "mbpp_pass_at_1",
   "rgb_all_rate",
-  "ocrbench_v2_micro_score",
-  "mmmu_accuracy",
-  "simpleqa_f1",
-  "harmbench_refusal_rate",
   "benchmark_samples",
   "benchmark_runtime_seconds",
   "benchmark_total_tokens",
@@ -457,7 +539,7 @@ export function App() {
 
   const rawRows = payload?.leaderboard ?? [];
   const publishableRows = useMemo(
-    () => rawRows.filter((row) => !isSyntheticRow(row) && !isSmokeRow(row)),
+    () => rawRows.filter((row) => !isSyntheticRow(row) && !isSmokeRow(row) && !isSmolLM2Row(row)),
     [rawRows],
   );
   const comparableRows = useMemo(() => buildComparableRows(publishableRows), [publishableRows]);
@@ -481,18 +563,17 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <SiteHeader generatedAt={payload.generated_at} page={page} onNavigate={setPage} />
+      <SiteHeader page={page} onNavigate={setPage} />
 
-      <section className="hero-band">
-        <div>
-          <p className="eyebrow">Local AI Analysis</p>
-          <h1>{PAGE_LABELS[page]}</h1>
-          <p>
-            Compare local and hosted models by LAIA Index, benchmark coverage, quantization, and
-            reproducible run metadata. Updated {formatDate(payload.generated_at)}.
-          </p>
-        </div>
-      </section>
+      {page !== "leaderboard" && (
+        <section className="hero-band">
+          <div>
+            <p className="eyebrow">Local AI Analysis</p>
+            <h1>{PAGE_LABELS[page]}</h1>
+            <p>{PAGE_COPY[page]}</p>
+          </div>
+        </section>
+      )}
 
       {page === "models" && (
         <FilterPanel filters={filters} options={options} onChange={setFilters} />
@@ -511,8 +592,8 @@ export function App() {
       {page === "efficiency" && <EfficiencyPage rows={leaderboardRows} />}
       {page === "models" && (
         <ModelsPage
-          rows={leaderboardRows}
-          allRows={publishableRows}
+          rows={filteredRows}
+          allRows={comparableRows}
           selectedModelId={selectedModelId}
           onSelectedModelIdChange={setSelectedModelId}
         />
@@ -538,11 +619,9 @@ function StateShell({ title, detail }: { title: string; detail: string }) {
 }
 
 function SiteHeader({
-  generatedAt,
   page,
   onNavigate,
 }: {
-  generatedAt: string;
   page: Page;
   onNavigate: (page: Page) => void;
 }) {
@@ -565,7 +644,6 @@ function SiteHeader({
           </button>
         ))}
       </nav>
-      <time dateTime={generatedAt}>Updated {formatDate(generatedAt)}</time>
     </header>
   );
 }
@@ -670,63 +748,52 @@ function LeaderboardPage({
     () => topIndexRows(rows, parameterLimit, gbLimit, excludeClosedSource),
     [rows, parameterLimit, gbLimit, excludeClosedSource],
   );
-  const maxModelSize = useMemo(
-    () => Math.max(...rows.map(modelSizeGb).filter((size): size is number => size !== null), 0.01),
-    [rows],
-  );
+  const completedRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
+  const topRow = chartRows[0] ?? rows[0] ?? null;
 
   return (
-    <section className="leaderboard-shell">
-      <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
-      <div className="page-grid leaderboard-view">
-        <section className="chapter-section" id="leaderboard-overview">
-          <div className="highlights-heading">
-            <h2>Highlights</h2>
+    <>
+      <section className="leaderboard-landing">
+        <div className="leaderboard-landing-copy">
+          <p className="eyebrow">Local AI Analysis</p>
+          <h1>Local model intelligence, measured on your machine.</h1>
+          <p>
+            A public benchmark for small and local models, centered on a text-only LAIA Index
+            across knowledge, instructions, tools, coding, and grounding.
+          </p>
+          <div className="landing-proof" aria-label="Leaderboard summary">
+            <span><b>{completedRows.length}</b> scored rows</span>
+            <span><b>{topRow ? formatIndexNumber(numeric(topRow.model_intelligence_score) ?? 0) : "n/a"}</b> top score</span>
+            <span><b>5</b> text capabilities</span>
           </div>
-          <div className="highlight-grid single-highlight">
-            <IndexPlotCard
-              title="Intelligence Index"
-              subtitle="Text intelligence points · Higher is better"
-              rows={chartRows}
-              parameterLimit={parameterLimit}
-              gbLimit={gbLimit}
-              excludeClosedSource={excludeClosedSource}
-              onParameterLimitChange={setParameterLimit}
-              onGbLimitChange={setGbLimit}
-              onExcludeClosedSourceChange={setExcludeClosedSource}
-              onOpenModel={onOpenModel}
-            />
-          </div>
-          <ProviderLegend rows={rows} />
-        </section>
+        </div>
+        <IndexPlotCard
+          title="Intelligence Index"
+          subtitle="Text intelligence points · Higher is better"
+          rows={chartRows}
+          parameterLimit={parameterLimit}
+          gbLimit={gbLimit}
+          excludeClosedSource={excludeClosedSource}
+          onParameterLimitChange={setParameterLimit}
+          onGbLimitChange={setGbLimit}
+          onExcludeClosedSourceChange={setExcludeClosedSource}
+          onOpenModel={onOpenModel}
+        />
+      </section>
 
-        <section className="chapter-section" id="leaderboard-formula">
-          <LaiaFormulaNote />
-        </section>
+      <section className="leaderboard-shell">
+        <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
+        <div className="page-grid leaderboard-view">
+          <LandscapeSection rows={rows} />
 
-        <LandscapeSection rows={rows} />
+          <section className="chapter-section" id="leaderboard-formula">
+            <LaiaFormulaNote />
+          </section>
 
-        <section className="chapter-section" id="leaderboard-rankings">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Capability Ranking</p>
-              <h2>Models ranked by LAIA Index</h2>
-            </div>
-            <p>Default view shows 4-bit local rows and hosted OpenAI references.</p>
-          </div>
-          <div className="ranking-list">
-            {rows.map((row, index) => (
-              <LeaderboardRowCard
-                row={row}
-                rank={index + 1}
-                maxModelSizeGb={maxModelSize}
-                key={row.normalized_result_id ?? row.variant_id}
-              />
-            ))}
-          </div>
-        </section>
-      </div>
-    </section>
+          <LeaderboardInsights rows={rows} onOpenModel={onOpenModel} />
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -790,7 +857,7 @@ function LaiaFormulaNote() {
       {TEXT_CAPABILITIES.map((capability) => (
         <span key={capability.id}>{capability.label} {capability.weight} pts</span>
       ))}
-      <em>Judge and vision benchmarks are reported separately.</em>
+      <em>Judge and vision benchmarks are excluded from the public score.</em>
     </section>
   );
 }
@@ -819,6 +886,7 @@ function LandscapeSection({ rows }: { rows: LeaderboardRow[] }) {
 }
 
 function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const points = rows
     .map((row) => ({ row, x: modelSizeGb(row), y: numeric(row.model_intelligence_score) }))
     .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
@@ -832,6 +900,7 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
   const xFor = (x: number) => pad.left + (x / maxX) * plotW;
   const yFor = (y: number) => pad.top + plotH - (y / maxY) * plotH;
   const labeled = new Set([...points].sort((a, b) => b.y - a.y).slice(0, 7).map((p) => p.row.variant_id));
+  const hoveredPoint = points.find((point) => point.row.variant_id === hoveredId) ?? null;
 
   return (
     <article className="landscape-panel">
@@ -867,7 +936,21 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
           {points.map((point) => {
             const isLabeled = labeled.has(point.row.variant_id);
             return (
-              <g key={`landscape-${point.row.variant_id}`}>
+              <g
+                key={`landscape-${point.row.variant_id}`}
+                className={`scatter-node${hoveredId === point.row.variant_id ? " active" : ""}`}
+                tabIndex={0}
+                onMouseEnter={() => setHoveredId(point.row.variant_id)}
+                onMouseLeave={() => setHoveredId(null)}
+                onFocus={() => setHoveredId(point.row.variant_id)}
+                onBlur={() => setHoveredId(null)}
+              >
+                <circle
+                  className="scatter-hit-area"
+                  cx={xFor(point.x)}
+                  cy={yFor(point.y)}
+                  r={16}
+                />
                 <circle
                   className={`scatter-point quant-${quantizationTone(point.row)}`}
                   cx={xFor(point.x)}
@@ -886,6 +969,19 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
             );
           })}
         </svg>
+        {hoveredPoint && (
+          <div
+            className="scatter-tooltip"
+            style={{
+              left: `${(xFor(hoveredPoint.x) / width) * 100}%`,
+              top: `${(yFor(hoveredPoint.y) / height) * 100}%`,
+            }}
+          >
+            <strong>{displayModelName(hoveredPoint.row)}</strong>
+            <span>{formatPoints(hoveredPoint.y)} · {formatModelSize(hoveredPoint.row)}</span>
+            <small>{providerLabel(hoveredPoint.row)} · {quantizationLabel(hoveredPoint.row)}</small>
+          </div>
+        )}
       </div>
     </article>
   );
@@ -924,6 +1020,319 @@ function CompactEfficiencyRanking({ rows }: { rows: LeaderboardRow[] }) {
             <div className="efficiency-bar"><span style={{ width: `${(value / max) * 100}%` }} /></div>
             <b>{value.toFixed(1)}</b>
           </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+type RunAggregate = {
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  reasoningTokens: number;
+  runtimeSeconds: number;
+  samples: number;
+  truncatedCount: number;
+  p95LatencySeconds: number | null;
+  outputTokensPerSecond: number | null;
+  latestStartedAt: string | null;
+  runCount: number;
+};
+
+type InsightItem = {
+  row: LeaderboardRow;
+  value: number;
+  detail?: string;
+};
+
+function isInsightItem(item: InsightItem | null): item is InsightItem {
+  return item !== null;
+}
+
+function LeaderboardInsights({
+  rows,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  const statsByKey = useMemo(() => runAggregates(rows), [rows]);
+  const scoredRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
+  const coverageRows = [...scoredRows].sort((a, b) => scoreForRank(b) - scoreForRank(a)).slice(0, 12);
+  const tokenItems: InsightItem[] = scoredRows
+    .flatMap((row) => {
+      const stats = runStatsForRow(row, statsByKey);
+      return stats.totalTokens > 0
+        ? [{ row, value: stats.totalTokens, detail: `${formatCount(stats.samples)} samples · ${stats.runCount} run${stats.runCount === 1 ? "" : "s"}` }]
+        : [];
+    })
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+  const latencyItems: InsightItem[] = scoredRows
+    .flatMap((row) => {
+      const stats = runStatsForRow(row, statsByKey);
+      return stats.p95LatencySeconds !== null
+        ? [{ row, value: stats.p95LatencySeconds, detail: `${formatCompactNumber(stats.totalTokens)} tokens observed` }]
+        : [];
+    })
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+  const truncationItems: InsightItem[] = scoredRows
+    .flatMap((row) => {
+      const stats = runStatsForRow(row, statsByKey);
+      return stats.truncatedCount > 0
+        ? [{ row, value: stats.truncatedCount, detail: `${formatCount(stats.samples)} samples inspected` }]
+        : [];
+    })
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
+  return (
+    <>
+      <section className="chapter-section insights-section" id="leaderboard-insights">
+        <div className="section-heading compact">
+          <div>
+            <p className="eyebrow">Benchmark Insight</p>
+            <h2>What the suite is actually measuring</h2>
+          </div>
+          <p>Coverage, run dates, token budget, and truncation make the headline score easier to trust.</p>
+        </div>
+        <div className="insight-grid two-column">
+          <CoverageHeatmap rows={coverageRows} onOpenModel={onOpenModel} />
+          <RunTimelineChart rows={scoredRows} statsByKey={statsByKey} onOpenModel={onOpenModel} />
+        </div>
+      </section>
+
+      <section className="chapter-section insights-section" id="leaderboard-operations">
+        <div className="section-heading compact">
+          <div>
+            <p className="eyebrow">Run Signals</p>
+            <h2>Cost of producing the leaderboard</h2>
+          </div>
+          <p>These charts expose practical benchmarking friction: tokens, slow runs, and outputs that hit limits.</p>
+        </div>
+        <div className="insight-grid three-column">
+          <InsightBarChart
+            title="Token budget"
+            subtitle="Total prompt + completion tokens seen in published runs."
+            items={tokenItems}
+            formatter={formatCompactNumber}
+            onOpenModel={onOpenModel}
+          />
+          <InsightBarChart
+            title="P95 latency"
+            subtitle="Slow-tail request latency. Lower is easier to run overnight."
+            items={latencyItems}
+            formatter={(value) => `${value.toFixed(value < 10 ? 1 : 0)}s`}
+            tone="latency"
+            onOpenModel={onOpenModel}
+          />
+          <InsightBarChart
+            title="Truncation watchlist"
+            subtitle="Runs where responses reached the configured output cap."
+            items={truncationItems}
+            formatter={(value) => `${Math.round(value)}`}
+            tone="truncation"
+            emptyLabel="No visible model reports truncated outputs."
+            onOpenModel={onOpenModel}
+          />
+        </div>
+      </section>
+    </>
+  );
+}
+
+function CoverageHeatmap({
+  rows,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  return (
+    <article className="insight-card coverage-card">
+      <div className="insight-card-heading">
+        <span className="metric-icon"><Table2 size={16} /></span>
+        <div>
+          <h3>Benchmark coverage</h3>
+          <p>Five LAIA components. Filled cells mean the selected metric exists for that model row.</p>
+        </div>
+      </div>
+      <div className="coverage-table" role="table" aria-label="LAIA benchmark coverage">
+        <div className="coverage-header" role="row">
+          <span>Model</span>
+          {TEXT_CAPABILITIES.map((capability) => <span key={`coverage-head-${capability.id}`}>{capability.label}</span>)}
+        </div>
+        {rows.map((row) => (
+          <button
+            className="coverage-model-row"
+            key={`coverage-row-${row.variant_id}`}
+            type="button"
+            style={{ "--provider-color": providerColor(row) } as CSSProperties}
+            onClick={() => onOpenModel(row)}
+          >
+            <span className="coverage-model-name">
+              <LabIcon row={row} />
+              <b>{shortModelLabel(row)}</b>
+            </span>
+            {TEXT_CAPABILITIES.map((capability) => {
+              const value = capability.value(row);
+              const filled = value !== null;
+              return (
+                <span
+                  className={`coverage-cell ${filled ? "complete" : "missing"}`}
+                  title={`${capability.label}: ${filled ? formatPercent(value) : "missing"}`}
+                  key={`coverage-${row.variant_id}-${capability.id}`}
+                >
+                  {filled ? formatIndexNumber(value) : "n/a"}
+                </span>
+              );
+            })}
+          </button>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function RunTimelineChart({
+  rows,
+  statsByKey,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  statsByKey: Map<string, RunAggregate>;
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  const points = rows
+    .map((row) => {
+      const stats = runStatsForRow(row, statsByKey);
+      const date = parseRunDate(stats.latestStartedAt ?? row.started_at ?? null);
+      const score = numeric(row.model_intelligence_score);
+      return date && score !== null ? { row, date, score } : null;
+    })
+    .filter((item): item is { row: LeaderboardRow; date: Date; score: number } => item !== null)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const width = 620;
+  const height = 300;
+  const pad = { top: 22, right: 24, bottom: 42, left: 48 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const times = points.map((point) => point.date.getTime());
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const maxScore = Math.max(...points.map((point) => point.score), 0.1);
+  const xFor = (time: number) => pad.left + (maxTime === minTime ? plotW / 2 : ((time - minTime) / (maxTime - minTime)) * plotW);
+  const yFor = (score: number) => pad.top + plotH - (score / maxScore) * plotH;
+  const labeled = new Set([...points].sort((a, b) => b.score - a.score).slice(0, 4).map((point) => point.row.variant_id));
+
+  return (
+    <article className="insight-card timeline-card">
+      <div className="insight-card-heading">
+        <span className="metric-icon"><BarChart3 size={16} /></span>
+        <div>
+          <h3>LAIA by run date</h3>
+          <p>Latest published run timestamp for each visible row. This is not a model release-date claim.</p>
+        </div>
+      </div>
+      {points.length < 2 ? (
+        <p className="empty-note">Not enough dated runs to draw a timeline.</p>
+      ) : (
+        <svg className="timeline-plot" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index by run date">
+          {[0, maxScore / 2, maxScore].map((tick) => (
+            <g key={`timeline-y-${tick}`}>
+              <line className="grid-line" x1={pad.left} x2={pad.left + plotW} y1={yFor(tick)} y2={yFor(tick)} />
+              <text className="axis-label" x={pad.left - 8} y={yFor(tick) + 4} textAnchor="end">
+                {formatIndexNumber(tick)}
+              </text>
+            </g>
+          ))}
+          {[minTime, (minTime + maxTime) / 2, maxTime].map((tick) => (
+            <text className="axis-label" x={xFor(tick)} y={height - 14} textAnchor="middle" key={`timeline-x-${tick}`}>
+              {formatShortDate(new Date(tick))}
+            </text>
+          ))}
+          <polyline
+            className="timeline-line"
+            points={points.map((point) => `${xFor(point.date.getTime())},${yFor(point.score)}`).join(" ")}
+          />
+          {points.map((point) => (
+            <g key={`timeline-point-${point.row.variant_id}`}>
+              <circle
+                className="timeline-hit"
+                cx={xFor(point.date.getTime())}
+                cy={yFor(point.score)}
+                r={12}
+                onClick={() => onOpenModel(point.row)}
+              >
+                <title>{displayModelName(point.row)} · {formatPoints(point.score)} · {formatShortDate(point.date)}</title>
+              </circle>
+              <circle
+                className="timeline-point"
+                cx={xFor(point.date.getTime())}
+                cy={yFor(point.score)}
+                r={labeled.has(point.row.variant_id) ? 6 : 4.5}
+                style={{ fill: providerColor(point.row) }}
+              />
+              {labeled.has(point.row.variant_id) && (
+                <text className="point-label" x={xFor(point.date.getTime()) + 8} y={yFor(point.score) - 8}>
+                  {shortModelLabel(point.row)}
+                </text>
+              )}
+            </g>
+          ))}
+        </svg>
+      )}
+    </article>
+  );
+}
+
+function InsightBarChart({
+  title,
+  subtitle,
+  items,
+  formatter,
+  tone = "tokens",
+  emptyLabel = "No visible data.",
+  onOpenModel,
+}: {
+  title: string;
+  subtitle: string;
+  items: InsightItem[];
+  formatter: (value: number) => string;
+  tone?: string;
+  emptyLabel?: string;
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  const max = Math.max(...items.map((item) => item.value), 0.01);
+  return (
+    <article className={`insight-card insight-${tone}`}>
+      <div className="insight-card-heading">
+        <span className="metric-icon"><Gauge size={16} /></span>
+        <div>
+          <h3>{title}</h3>
+          <p>{subtitle}</p>
+        </div>
+      </div>
+      <div className="insight-bar-list">
+        {items.length === 0 && <p className="empty-note">{emptyLabel}</p>}
+        {items.map((item, index) => (
+          <button
+            className="insight-bar-row"
+            type="button"
+            key={`${title}-${item.row.variant_id}`}
+            onClick={() => onOpenModel(item.row)}
+          >
+            <span className="bar-rank">{String(index + 1).padStart(2, "0")}</span>
+            <LabIcon row={item.row} />
+            <span className="insight-row-label">
+              <b>{shortModelLabel(item.row)}</b>
+              <small>{item.detail ?? `${quantizationLabel(item.row)} · ${formatModelSize(item.row)}`}</small>
+            </span>
+            <span className="insight-track"><i style={{ width: `${(item.value / max) * 100}%`, background: providerColor(item.row) }} /></span>
+            <strong>{formatter(item.value)}</strong>
+          </button>
         ))}
       </div>
     </article>
@@ -973,7 +1382,7 @@ function IndexPlotCard({
     <section className="index-plot-card intelligence-card">
       <div className="index-plot-heading">
         <div>
-          <p className="eyebrow">Top 10</p>
+          <p className="eyebrow">All models</p>
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
@@ -1001,7 +1410,7 @@ function IndexPlotCard({
               type="button"
               onClick={() => onExcludeClosedSourceChange(!excludeClosedSource)}
             >
-              {excludeClosedSource ? "Closed source hidden" : "Exclude closed source"}
+              {excludeClosedSource ? "Hosted hidden" : "Exclude hosted"}
             </button>
           </label>
         </div>
@@ -1102,6 +1511,43 @@ function CapabilityStrip({
   maxModelSizeGb?: number;
 }) {
   const size = modelSizeGb(row);
+  if (compact) {
+    const score = numeric(row.model_intelligence_score);
+    const capabilityItems = TEXT_CAPABILITIES.map((capability) => {
+      const value = numeric(capability.value(row));
+      return {
+        id: capability.id,
+        label: capability.label,
+        value,
+        display: formatPercent(value),
+      };
+    });
+
+    return (
+      <div className="capability-strip compact">
+        <div className="compact-score-line">
+          <span>LAIA</span>
+          <div className="compact-score-track" aria-label={`LAIA Index: ${formatPoints(score)}`}>
+            <i style={{ width: `${score === null ? 0 : Math.max(2, Math.min(100, score * 100))}%` }} />
+          </div>
+          <strong>{formatPoints(score)}</strong>
+        </div>
+        <div className="compact-metric-grid">
+          {capabilityItems.map((item) => (
+            <div className={`compact-metric ${item.value === null ? "missing" : ""}`} key={item.id}>
+              <span>{item.label}</span>
+              <b>{item.display}</b>
+            </div>
+          ))}
+          <div className={`compact-metric footprint ${size === null ? "missing" : ""}`}>
+            <span>GB</span>
+            <b>{size === null ? "n/a" : formatModelSize(row)}</b>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const items = [
     {
       id: "laia",
@@ -1156,17 +1602,45 @@ function CapabilityStrip({
 }
 
 function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
-  const [activeBenchmarkId, setActiveBenchmarkId] = useState(BENCHMARK_PAGES[0].id);
-  const activeBenchmark = BENCHMARK_PAGES.find((benchmark) => benchmark.id === activeBenchmarkId) ?? BENCHMARK_PAGES[0];
-  const [activeMetricId, setActiveMetricId] = useState(activeBenchmark.metrics[0].id);
-  const activeMetric = activeBenchmark.metrics.find((metric) => metric.id === activeMetricId) ?? activeBenchmark.metrics[0];
+  const visibleBenchmarks = useMemo(
+    () => BENCHMARK_PAGES
+      .filter((benchmark) => benchmark.badge === "LAIA")
+      .map((benchmark) => ({
+        ...benchmark,
+        metrics: benchmark.metrics.filter((metric) => metricHasData(rows, metric)),
+      }))
+      .filter((benchmark) => benchmark.metrics.length > 0),
+    [rows],
+  );
+  const [activeBenchmarkId, setActiveBenchmarkId] = useState(visibleBenchmarks[0]?.id ?? BENCHMARK_PAGES[0].id);
+  const activeBenchmark = visibleBenchmarks.find((benchmark) => benchmark.id === activeBenchmarkId) ?? visibleBenchmarks[0];
+  const [activeMetricId, setActiveMetricId] = useState(activeBenchmark?.metrics[0]?.id ?? "");
+  const activeMetric = activeBenchmark?.metrics.find((metric) => metric.id === activeMetricId) ?? activeBenchmark?.metrics[0];
 
   useEffect(() => {
+    if (!activeBenchmark) return;
+    setActiveBenchmarkId((current) => (
+      visibleBenchmarks.some((benchmark) => benchmark.id === current)
+        ? current
+        : activeBenchmark.id
+    ));
+  }, [activeBenchmark?.id, visibleBenchmarks]);
+
+  useEffect(() => {
+    if (!activeBenchmark) return;
     setActiveMetricId((current) => {
       const stillAvailable = activeBenchmark.metrics.some((metric) => metric.id === current);
       return stillAvailable ? current : activeBenchmark.metrics[0].id;
     });
-  }, [activeBenchmark.id]);
+  }, [activeBenchmark?.id, activeBenchmark?.metrics]);
+
+  if (!activeBenchmark || !activeMetric) {
+    return (
+      <section className="page-grid benchmarks-page">
+        <p className="empty-note">No completed LAIA benchmark metrics are available for the current filters.</p>
+      </section>
+    );
+  }
 
   return (
     <section className="page-grid benchmarks-page">
@@ -1178,7 +1652,7 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
         <p>Choose a benchmark, then switch between its exported slices and diagnostic metrics.</p>
       </div>
       <div className="benchmark-tabs" aria-label="Benchmark pages">
-        {BENCHMARK_PAGES.map((benchmark) => (
+        {visibleBenchmarks.map((benchmark) => (
           <button
             className={benchmark.id === activeBenchmark.id ? "active" : ""}
             key={benchmark.id}
@@ -1236,11 +1710,13 @@ function BenchmarkDetailPage({
       <div className="benchmark-small-multiples">
         {benchmark.metrics
           .filter((metric) => metric.id !== activeMetric.id)
+          .filter((metric) => metricHasData(rows, metric))
           .map((metric) => (
             <BenchmarkMiniPlot benchmark={benchmark} metric={metric} rows={rows} key={`${benchmark.id}-${metric.id}`} />
           ))}
       </div>
       {benchmark.id === "global-mmlu-lite" && <GlobalMMLULanguageSection rows={rows} />}
+      {benchmark.id === "rgb" && <RGBLanguageSection rows={rows} />}
     </section>
   );
 }
@@ -1258,6 +1734,15 @@ function GlobalMMLULanguageSection({ rows }: { rows: LeaderboardRow[] }) {
     return Array.from(codes).sort((a, b) => languageLabel(a).localeCompare(languageLabel(b)));
   }, [rows]);
   const [selectedLanguage, setSelectedLanguage] = useState("all");
+  const [rowLimit, setRowLimit] = useState("16");
+  const [breakdownMode, setBreakdownMode] = useState<"region" | "language">("region");
+  const visibleLimit = rowLimit === "all" ? null : Number(rowLimit);
+  const availableRegions = GLOBAL_MMLU_LANGUAGE_REGIONS
+    .map((region) => ({
+      ...region,
+      languages: region.languages.filter((language) => languageCodes.includes(language)),
+    }))
+    .filter((region) => region.languages.length > 0);
   const shownLanguages =
     selectedLanguage === "all" ? languageCodes : languageCodes.filter((language) => language === selectedLanguage);
 
@@ -1280,51 +1765,178 @@ function GlobalMMLULanguageSection({ rows }: { rows: LeaderboardRow[] }) {
       <div className="benchmark-plot-title">
         <div>
           <h4>Language breakdown</h4>
-          <p>Top models by Global MMLU Lite language slice.</p>
+          <p>
+            Global MMLU Lite language accuracy. Regional averages are diagnostic geographic groupings, not claims about
+            speakers or cultures.
+          </p>
         </div>
-        <label className="language-filter">
-          <span>Language</span>
-          <select value={selectedLanguage} onChange={(event) => setSelectedLanguage(event.target.value)}>
-            <option value="all">All languages</option>
-            {languageCodes.map((language) => (
-              <option value={language} key={language}>
-                {languageLabel(language)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="language-controls">
+          <label className="language-filter">
+            <span>View</span>
+            <select
+              value={breakdownMode}
+              onChange={(event) => setBreakdownMode(event.target.value as "region" | "language")}
+            >
+              <option value="region">Regions</option>
+              <option value="language">Languages</option>
+            </select>
+          </label>
+          <label className="language-filter">
+            <span>Language</span>
+            <select
+              value={selectedLanguage}
+              onChange={(event) => setSelectedLanguage(event.target.value)}
+              disabled={breakdownMode === "region"}
+            >
+              <option value="all">All languages</option>
+              {languageCodes.map((language) => (
+                <option value={language} key={language}>
+                  {languageLabel(language)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="language-filter">
+            <span>Rows</span>
+            <select value={rowLimit} onChange={(event) => setRowLimit(event.target.value)}>
+              <option value="8">Top 8</option>
+              <option value="16">Top 16</option>
+              <option value="all">All rows</option>
+            </select>
+          </label>
+        </div>
       </div>
-      <div className="language-grid">
-        {shownLanguages.map((language) => (
-          <GlobalMMLULanguagePlot rows={rows} language={language} key={language} />
-        ))}
-      </div>
+      {breakdownMode === "region" ? (
+        <div className="language-grid region-grid">
+          {availableRegions.map((region) => (
+            <GlobalMMLURegionPlot
+              rows={rows}
+              region={region}
+              limit={visibleLimit}
+              key={region.id}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className={`language-grid ${selectedLanguage !== "all" ? "single-language" : ""}`}>
+          {shownLanguages.map((language) => (
+            <GlobalMMLULanguagePlot rows={rows} language={language} limit={visibleLimit} key={language} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
-function GlobalMMLULanguagePlot({ rows, language }: { rows: LeaderboardRow[]; language: string }) {
-  const items = rows
+function GlobalMMLURegionPlot({
+  rows,
+  region,
+  limit,
+}: {
+  rows: LeaderboardRow[];
+  region: { id: string; label: string; languages: string[] };
+  limit: number | null;
+}) {
+  const allItems = rows
+    .flatMap((row) => {
+      const scores = region.languages
+        .map((language) => row.global_mmlu_lite_language_scores?.find((item) => item.language === language) ?? null)
+        .filter((score): score is GlobalMMLULanguageScore => score !== null && numeric(score.accuracy) !== null);
+      const values = scores.map((score) => numeric(score.accuracy)).filter((value): value is number => value !== null);
+      const total = scores.reduce((sum, score) => sum + (numeric(score.total) ?? 0), 0);
+      const correct = scores.reduce((sum, score) => sum + (numeric(score.correct) ?? 0), 0);
+      const invalid = scores.reduce((sum, score) => sum + (numeric(score.invalid) ?? 0), 0);
+      if (!values.length) return [];
+      const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+      return [{
+        row,
+        value: average,
+        score: {
+          language: region.id,
+          accuracy: average,
+          correct,
+          total,
+          invalid,
+          invalid_rate: total ? invalid / total : null,
+        } satisfies GlobalMMLULanguageScore,
+        coveredLanguages: scores.length,
+      }];
+    })
+    .sort((a, b) => b.value - a.value);
+  const items = limit === null ? allItems : allItems.slice(0, limit);
+  const subtitle = region.languages.map(languageLabel).join(", ");
+  const title = `${region.label} (${region.languages.length})`;
+
+  return (
+    <GlobalMMLUColumnPlot
+      code={`${items.length}/${allItems.length}`}
+      items={items}
+      totalItems={allItems.length}
+      max={Math.max(...items.map((item) => item.value), 0.01)}
+      subtitle={subtitle}
+      title={title}
+    />
+  );
+}
+
+function GlobalMMLULanguagePlot({
+  rows,
+  language,
+  limit,
+}: {
+  rows: LeaderboardRow[];
+  language: string;
+  limit: number | null;
+}) {
+  const allItems = rows
     .map((row) => {
       const score = row.global_mmlu_lite_language_scores?.find((item) => item.language === language);
       return { row, score, value: numeric(score?.accuracy) };
     })
     .filter((item): item is { row: LeaderboardRow; score: GlobalMMLULanguageScore; value: number } => item.value !== null)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 8);
-  const max = Math.max(...items.map((item) => item.value), 0.01);
+    .sort((a, b) => b.value - a.value);
+  const items = limit === null ? allItems : allItems.slice(0, limit);
 
+  return (
+    <GlobalMMLUColumnPlot
+      code={`${language.toUpperCase()} · ${items.length}/${allItems.length}`}
+      items={items}
+      totalItems={allItems.length}
+      max={Math.max(...items.map((item) => item.value), 0.01)}
+      title={languageLabel(language)}
+    />
+  );
+}
+
+function GlobalMMLUColumnPlot({
+  title,
+  code,
+  subtitle,
+  items,
+  totalItems,
+  max,
+}: {
+  title: string;
+  code: string;
+  subtitle?: string;
+  items: Array<{ row: LeaderboardRow; score: LanguageBreakdownScore; value: number }>;
+  totalItems: number;
+  max: number;
+}) {
   return (
     <article className="language-card">
       <div className="language-card-heading">
-        <h5>{languageLabel(language)}</h5>
-        <span>{language.toUpperCase()}</span>
+        <div>
+          <h5>{title}</h5>
+          {subtitle && <p>{subtitle}</p>}
+        </div>
+        <span>{code}</span>
       </div>
       <div className="language-column-plot">
         {items.length ? items.map(({ row, score, value }) => (
           <button
             className={`language-column ${rowToneClass(row)}`}
-            key={`${language}-${row.variant_id}`}
+            key={`${title}-${row.variant_id}`}
             type="button"
             title={`${displayModelName(row)} · ${formatPercent(value)} · ${formatLanguageCounts(score)}`}
           >
@@ -1343,6 +1955,109 @@ function GlobalMMLULanguagePlot({ rows, language }: { rows: LeaderboardRow[]; la
         )) : <span className="empty-note">n/a</span>}
       </div>
     </article>
+  );
+}
+
+function RGBLanguageSection({ rows }: { rows: LeaderboardRow[] }) {
+  const languageCodes = useMemo(() => {
+    const codes = new Set<string>();
+    rows.forEach((row) => {
+      row.rgb_language_scores?.forEach((score) => {
+        if (score.language && numeric(score.accuracy) !== null) {
+          codes.add(score.language);
+        }
+      });
+    });
+    return Array.from(codes).sort((a, b) => languageLabel(a).localeCompare(languageLabel(b)));
+  }, [rows]);
+  const [selectedLanguage, setSelectedLanguage] = useState("all");
+  const [rowLimit, setRowLimit] = useState("16");
+  const visibleLimit = rowLimit === "all" ? null : Number(rowLimit);
+  const shownLanguages =
+    selectedLanguage === "all" ? languageCodes : languageCodes.filter((language) => language === selectedLanguage);
+
+  useEffect(() => {
+    if (selectedLanguage !== "all" && !languageCodes.includes(selectedLanguage)) {
+      setSelectedLanguage("all");
+    }
+  }, [languageCodes, selectedLanguage]);
+
+  if (!languageCodes.length) {
+    return (
+      <p className="benchmark-data-note">
+        No exported language-level RGB rows are available yet for the current results file.
+      </p>
+    );
+  }
+
+  return (
+    <section className="language-section">
+      <div className="benchmark-plot-title">
+        <div>
+          <h4>Language breakdown</h4>
+          <p>
+            RGB language score across English and Chinese grounding cases. Scores combine noise robustness, rejection,
+            information integration, and error detection with the RGB suite weights.
+          </p>
+        </div>
+        <div className="language-controls">
+          <label className="language-filter">
+            <span>Language</span>
+            <select value={selectedLanguage} onChange={(event) => setSelectedLanguage(event.target.value)}>
+              <option value="all">All languages</option>
+              {languageCodes.map((language) => (
+                <option value={language} key={language}>
+                  {languageLabel(language)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="language-filter">
+            <span>Rows</span>
+            <select value={rowLimit} onChange={(event) => setRowLimit(event.target.value)}>
+              <option value="8">Top 8</option>
+              <option value="16">Top 16</option>
+              <option value="all">All rows</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div className={`language-grid ${selectedLanguage !== "all" ? "single-language" : ""}`}>
+        {shownLanguages.map((language) => (
+          <RGBLanguagePlot rows={rows} language={language} limit={visibleLimit} key={language} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RGBLanguagePlot({
+  rows,
+  language,
+  limit,
+}: {
+  rows: LeaderboardRow[];
+  language: string;
+  limit: number | null;
+}) {
+  const allItems = rows
+    .map((row) => {
+      const score = row.rgb_language_scores?.find((item) => item.language === language);
+      return { row, score, value: numeric(score?.accuracy) };
+    })
+    .filter((item): item is { row: LeaderboardRow; score: RGBLanguageScore; value: number } => item.value !== null)
+    .sort((a, b) => b.value - a.value);
+  const items = limit === null ? allItems : allItems.slice(0, limit);
+
+  return (
+    <GlobalMMLUColumnPlot
+      code={`${language.toUpperCase()} · ${items.length}/${allItems.length}`}
+      items={items}
+      totalItems={allItems.length}
+      max={Math.max(...items.map((item) => item.value), 0.01)}
+      subtitle={rgbLanguageSubtitle(items)}
+      title={languageLabel(language)}
+    />
   );
 }
 
@@ -1412,16 +2127,23 @@ function BenchmarkMiniPlot({
       <div className="mini-column-plot">
         {items.length ? items.map(({ row, value }) => (
           <span
-            className="mini-column"
+            className={`mini-column ${rowToneClass(row)}`}
             key={`${benchmark.id}-${metric.id}-mini-${row.variant_id}`}
-            title={`${displayModelName(row)} · ${formatPercent(value)}`}
+            title={`${displayModelName(row)} · ${formatPercent(value)} · ${quantizationLabel(row)}`}
+            style={{ "--provider-color": providerColor(row) } as CSSProperties}
           >
-            <i
-              style={{
-                height: `${Math.max(5, (value / max) * 100)}%`,
-                background: metric.kind === "error" ? "var(--orange)" : providerColor(row),
-              }}
-            />
+            <span className="mini-column-track">
+              <i
+                style={{
+                  height: `${Math.max(5, (value / max) * 100)}%`,
+                  background: metric.kind === "error" ? "var(--orange)" : providerColor(row),
+                }}
+              />
+              <b>{metric.kind === "error" ? formatPercent(value) : Math.round(value * 100)}</b>
+            </span>
+            <LabIcon row={row} />
+            <small>{shortModelLabel(row)}</small>
+            <em>{quantizationLabel(row)}</em>
           </span>
         )) : <span className="empty-note">n/a</span>}
       </div>
@@ -1434,6 +2156,10 @@ function benchmarkMetricItems(rows: LeaderboardRow[], metric: BenchmarkMetric) {
     .map((row) => ({ row, value: numeric(row[metric.metric]) }))
     .filter((item): item is { row: LeaderboardRow; value: number } => item.value !== null)
     .sort((a, b) => metric.kind === "error" ? a.value - b.value : b.value - a.value);
+}
+
+function metricHasData(rows: LeaderboardRow[], metric: BenchmarkMetric) {
+  return rows.some((row) => numeric(row[metric.metric]) !== null);
 }
 
 function BenchmarkBarChart({ capability, rows }: { capability: Capability; rows: LeaderboardRow[] }) {
@@ -1639,6 +2365,8 @@ function ModelsPage({
   onSelectedModelIdChange: (value: string | null) => void;
 }) {
   const tableRows = rows.length ? rows : allRows;
+  const rankedRows = [...tableRows].sort((a, b) => scoreForRank(b) - scoreForRank(a));
+  const maxModelSize = Math.max(...rankedRows.map(modelSizeGb).filter((size): size is number => size !== null), 0.01);
   const selectedRow = selectedModelId
     ? tableRows.find((row) => row.variant_id === selectedModelId) ?? null
     : null;
@@ -1646,10 +2374,29 @@ function ModelsPage({
     <section className="page-grid models-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Model Registry</p>
-          <h2>Models, quantization, and run coverage</h2>
+          <p className="eyebrow">Model Leaderboard</p>
+          <h2>Models ranked by LAIA Index</h2>
         </div>
-        <p>Every visible model version with source links, benchmark coverage, and raw metrics for verification.</p>
+        <p>Detailed ranking, source links, benchmark coverage, and raw metrics for every visible model version.</p>
+      </div>
+
+      <div className="ranking-list models-ranking-list">
+        {rankedRows.map((row, index) => (
+          <LeaderboardRowCard
+            row={row}
+            rank={index + 1}
+            maxModelSizeGb={maxModelSize}
+            key={`models-rank-${row.normalized_result_id ?? row.variant_id}`}
+          />
+        ))}
+      </div>
+
+      <div className="section-heading compact">
+        <div>
+          <p className="eyebrow">Model Registry</p>
+          <h2>Coverage and source details</h2>
+        </div>
+        <p>Open the details panel for links, benchmark status, token counts, runtime, and truncation metadata.</p>
       </div>
 
       <div className="model-registry">
@@ -1682,10 +2429,10 @@ function ModelsPage({
 
       <div className="section-heading compact">
         <div>
-          <p className="eyebrow">Full Data Table</p>
-          <h2>Raw exported metrics</h2>
+          <p className="eyebrow">Score Table</p>
+          <h2>Latest successful metrics</h2>
         </div>
-        <p>Column-level view for debugging benchmark output, tokens, cost, and truncation.</p>
+        <p>Column-level view after merging only the newest saved benchmark metric for each model version.</p>
       </div>
       <div className="full-table-shell">
         <table>
@@ -1698,7 +2445,13 @@ function ModelsPage({
             {tableRows.map((row) => (
               <tr className={rowToneClass(row)} key={row.normalized_result_id ?? row.variant_id}>
                 {RAW_TABLE_COLUMNS.map((column) => (
-                  <td key={column}>{formatCell(row[column])}</td>
+                  <td
+                    className={rawCellClass(column as keyof LeaderboardRow, row[column])}
+                    key={column}
+                    style={rawCellStyle(column as keyof LeaderboardRow, row[column])}
+                  >
+                    {formatCell(row[column])}
+                  </td>
                 ))}
               </tr>
             ))}
@@ -1783,6 +2536,7 @@ function ModelDetailsDrawer({ row, onClose }: { row: LeaderboardRow; onClose: ()
         <div className="drawer-section">
           <h3>Run Signals</h3>
           <dl>
+            <DetailItem label="Merged runs" value={formatCount(numeric(row.merged_run_count))} />
             <DetailItem label="Samples" value={formatSamples(row).replace(" samples", "")} />
             <DetailItem label="Runtime" value={formatSeconds(numeric(row.benchmark_runtime_seconds))} />
             <DetailItem label="Total tokens" value={formatCount(numeric(row.benchmark_total_tokens))} />
@@ -1814,11 +2568,11 @@ function MethodologyPage() {
     <section className="methodology-page">
       <div className="method-hero">
         <p className="eyebrow">Methodology</p>
-        <h2>Text capability first. Judge and vision results stay separate.</h2>
+        <h2>Text capability first. Judge and vision results are excluded.</h2>
         <p>
           LAIA Index is a 100-point text-model score built only from non-judge benchmarks.
-          Vision, factuality, and safety are reported as companion capabilities to avoid mixing
-          different evaluation assumptions.
+          Vision, factuality, and safety are kept out of the public leaderboard to avoid mixing
+          different evaluation assumptions with the core local text suite.
         </p>
       </div>
 
@@ -1864,7 +2618,7 @@ function MethodologyPage() {
           </article>
           <article>
             <h4>Reported separately</h4>
-            <p>Vision, factuality, and safety have different evaluation assumptions. They remain visible in benchmark pages without changing the headline LAIA Index.</p>
+            <p>Vision, factuality, and safety have different evaluation assumptions. They are not part of the public LAIA pages or headline score.</p>
           </article>
           <article>
             <h4>Quantization</h4>
@@ -1936,18 +2690,103 @@ function buildComparableRows(rows: LeaderboardRow[]) {
 }
 
 function mergeComparableRuns(rows: LeaderboardRow[]) {
-  const base = bestComparableRun(rows);
+  const sortedRows = newestRowsFirst(rows);
+  const base = sortedRows[0] ?? bestComparableRun(rows);
   const merged: LeaderboardRow = { ...base };
+  const runSignalSources = new Map<string, LeaderboardRow>();
+
   for (const key of MERGED_BENCHMARK_METRICS) {
-    if (numeric(merged[key]) !== null) continue;
-    const source = rows.find((row) => numeric(row[key]) !== null);
-    if (source) merged[key] = source[key];
+    const source = sortedRows.find((row) => numeric(row[key]) !== null);
+    if (source) {
+      merged[key] = source[key];
+      runSignalSources.set(rowIdentityKey(source), source);
+    } else {
+      merged[key] = null;
+    }
   }
+
+  const languageSource = sortedRows.find((row) => row.global_mmlu_lite_language_scores?.length);
+  if (languageSource?.global_mmlu_lite_language_scores?.length) {
+    merged.global_mmlu_lite_language_scores = languageSource.global_mmlu_lite_language_scores;
+    runSignalSources.set(rowIdentityKey(languageSource), languageSource);
+  } else {
+    merged.global_mmlu_lite_language_scores = null;
+  }
+
+  const rgbLanguageSource = sortedRows.find((row) => row.rgb_language_scores?.length);
+  if (rgbLanguageSource?.rgb_language_scores?.length) {
+    merged.rgb_language_scores = rgbLanguageSource.rgb_language_scores;
+    runSignalSources.set(rowIdentityKey(rgbLanguageSource), rgbLanguageSource);
+  } else {
+    merged.rgb_language_scores = null;
+  }
+
+  mergeLatestRunSignals(
+    merged,
+    runSignalSources.size ? Array.from(runSignalSources.values()) : [base],
+  );
   const intelligence = laiaIndexValues(merged);
   merged.model_intelligence_score = intelligence.score;
   merged.model_intelligence_coverage = intelligence.coverage;
   merged.model_intelligence_available_score = intelligence.availableScore;
   return merged;
+}
+
+function newestRowsFirst(rows: LeaderboardRow[]) {
+  return [...rows].sort((a, b) => {
+    const dateDelta = rowTimestamp(b) - rowTimestamp(a);
+    if (dateDelta !== 0) return dateDelta;
+    return scoreForRank(b) - scoreForRank(a);
+  });
+}
+
+function rowTimestamp(row: LeaderboardRow) {
+  return parseRunDate(row.started_at)?.getTime() ?? 0;
+}
+
+function rowIdentityKey(row: LeaderboardRow) {
+  return String(row.normalized_result_id ?? row.run_uuid ?? `${row.variant_id}-${row.started_at ?? ""}`);
+}
+
+function mergeLatestRunSignals(merged: LeaderboardRow, sourceRows: LeaderboardRow[]) {
+  const sources = newestRowsFirst(uniqueRowsByIdentity(sourceRows));
+  const latest = sources[0];
+  if (latest) {
+    merged.started_at = latest.started_at ?? null;
+    merged.run_uuid = latest.run_uuid ?? null;
+    merged.normalized_result_id = latest.normalized_result_id ?? merged.normalized_result_id;
+  }
+  merged.merged_run_count = sources.length;
+
+  for (const key of RUN_SIGNAL_SUM_FIELDS) {
+    const values = sources.map((row) => numeric(row[key])).filter((value): value is number => value !== null);
+    merged[key] = values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  }
+
+  for (const key of RUN_SIGNAL_MAX_FIELDS) {
+    const values = sources.map((row) => numeric(row[key])).filter((value): value is number => value !== null);
+    merged[key] = values.length ? Math.max(...values) : null;
+  }
+
+  const samples = numeric(merged.benchmark_samples) ?? 0;
+  const runtime = numeric(merged.benchmark_runtime_seconds) ?? 0;
+  const completionTokens = numeric(merged.benchmark_completion_tokens) ?? 0;
+  const totalTokens = numeric(merged.benchmark_total_tokens) ?? 0;
+  const truncatedCount = numeric(merged.benchmark_truncated_count) ?? 0;
+  merged.benchmark_truncated_rate = samples > 0 ? truncatedCount / samples : null;
+  merged.benchmark_avg_latency_seconds = samples > 0 && runtime > 0 ? runtime / samples : null;
+  merged.benchmark_output_tokens_per_second = runtime > 0 ? completionTokens / runtime : null;
+  merged.benchmark_total_tokens_per_second = runtime > 0 ? totalTokens / runtime : null;
+}
+
+function uniqueRowsByIdentity(rows: LeaderboardRow[]) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = rowIdentityKey(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function laiaIndexValues(row: LeaderboardRow) {
@@ -2012,8 +2851,83 @@ function topIndexRows(
         (maxGb === null || (size !== null && size <= maxGb))
       );
     })
-    .sort((a, b) => scoreForRank(b) - scoreForRank(a))
-    .slice(0, 10);
+    .sort((a, b) => scoreForRank(b) - scoreForRank(a));
+}
+
+function comparableRowKey(row: LeaderboardRow) {
+  return `${quantizationGroupKey(row)}|${quantizationKey(row)}`;
+}
+
+function emptyRunAggregate(): RunAggregate {
+  return {
+    totalTokens: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    reasoningTokens: 0,
+    runtimeSeconds: 0,
+    samples: 0,
+    truncatedCount: 0,
+    p95LatencySeconds: null,
+    outputTokensPerSecond: null,
+    latestStartedAt: null,
+    runCount: 0,
+  };
+}
+
+function runAggregates(rows: LeaderboardRow[]) {
+  const aggregates = new Map<string, RunAggregate>();
+  for (const row of rows) {
+    const key = comparableRowKey(row);
+    const aggregate = aggregates.get(key) ?? emptyRunAggregate();
+    aggregate.totalTokens += numeric(row.benchmark_total_tokens) ?? 0;
+    aggregate.promptTokens += numeric(row.benchmark_prompt_tokens) ?? 0;
+    aggregate.completionTokens += numeric(row.benchmark_completion_tokens) ?? 0;
+    aggregate.reasoningTokens += numeric(row.benchmark_reasoning_tokens) ?? 0;
+    aggregate.runtimeSeconds += numeric(row.benchmark_runtime_seconds) ?? 0;
+    aggregate.samples += numeric(row.benchmark_samples) ?? 0;
+    aggregate.truncatedCount += numeric(row.benchmark_truncated_count) ?? 0;
+
+    const p95 = numeric(row.benchmark_p95_latency_seconds);
+    if (p95 !== null) {
+      aggregate.p95LatencySeconds = aggregate.p95LatencySeconds === null ? p95 : Math.max(aggregate.p95LatencySeconds, p95);
+    }
+
+    const outputTokensPerSecond = numeric(row.benchmark_output_tokens_per_second);
+    if (outputTokensPerSecond !== null) {
+      aggregate.outputTokensPerSecond = aggregate.outputTokensPerSecond === null
+        ? outputTokensPerSecond
+        : Math.max(aggregate.outputTokensPerSecond, outputTokensPerSecond);
+    }
+
+    const currentDate = parseRunDate(aggregate.latestStartedAt);
+    const nextDate = parseRunDate(row.started_at);
+    if (nextDate && (!currentDate || nextDate.getTime() > currentDate.getTime())) {
+      aggregate.latestStartedAt = row.started_at ?? null;
+    }
+
+    aggregate.runCount += 1;
+    aggregates.set(key, aggregate);
+  }
+  return aggregates;
+}
+
+function runStatsForRow(row: LeaderboardRow, aggregates: Map<string, RunAggregate>) {
+  const aggregate = aggregates.get(comparableRowKey(row));
+  if (aggregate && aggregate.runCount > 0) return aggregate;
+  return {
+    ...emptyRunAggregate(),
+    totalTokens: numeric(row.benchmark_total_tokens) ?? 0,
+    promptTokens: numeric(row.benchmark_prompt_tokens) ?? 0,
+    completionTokens: numeric(row.benchmark_completion_tokens) ?? 0,
+    reasoningTokens: numeric(row.benchmark_reasoning_tokens) ?? 0,
+    runtimeSeconds: numeric(row.benchmark_runtime_seconds) ?? 0,
+    samples: numeric(row.benchmark_samples) ?? 0,
+    truncatedCount: numeric(row.benchmark_truncated_count) ?? 0,
+    p95LatencySeconds: numeric(row.benchmark_p95_latency_seconds),
+    outputTokensPerSecond: numeric(row.benchmark_output_tokens_per_second),
+    latestStartedAt: row.started_at ?? null,
+    runCount: 1,
+  };
 }
 
 function optionSets(rows: LeaderboardRow[]) {
@@ -2050,6 +2964,11 @@ function isFourBitRow(row: LeaderboardRow) {
   return quantizationLabel(row).toLowerCase() === "4 bit";
 }
 
+function isSmolLM2Row(row: LeaderboardRow) {
+  const source = `${row.variant_name} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.model_repo ?? ""}`.toLowerCase();
+  return source.includes("smollm2") || source.includes("smol lm2") || source.includes("smol lm 2");
+}
+
 function isSyntheticRow(row: LeaderboardRow) {
   if (!row.metadata_json) return false;
   return row.metadata_json.includes('"synthetic": true');
@@ -2065,12 +2984,6 @@ function numeric(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function averageMetric(row: LeaderboardRow, keys: string[]) {
-  const values = keys.map((key) => numeric(row[key])).filter((value): value is number => value !== null);
-  if (!values.length) return null;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function safeMetadata(row: LeaderboardRow) {
@@ -2362,6 +3275,14 @@ function formatCount(value?: number | null) {
   return value === null || value === undefined || Number.isNaN(value) ? "n/a" : Math.round(value).toLocaleString();
 }
 
+function formatCompactNumber(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}K`;
+  return Math.round(value).toLocaleString();
+}
+
 function formatNumber(value?: number | null) {
   return value === null || value === undefined || Number.isNaN(value) ? "n/a" : value.toFixed(value < 10 ? 2 : 1);
 }
@@ -2382,6 +3303,32 @@ function formatCell(value: unknown) {
   return String(value);
 }
 
+function rawCellClass(column: keyof LeaderboardRow, value: unknown) {
+  const numericValue = numeric(value);
+  if (!RAW_SCORE_COLUMNS.has(column) && !RAW_ERROR_COLUMNS.has(column)) return undefined;
+  return numericValue === null ? "score-heat-cell missing" : "score-heat-cell";
+}
+
+function rawCellStyle(column: keyof LeaderboardRow, value: unknown): CSSProperties | undefined {
+  const numericValue = numeric(value);
+  if (numericValue === null) return undefined;
+  if (RAW_SCORE_COLUMNS.has(column)) return heatmapStyle(numericValue);
+  if (RAW_ERROR_COLUMNS.has(column)) return heatmapStyle(numericValue, true);
+  return undefined;
+}
+
+function heatmapStyle(value: number, invert = false): CSSProperties {
+  const clamped = Math.max(0, Math.min(1, value));
+  const quality = invert ? 1 - clamped : clamped;
+  const hue = 10 + quality * 95;
+  const background = `hsl(${hue}, 92%, 88%)`;
+  const border = `hsl(${hue}, 70%, 62%)`;
+  return {
+    background,
+    boxShadow: `inset 0 0 0 1px ${border}`,
+  };
+}
+
 function humanizeColumn(value: string) {
   return value.replace(/_/g, " ");
 }
@@ -2394,10 +3341,22 @@ function languageLabel(language: string) {
   return GLOBAL_MMLU_LANGUAGE_LABELS[language] ?? language.toUpperCase();
 }
 
-function formatLanguageCounts(score: GlobalMMLULanguageScore) {
+function formatLanguageCounts(score: LanguageBreakdownScore) {
+  if ((score.correct === null || score.correct === undefined) && score.total) {
+    return `${Math.round(score.total)} samples`;
+  }
   if (score.correct === null || score.correct === undefined || !score.total) return "sample count n/a";
   const invalid = score.invalid ? ` · ${score.invalid} invalid` : "";
   return `${score.correct}/${score.total}${invalid}`;
+}
+
+function rgbLanguageSubtitle(items: Array<{ score: RGBLanguageScore }>) {
+  const components = items[0]?.score.components;
+  if (!components) return "RGB language suite";
+  return Object.entries(components)
+    .filter(([, value]) => numeric(value) !== null)
+    .map(([key, value]) => `${RGB_COMPONENT_LABELS[key] ?? humanizeColumn(key)} ${Math.round((numeric(value) ?? 0) * 100)}%`)
+    .join(" · ");
 }
 
 function formatPoints(value?: number | null) {
@@ -2413,8 +3372,19 @@ function formatBillionSize(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/0$/, "");
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+function formatShortDate(value: Date, includeYear = false) {
+  return value.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(includeYear ? { year: "numeric" as const } : {}),
+  });
+}
+
+function parseRunDate(value?: string | null) {
+  if (!value) return null;
+  const normalized = value.includes(" ") && !value.includes("T") ? value.replace(" ", "T") : value;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function unique(values: string[]) {

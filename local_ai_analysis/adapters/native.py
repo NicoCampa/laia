@@ -337,16 +337,76 @@ class LMStudioNativeClient(NativeClient):
         if request_extra:
             payload.update(request_extra)
 
-        raw, runtime = self._request_json(
-            self.planned_endpoint(),
-            method="POST",
-            payload=payload,
-            headers=self._headers(),
-        )
+        try:
+            raw, runtime = self._request_json(
+                self.planned_endpoint(),
+                method="POST",
+                payload=payload,
+                headers=self._headers(),
+            )
+        except RuntimeError as exc:
+            if images or not _lmstudio_parse_input_failure(exc):
+                raise
+            return self._generate_chat_completion_text(
+                model=model,
+                prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+                stop=stop,
+                seed=seed,
+                reasoning_effort=reasoning_effort,
+                response_format=response_format,
+            )
         text = _lmstudio_text(raw)
         usage = _lmstudio_usage(raw)
         if usage:
             raw.setdefault("usage", usage)
+        return GenerationResponse(text=text, raw=raw, runtime_seconds=runtime)
+
+    def _generate_chat_completion_text(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        temperature: float,
+        max_tokens: int,
+        top_p: float | None,
+        stop: list[str] | None,
+        seed: int | None,
+        reasoning_effort: str | None,
+        response_format: dict[str, Any] | None,
+    ) -> GenerationResponse:
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        if top_p is not None:
+            payload["top_p"] = top_p
+        if stop is not None:
+            payload["stop"] = stop
+        if seed is not None:
+            payload["seed"] = seed
+        if response_format is not None:
+            payload["response_format"] = response_format
+        if _lmstudio_reasoning(reasoning_effort) == "off":
+            payload["chat_template_kwargs"] = {
+                "enable_thinking": False,
+                "enableThinking": False,
+            }
+
+        raw, runtime = self._request_json(
+            self.chat_completions_endpoint(),
+            method="POST",
+            payload=payload,
+            headers=self._headers(),
+        )
+        message = _first_chat_completion_message(raw)
+        text = str(message.get("content") or "")
+        raw["laia_fallback_endpoint"] = "chat_completions"
         return GenerationResponse(text=text, raw=raw, runtime_seconds=runtime)
 
     def _generate_chat_completion_no_think(
@@ -522,6 +582,14 @@ def _lmstudio_uses_no_think_system_prompt(model: str, reasoning_effort: str | No
     if not uses_prompt_switch:
         return False
     return _lmstudio_reasoning(reasoning_effort) == "off"
+
+
+def _lmstudio_parse_input_failure(exc: RuntimeError) -> bool:
+    message = str(exc)
+    return (
+        "/api/v1/chat" in message
+        and "Failed to parse input at pos 0" in message
+    )
 
 
 def _lmstudio_no_think_messages(model: str, prompt: str) -> list[dict[str, str]]:

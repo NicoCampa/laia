@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LAIA LinkedIn Carousel</title>
+  <style>
+    :root {
+      --ink: #10100f;
+      --muted: #6b6d68;
+      --paper: #f7f8f3;
+      --card: #ffffff;
+      --line: #d9ddd1;
+      --lime: #ccff65;
+      --blue: #dff0ff;
+      --orange: #f58e3b;
+      --shadow: 18px 22px 0 #10100f;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 24px 24px, rgba(16, 16, 15, 0.12) 2px, transparent 2.5px),
+        var(--paper);
+      background-size: 28px 28px;
+      color: var(--ink);
+    }
+
+    .deck {
+      display: grid;
+      gap: 48px;
+      justify-items: center;
+      padding: 48px;
+    }
+
+    .slide {
+      position: relative;
+      display: grid;
+      width: 1080px;
+      height: 1080px;
+      overflow: hidden;
+      border: 3px solid var(--ink);
+      border-radius: 34px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--shadow);
+    }
+
+    .slide-inner {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      gap: 28px;
+      padding: 64px;
+    }
+
+    .split {
+      grid-template-columns: 0.92fr 1.08fr;
+      align-items: center;
+    }
+
+    .topline {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border: 2px solid #b7df5c;
+      border-radius: 999px;
+      background: #efffcb;
+      color: #4a5f14;
+      font-size: 17px;
+      font-weight: 950;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2 {
+      margin: 0;
+      font-weight: 1000;
+      letter-spacing: -0.04em;
+      line-height: 0.92;
+    }
+
+    h1 {
+      font-size: 92px;
+    }
+
+    h2 {
+      font-size: 76px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 30px;
+      line-height: 1.24;
+      font-weight: 650;
+    }
+
+    .mark {
+      display: inline-grid;
+      width: 72px;
+      height: 72px;
+      place-items: center;
+      border-radius: 18px;
+      background: var(--ink);
+      color: white;
+      font-size: 26px;
+      font-weight: 1000;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 28px;
+      font-weight: 950;
+    }
+
+    .bar-card,
+    .panel {
+      border: 2px solid var(--line);
+      border-radius: 28px;
+      background: var(--card);
+      box-shadow: 0 18px 55px rgba(16, 16, 15, 0.08);
+    }
+
+    .bar-card {
+      padding: 34px;
+    }
+
+    .mini-bars {
+      display: grid;
+      height: 470px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      align-items: end;
+      gap: 18px;
+      padding-top: 36px;
+      border-top: 2px solid var(--line);
+    }
+
+    .bar-item {
+      display: grid;
+      min-width: 0;
+      align-items: end;
+      gap: 10px;
+      text-align: center;
+    }
+
+    .bar {
+      position: relative;
+      min-height: 34px;
+      border-radius: 10px 10px 2px 2px;
+      background: var(--provider, var(--lime));
+      box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    .bar strong {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      color: white;
+      font-size: 25px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    .bar-meta {
+      display: grid;
+      justify-items: center;
+      gap: 6px;
+      min-width: 0;
+      font-weight: 950;
+      font-size: 16px;
+      line-height: 1.05;
+    }
+
+    .bar-meta img,
+    .logo-box img,
+    .floating-logo img {
+      width: 34px;
+      height: 34px;
+      object-fit: contain;
+    }
+
+    .bar-meta span {
+      max-width: 116px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .command-strip {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 22px 28px;
+      border: 3px solid var(--ink);
+      border-radius: 24px;
+      background: var(--ink);
+      color: var(--lime);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 28px;
+      font-weight: 900;
+      box-shadow: 10px 12px 0 var(--lime);
+    }
+
+    .command-strip img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+      border-radius: 8px;
+      background: white;
+      padding: 4px;
+    }
+
+    .floating-logo {
+      position: absolute;
+      display: grid;
+      width: 66px;
+      height: 66px;
+      place-items: center;
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      background: white;
+      box-shadow: 0 12px 30px rgba(16, 16, 15, 0.12);
+    }
+
+    .floating-logo.one { right: 86px; top: 96px; transform: rotate(7deg); }
+    .floating-logo.two { right: 190px; bottom: 116px; transform: rotate(-9deg); }
+    .floating-logo.three { left: 92px; bottom: 118px; transform: rotate(5deg); }
+
+    .big-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    .stat-card {
+      display: grid;
+      min-height: 210px;
+      align-content: space-between;
+      padding: 30px;
+      border: 2px solid var(--line);
+      border-radius: 28px;
+      background: white;
+    }
+
+    .stat-card b {
+      font-size: 54px;
+      line-height: 0.95;
+    }
+
+    .stat-card span {
+      color: var(--muted);
+      font-size: 22px;
+      font-weight: 750;
+      line-height: 1.22;
+    }
+
+    .formula-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .formula-tile {
+      display: grid;
+      gap: 18px;
+      padding: 24px;
+      border: 2px solid var(--line);
+      border-radius: 24px;
+      background: #fbfcf8;
+      min-height: 235px;
+    }
+
+    .formula-tile strong {
+      font-size: 22px;
+      line-height: 1.05;
+    }
+
+    .formula-tile b {
+      width: fit-content;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: var(--lime);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 18px;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 28px;
+    }
+
+    .model-compare {
+      display: grid;
+      gap: 20px;
+      padding: 32px;
+      border: 2px solid var(--line);
+      border-radius: 30px;
+      background: #fff;
+    }
+
+    .model-compare.closed {
+      background: linear-gradient(135deg, #e8f4ff, #fff);
+      border-color: #b7d9ff;
+    }
+
+    .model-head {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-box {
+      display: grid;
+      width: 58px;
+      height: 58px;
+      place-items: center;
+      border: 2px solid var(--ink);
+      border-radius: 14px;
+      background: white;
+    }
+
+    .model-head strong {
+      display: block;
+      font-size: 30px;
+      line-height: 1.04;
+    }
+
+    .model-head small {
+      color: var(--muted);
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .cap-line {
+      display: grid;
+      grid-template-columns: 112px 1fr 54px;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+      font-weight: 950;
+    }
+
+    .track {
+      height: 20px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      background: #eceee8;
+      overflow: hidden;
+    }
+
+    .track i {
+      display: block;
+      height: 100%;
+      background: var(--lime);
+    }
+
+    .price-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-top: 8px;
+    }
+
+    .price {
+      padding: 20px;
+      border-radius: 22px;
+      background: #f4f6ef;
+      font-size: 36px;
+      font-weight: 1000;
+    }
+
+    .price small {
+      display: block;
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .flow-list {
+      display: grid;
+      gap: 18px;
+    }
+
+    .flow-item {
+      display: grid;
+      grid-template-columns: 76px 1fr;
+      gap: 18px;
+      align-items: center;
+      padding: 24px;
+      border: 2px solid var(--line);
+      border-radius: 26px;
+      background: white;
+    }
+
+    .flow-item b {
+      display: grid;
+      width: 62px;
+      height: 62px;
+      place-items: center;
+      border-radius: 18px;
+      background: var(--ink);
+      color: var(--lime);
+      font-size: 24px;
+    }
+
+    .flow-item strong {
+      display: block;
+      font-size: 25px;
+      margin-bottom: 4px;
+    }
+
+    .flow-item span {
+      color: var(--muted);
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .slide-number {
+      position: absolute;
+      right: 44px;
+      bottom: 34px;
+      color: #9da196;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    @media print {
+      body { background: white; }
+      .deck { padding: 0; gap: 0; }
+      .slide { box-shadow: none; page-break-after: always; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="deck">
+    <section class="slide">
+      <div class="slide-inner split">
+        <div>
+          <div class="brand-row"><span class="mark">NC</span><span>Local AI Analysis</span></div>
+          <div style="height: 54px"></div>
+          <span class="topline">LAIA</span>
+          <h1 style="margin-top: 20px">Local AI leaderboards for your machine.</h1>
+          <p style="margin-top: 26px">Benchmark Ollama, LM Studio, and oMLX models with one local command.</p>
+          <div style="height: 40px"></div>
+          <div class="command-strip">
+            <img src="/labs/ollama.png" alt="" />
+            <img src="/labs/lmstudio.png" alt="" />
+            <img src="/labs/omlx.svg" alt="" />
+            <span>laia ollama|lmstudio|omlx MODEL</span>
+          </div>
+        </div>
+        <div class="bar-card">
+          <span class="topline">Top local rows</span>
+          <div id="top-bars" class="mini-bars"></div>
+        </div>
+      </div>
+      <span class="floating-logo one"><img src="/labs/qwen.png" alt="" /></span>
+      <span class="floating-logo two"><img src="/labs/google.png" alt="" /></span>
+      <span class="floating-logo three"><img src="/labs/huggingface.svg" alt="" /></span>
+      <span class="slide-number">01 / 05</span>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="brand-row"><span class="mark">NC</span><span>Why local benchmarking?</span></div>
+        <span class="topline">Motivation</span>
+        <h2>Most local AI decisions happen under real hardware limits.</h2>
+        <p>LAIA is built around laptop-class constraints, not only frontier cloud APIs.</p>
+        <div class="big-stat-grid">
+          <div class="stat-card">
+            <b>16 GB-class</b>
+            <span>Useful for people choosing models that actually fit on everyday machines.</span>
+          </div>
+          <div class="stat-card">
+            <b>100% local</b>
+            <span>No uploaded prompts, no external model calls for the LAIA Index.</span>
+          </div>
+          <div class="stat-card">
+            <b>$0 marginal API cost</b>
+            <span>Run repeated experiments after the model is downloaded.</span>
+          </div>
+          <div class="stat-card">
+            <b>No network dependency</b>
+            <span>Benchmark offline workflows and reduce unnecessary request traffic.</span>
+          </div>
+        </div>
+      </div>
+      <span class="floating-logo one"><img src="/labs/huggingface.svg" alt="" /></span>
+      <span class="slide-number">02 / 05</span>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="brand-row"><span class="mark">NC</span><span>Local vs hosted reference</span></div>
+        <span class="topline">Comparison</span>
+        <h2>Best local rows can be compared against hosted references.</h2>
+        <div id="compare-grid" class="compare-grid"></div>
+        <div class="price-row">
+          <div class="price"><small>GPT 5.4 Mini benchmark API cost</small>$3.24</div>
+          <div class="price"><small>Local marginal API cost</small>$0</div>
+        </div>
+      </div>
+      <span class="slide-number">03 / 05</span>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner">
+        <div class="brand-row"><span class="mark">NC</span><span>LAIA composition</span></div>
+        <span class="topline">Five text capabilities</span>
+        <h2>One index, equal-weighted across the text suite.</h2>
+        <p>Judge-based and vision benchmarks stay visible, but they are excluded from the public LAIA Index.</p>
+        <div class="formula-grid">
+          <div class="formula-tile"><b>20 pts</b><strong>Knowledge</strong><span>Global MMLU Lite</span></div>
+          <div class="formula-tile"><b>20 pts</b><strong>Instructions</strong><span>IFBench</span></div>
+          <div class="formula-tile"><b>20 pts</b><strong>Tools</strong><span>BFCL v4</span></div>
+          <div class="formula-tile"><b>20 pts</b><strong>Coding</strong><span>MBPP</span></div>
+          <div class="formula-tile"><b>20 pts</b><strong>Grounding</strong><span>RGB</span></div>
+        </div>
+      </div>
+      <span class="slide-number">04 / 05</span>
+    </section>
+
+    <section class="slide">
+      <div class="slide-inner split">
+        <div>
+          <div class="brand-row"><span class="mark">NC</span><span>Engineering details</span></div>
+          <span class="topline">Reproducible runs</span>
+          <h2>Built for overnight local experiments.</h2>
+          <p>LAIA tracks the signals that matter when a benchmark is run on your own hardware.</p>
+        </div>
+        <div class="flow-list">
+          <div class="flow-item"><b>1</b><div><strong>Native backends</strong><span>Ollama, LM Studio, and oMLX shortcuts.</span></div></div>
+          <div class="flow-item"><b>2</b><div><strong>Restart controls</strong><span>Refresh model runtimes between long batches.</span></div></div>
+          <div class="flow-item"><b>3</b><div><strong>Run signals</strong><span>Tokens, cost, latency, truncation, and coverage.</span></div></div>
+          <div class="flow-item"><b>4</b><div><strong>Website export</strong><span>Every completed benchmark can update the public leaderboard.</span></div></div>
+        </div>
+      </div>
+      <span class="slide-number">05 / 05</span>
+    </section>
+  </main>
+
+  <script>
+    const providers = {
+      openai: { color: "#10100f", icon: "/labs/openai.png" },
+      google: { color: "#72b866", icon: "/labs/google.png" },
+      ibm: { color: "#7e91ad", icon: "/labs/ibm.png" },
+      mistral: { color: "#f58e3b", icon: "/labs/mistral.png" },
+      qwen: { color: "#6447f2", icon: "/labs/qwen.png" },
+      alibaba: { color: "#6447f2", icon: "/labs/qwen.png" },
+      liquid: { color: "#edcf5b", icon: "/labs/liquidAI.jpeg" },
+      meta: { color: "#5b8def", icon: "/labs/meta.png" },
+      nvidia: { color: "#86bd35", icon: "/labs/nvidia.webp" },
+      tii: { color: "#d57358", icon: "/labs/TechnologyInnovationINstitute.PNG" },
+      hugging: { color: "#b78c24", icon: "/labs/huggingface.svg" },
+      microsoft: { color: "#4d82e8", icon: "/labs/microsoft.png" },
+      ai2: { color: "#9b63f5", icon: "/labs/ai2.png" },
+    };
+
+    function provider(row) {
+      const text = `${row.family || ""} ${row.base_model_name || ""} ${row.variant_name || ""} ${row.model_repo || ""}`.toLowerCase();
+      if (text.includes("openai") || text.includes("gpt")) return providers.openai;
+      if (text.includes("google") || text.includes("gemma")) return providers.google;
+      if (text.includes("ibm") || text.includes("granite")) return providers.ibm;
+      if (text.includes("mistral") || text.includes("ministral")) return providers.mistral;
+      if (text.includes("qwen") || text.includes("alibaba")) return providers.qwen;
+      if (text.includes("liquid") || text.includes("lfm")) return providers.liquid;
+      if (text.includes("meta") || text.includes("llama")) return providers.meta;
+      if (text.includes("nvidia") || text.includes("nemotron")) return providers.nvidia;
+      if (text.includes("falcon") || text.includes("tii")) return providers.tii;
+      if (text.includes("smol") || text.includes("hugging")) return providers.hugging;
+      if (text.includes("phi") || text.includes("microsoft")) return providers.microsoft;
+      if (text.includes("olmo") || text.includes("allen")) return providers.ai2;
+      return { color: "#111", icon: "/labs/huggingface.svg" };
+    }
+
+    function modelName(row) {
+      const raw = String(row.variant_name || row.base_model_name || "Model");
+      return raw
+        .replace(/LM Studio|Ollama|Reasoning none|All Languages|Text Suite|Smoke/gi, "")
+        .replace(/Q4_K_M|Q8_0|BF16|F16|4 bit|8 bit|16 bit/gi, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 28);
+    }
+
+    function quant(row) {
+      const q = String(row.quantization || row.precision || row.variant_name || "").toLowerCase();
+      if (q.includes("q4") || q.includes("4 bit")) return "4 bit";
+      if (q.includes("q8") || q.includes("8 bit")) return "8 bit";
+      if (q.includes("bf16") || q.includes("f16") || q.includes("16")) return "16 bit";
+      return "server";
+    }
+
+    function score(row) {
+      return Number(row.model_intelligence_score || 0) * 100;
+    }
+
+    function topRows(rows) {
+      const seen = new Set();
+      return rows
+        .filter((row) => score(row) > 0 && !String(row.variant_name || "").toLowerCase().includes("smoke"))
+        .sort((a, b) => score(b) - score(a))
+        .filter((row) => {
+          const key = `${modelName(row)}-${quant(row)}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    }
+
+    function capability(row, key) {
+      return Math.round(Number(row[key] || 0) * 100);
+    }
+
+    function renderBars(rows) {
+      const container = document.getElementById("top-bars");
+      const items = topRows(rows).filter((row) => !String(row.family || "").toLowerCase().includes("openai")).slice(0, 6);
+      const max = Math.max(...items.map(score), 1);
+      container.innerHTML = items.map((row) => {
+        const p = provider(row);
+        return `
+          <div class="bar-item" style="--provider:${p.color}">
+            <div class="bar" style="height:${Math.max(36, score(row) / max * 390)}px"><strong>${Math.round(score(row))}</strong></div>
+            <div class="bar-meta">
+              <img src="${p.icon}" alt="" />
+              <span>${modelName(row)}</span>
+              <small>${quant(row)}</small>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function renderCompare(rows) {
+      const container = document.getElementById("compare-grid");
+      const sorted = topRows(rows);
+      const local = sorted.find((row) => !String(row.family || "").toLowerCase().includes("openai"));
+      const hosted = sorted.find((row) => modelName(row).toLowerCase().includes("gpt 5.4 mini")) || sorted.find((row) => String(row.family || "").toLowerCase().includes("openai"));
+      const selected = [local, hosted].filter(Boolean);
+      container.innerHTML = selected.map((row) => {
+        const p = provider(row);
+        const closed = String(row.family || "").toLowerCase().includes("openai");
+        const caps = [
+          ["Know.", capability(row, "global_mmlu_lite_pass_at_1")],
+          ["Instr.", capability(row, "ifbench_prompt_level_loose")],
+          ["Tools", capability(row, "bfcl_v4_selected_accuracy")],
+          ["Code", capability(row, "mbpp_pass_at_1")],
+          ["Ground.", capability(row, "rgb_all_rate")],
+        ];
+        return `
+          <article class="model-compare ${closed ? "closed" : ""}">
+            <div class="model-head">
+              <span class="logo-box"><img src="${p.icon}" alt="" /></span>
+              <div><strong>${modelName(row)}</strong><small>${closed ? "Hosted API" : quant(row)}</small></div>
+            </div>
+            <div style="font-size:58px;font-weight:1000">${Math.round(score(row))}<span style="font-size:24px;color:var(--muted)"> pts</span></div>
+            ${caps.map(([label, value]) => `
+              <div class="cap-line">
+                <span>${label}</span>
+                <span class="track"><i style="width:${Math.max(2, value)}%"></i></span>
+                <b>${value || "n/a"}</b>
+              </div>`).join("")}
+          </article>`;
+      }).join("");
+    }
+
+    fetch("/results.json")
+      .then((response) => response.json())
+      .then((payload) => {
+        const rows = payload.leaderboard || [];
+        renderBars(rows);
+        renderCompare(rows);
+      })
+      .catch(() => {
+        document.getElementById("top-bars").innerHTML = "<p>Run the local website to load results.json.</p>";
+      });
+  </script>
+</body>
+</html>
