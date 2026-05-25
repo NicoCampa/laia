@@ -892,7 +892,7 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
     .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
   const width = 620;
   const height = 330;
-  const pad = { top: 22, right: 24, bottom: 44, left: 54 };
+  const pad = { top: 24, right: 34, bottom: 46, left: 66 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const maxX = Math.max(1, Math.ceil(Math.max(...points.map((p) => p.x)) * 1.08));
@@ -1216,7 +1216,7 @@ function RunTimelineChart({
     .sort((a, b) => a.date.getTime() - b.date.getTime());
   const width = 620;
   const height = 300;
-  const pad = { top: 22, right: 24, bottom: 42, left: 48 };
+  const pad = { top: 24, right: 44, bottom: 44, left: 62 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const times = points.map((point) => point.date.getTime());
@@ -2227,14 +2227,14 @@ function EfficiencyScatter({ rows }: { rows: LeaderboardRow[] }) {
 
   const width = 920;
   const height = 390;
-  const pad = { top: 26, right: 34, bottom: 48, left: 56 };
+  const pad = { top: 28, right: 52, bottom: 50, left: 70 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const maxX = Math.max(1, Math.ceil(Math.max(...points.map((p) => p.x)) * 1.1));
   const maxY = Math.max(0.12, Math.ceil(Math.max(...points.map((p) => p.y)) * 120) / 100);
   const xFor = (x: number) => pad.left + (x / maxX) * plotW;
   const yFor = (y: number) => pad.top + plotH - (y / maxY) * plotH;
-  const labeled = new Set([...points].sort((a, b) => b.y - a.y).slice(0, 6).map((p) => p.row.variant_id));
+  const labeled = new Set([...points].sort((a, b) => b.y - a.y).slice(0, 5).map((p) => p.row.variant_id));
 
   return (
     <section className="chart-card">
@@ -2272,7 +2272,7 @@ function EfficiencyScatter({ rows }: { rows: LeaderboardRow[] }) {
                 </circle>
                 {isLabeled && (
                   <text className="point-label" x={xFor(point.x) + 9} y={yFor(point.y) - 8}>
-                    {displayModelName(point.row)}
+                    {shortModelLabel(point.row)}
                   </text>
                 )}
               </g>
