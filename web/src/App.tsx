@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { WORLD_COUNTRY_PATH } from "./worldMapPaths";
 
 type LeaderboardRow = {
   [key: string]: unknown;
@@ -162,6 +163,7 @@ const INDEX_GB_LIMITS = [
 ];
 
 const LEADERBOARD_CHAPTERS = [
+  { id: "leaderboard-origins", label: "Origins" },
   { id: "leaderboard-landscape", label: "Footprint" },
   { id: "leaderboard-insights", label: "Insights" },
   { id: "leaderboard-operations", label: "Run Signals" },
@@ -781,6 +783,7 @@ function LeaderboardPage({
       <section className="leaderboard-shell">
         <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
         <div className="page-grid leaderboard-view">
+          <ModelOriginsSection rows={rows} />
           <LandscapeSection rows={rows} />
 
           <LeaderboardInsights rows={rows} onOpenModel={onOpenModel} />
@@ -841,6 +844,203 @@ function useScrollSpy(sectionIds: string[]) {
   }, [sectionIds.join("|")]);
 
   return activeId;
+}
+
+type LabOriginLocation = {
+  id: string;
+  label: string;
+  city: string;
+  country: string;
+  lat: number;
+  lon: number;
+  labelX: number;
+  labelY: number;
+  side: "left" | "right";
+};
+
+type ModelOriginMarker = {
+  location: LabOriginLocation;
+  models: string[];
+  rowCount: number;
+};
+
+const ORIGIN_MAP = {
+  width: 1320,
+  height: 640,
+  mapX: 160,
+  mapY: 70,
+  mapW: 1000,
+  mapH: 500,
+};
+
+const LAB_ORIGIN_LOCATIONS: LabOriginLocation[] = [
+  { id: "ai2", label: "AI2", city: "Seattle", country: "United States", lat: 47.6062, lon: -122.3321, labelX: 136, labelY: 82, side: "left" },
+  { id: "microsoft", label: "Microsoft", city: "Redmond", country: "United States", lat: 47.674, lon: -122.1215, labelX: 136, labelY: 132, side: "left" },
+  { id: "nvidia", label: "NVIDIA", city: "Santa Clara", country: "United States", lat: 37.3541, lon: -121.9552, labelX: 136, labelY: 196, side: "left" },
+  { id: "meta", label: "Meta", city: "Menlo Park", country: "United States", lat: 37.453, lon: -122.1817, labelX: 136, labelY: 250, side: "left" },
+  { id: "google", label: "Google", city: "Mountain View", country: "United States", lat: 37.3861, lon: -122.0839, labelX: 136, labelY: 304, side: "left" },
+  { id: "liquid", label: "Liquid AI", city: "Cambridge, MA", country: "United States", lat: 42.3736, lon: -71.1097, labelX: 136, labelY: 382, side: "left" },
+  { id: "ibm", label: "IBM", city: "Armonk", country: "United States", lat: 41.1265, lon: -73.714, labelX: 136, labelY: 442, side: "left" },
+  { id: "huggingface", label: "Hugging Face", city: "New York City", country: "United States", lat: 40.7128, lon: -74.006, labelX: 136, labelY: 502, side: "left" },
+  { id: "openai", label: "OpenAI", city: "San Francisco", country: "United States", lat: 37.7749, lon: -122.4194, labelX: 136, labelY: 558, side: "left" },
+  { id: "mistral", label: "Mistral AI", city: "Paris", country: "France", lat: 48.8566, lon: 2.3522, labelX: 1188, labelY: 176, side: "right" },
+  { id: "tii", label: "TII", city: "Abu Dhabi", country: "United Arab Emirates", lat: 24.4539, lon: 54.3773, labelX: 1188, labelY: 298, side: "right" },
+  { id: "alibaba", label: "Alibaba", city: "Hangzhou", country: "China", lat: 30.2741, lon: 120.1551, labelX: 1188, labelY: 408, side: "right" },
+];
+
+function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const markers = useMemo(() => modelOriginMarkers(rows), [rows]);
+  if (!markers.length) return null;
+
+  return (
+    <section className="chapter-section model-origin-section" id="leaderboard-origins">
+      <div className="section-heading compact">
+        <div>
+          <p className="eyebrow">Model Origins</p>
+          <h2>Model lab HQ map</h2>
+        </div>
+        <p>Dots mark headquarters cities for each visible 4-bit model family.</p>
+      </div>
+
+      <div className="origin-map-scroll">
+        <svg
+          className="origin-world-map"
+          viewBox={`0 0 ${ORIGIN_MAP.width} ${ORIGIN_MAP.height}`}
+          role="img"
+          aria-label="World map showing model lab headquarters cities as dots"
+        >
+          <rect className="origin-map-background" x={ORIGIN_MAP.mapX} y={ORIGIN_MAP.mapY} width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapH} rx="22" />
+          <g className="origin-countries" transform={`translate(${ORIGIN_MAP.mapX} ${ORIGIN_MAP.mapY})`}>
+            <path d={WORLD_COUNTRY_PATH} />
+          </g>
+
+          {markers.map((marker) => {
+            const point = originPoint(marker.location);
+            const callout = originCalloutPoint(marker.location);
+            const active = activeId === marker.location.id;
+            return (
+              <g
+                className={`origin-connection${active ? " active" : ""}`}
+                key={`origin-line-${marker.location.id}`}
+                onMouseEnter={() => setActiveId(marker.location.id)}
+                onMouseLeave={() => setActiveId(null)}
+                onFocus={() => setActiveId(marker.location.id)}
+                onBlur={() => setActiveId(null)}
+                tabIndex={0}
+              >
+                <path className="origin-leader" d={`M${callout.x},${callout.y} L${point.x},${point.y}`} />
+                <text
+                  className="origin-label"
+                  x={marker.location.labelX}
+                  y={marker.location.labelY}
+                  textAnchor={marker.location.side === "left" ? "end" : "start"}
+                >
+                  <tspan className="origin-lab" x={marker.location.labelX}>{marker.location.label}</tspan>
+                  <tspan className="origin-city" x={marker.location.labelX} dy="1.25em">{marker.location.city}</tspan>
+                  <tspan className="origin-models" x={marker.location.labelX} dy="1.28em">{originModelSummary(marker.location, marker.models)}</tspan>
+                </text>
+              </g>
+            );
+          })}
+
+          {markers.map((marker) => {
+            const point = originPoint(marker.location);
+            const active = activeId === marker.location.id;
+            return (
+              <g
+                className={`origin-dot-node${active ? " active" : ""}`}
+                key={`origin-dot-${marker.location.id}`}
+                onMouseEnter={() => setActiveId(marker.location.id)}
+                onMouseLeave={() => setActiveId(null)}
+              >
+                <circle className="origin-dot-halo" cx={point.x} cy={point.y} r={9 + Math.min(marker.rowCount, 5)} />
+                <circle className="origin-dot" cx={point.x} cy={point.y} r={4.8} />
+                <title>{`${marker.location.label}: ${marker.location.city}, ${marker.location.country}`}</title>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </section>
+  );
+}
+
+function modelOriginMarkers(rows: LeaderboardRow[]) {
+  const groups = new Map<string, { location: LabOriginLocation; models: Set<string>; rowCount: number }>();
+  for (const row of rows) {
+    const location = originLocationForRow(row);
+    if (!location) continue;
+    const group = groups.get(location.id) ?? { location, models: new Set<string>(), rowCount: 0 };
+    group.models.add(shortModelLabel(row));
+    group.rowCount += 1;
+    groups.set(location.id, group);
+  }
+  return LAB_ORIGIN_LOCATIONS.flatMap((location): ModelOriginMarker[] => {
+    const group = groups.get(location.id);
+    if (!group) return [];
+    return [{ location, models: [...group.models].sort(modelNameSort), rowCount: group.rowCount }];
+  });
+}
+
+function originLocationForRow(row: LeaderboardRow) {
+  const source = `${providerLabel(row)} ${row.family} ${row.base_model_name} ${row.variant_name} ${apiModel(row) ?? ""}`.toLowerCase();
+  if (source.includes("qwen") || source.includes("alibaba")) return originLocation("alibaba");
+  if (source.includes("gemma") || source.includes("google")) return originLocation("google");
+  if (source.includes("granite") || source.includes("ibm")) return originLocation("ibm");
+  if (source.includes("lfm") || source.includes("liquid")) return originLocation("liquid");
+  if (source.includes("llama") || source.includes("meta")) return originLocation("meta");
+  if (source.includes("ministral") || source.includes("mistral")) return originLocation("mistral");
+  if (source.includes("nemotron") || source.includes("nvidia")) return originLocation("nvidia");
+  if (source.includes("olmo") || source.includes("ai2") || source.includes("allenai")) return originLocation("ai2");
+  if (source.includes("phi") || source.includes("microsoft")) return originLocation("microsoft");
+  if (source.includes("smollm") || source.includes("hugging face")) return originLocation("huggingface");
+  if (source.includes("falcon") || source.includes("tii")) return originLocation("tii");
+  if (source.includes("openai") || /\bgpt-[\w.-]+/.test(source)) return originLocation("openai");
+  return null;
+}
+
+function originLocation(id: string) {
+  return LAB_ORIGIN_LOCATIONS.find((location) => location.id === id) ?? null;
+}
+
+function originPoint(location: LabOriginLocation) {
+  return {
+    x: ORIGIN_MAP.mapX + ((location.lon + 180) / 360) * ORIGIN_MAP.mapW,
+    y: ORIGIN_MAP.mapY + ((90 - location.lat) / 180) * ORIGIN_MAP.mapH,
+  };
+}
+
+function originCalloutPoint(location: LabOriginLocation) {
+  return {
+    x: location.side === "left" ? location.labelX + 15 : location.labelX - 15,
+    y: location.labelY + 9,
+  };
+}
+
+function originModelSummary(location: LabOriginLocation, models: string[]) {
+  const custom: Record<string, string> = {
+    ai2: "Olmo 7B",
+    alibaba: "Qwen 0.8B-9B",
+    google: "Gemma E2B / E4B",
+    huggingface: "SmolLM3 3B",
+    ibm: "Granite 3B / 8B",
+    liquid: "LFM 350M / 1.2B",
+    meta: "Llama 1B / 3B",
+    microsoft: "Phi 4 mini",
+    mistral: "Ministral 3B / 8B",
+    nvidia: "Nemotron 3 Nano",
+    openai: "GPT hosted",
+    tii: "Falcon H1 3B",
+  };
+  if (custom[location.id]) return custom[location.id];
+  if (models.length <= 2) return models.join(" / ");
+  const firstTwo = models.slice(0, 2).join(" / ");
+  return `${firstTwo} +${models.length - 2}`;
+}
+
+function modelNameSort(a: string, b: string) {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
 function LandscapeSection({ rows }: { rows: LeaderboardRow[] }) {

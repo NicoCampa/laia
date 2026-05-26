@@ -834,6 +834,119 @@ p {
   line-height: 1.55;
 }
 
+.model-origin-section {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 22px;
+}
+
+.origin-map-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+.origin-world-map {
+  display: block;
+  width: 100%;
+  min-width: 920px;
+  height: auto;
+  background: #fff;
+}
+
+.origin-map-background {
+  fill: #fff;
+  stroke: #111;
+  stroke-width: 1.25;
+}
+
+.origin-countries path {
+  fill: #fff;
+  stroke: #111;
+  stroke-linejoin: round;
+  stroke-width: 0.58;
+  vector-effect: non-scaling-stroke;
+}
+
+.origin-connection,
+.origin-dot-node {
+  outline: none;
+}
+
+.origin-leader {
+  fill: none;
+  stroke: #111;
+  stroke-dasharray: 3 4;
+  stroke-linecap: round;
+  stroke-width: 1;
+  opacity: 0.5;
+  vector-effect: non-scaling-stroke;
+  transition: opacity 160ms ease, stroke-width 160ms ease;
+}
+
+.origin-label {
+  fill: var(--ink);
+  pointer-events: none;
+}
+
+.origin-lab {
+  font-size: 17px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.origin-city,
+.origin-models {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.origin-city {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.origin-models {
+  fill: var(--quiet);
+  font-size: 9px;
+}
+
+.origin-dot-halo {
+  fill: var(--accent);
+  opacity: 0.78;
+  stroke: #111;
+  stroke-width: 0.9;
+  transition: opacity 160ms ease, r 160ms ease;
+  vector-effect: non-scaling-stroke;
+}
+
+.origin-dot {
+  fill: #111;
+  stroke: #fff;
+  stroke-width: 1.5;
+  transition: r 160ms ease;
+  vector-effect: non-scaling-stroke;
+}
+
+.origin-connection.active .origin-leader,
+.origin-connection:hover .origin-leader,
+.origin-connection:focus .origin-leader {
+  stroke-width: 1.45;
+  opacity: 0.92;
+}
+
+.origin-dot-node.active .origin-dot-halo,
+.origin-dot-node:hover .origin-dot-halo {
+  opacity: 1;
+}
+
+.origin-dot-node.active .origin-dot,
+.origin-dot-node:hover .origin-dot {
+  r: 6;
+}
+
 .landscape-section {
   display: grid;
   gap: 14px;
@@ -4289,6 +4402,34 @@ body::before {
 
   .leaderboard-landing + .leaderboard-shell {
     margin-top: 26px;
+  }
+
+  .model-origin-section {
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .origin-map-scroll {
+    margin-inline: -14px;
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .origin-world-map {
+    width: 980px;
+    min-width: 980px;
+  }
+
+  .origin-lab {
+    font-size: 18px;
+  }
+
+  .origin-city {
+    font-size: 10.5px;
+  }
+
+  .origin-models {
+    font-size: 9.5px;
   }
 
   .ranking-list {
