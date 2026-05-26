@@ -130,10 +130,10 @@ const PAGE_LABELS: Record<Page, string> = {
 };
 
 const PAGE_COPY: Record<Page, string> = {
-  leaderboard: "Rank local and hosted models by the text-only LAIA Index and its five capability scores.",
+  leaderboard: "Rank 4-bit local models by the text-only LAIA Index and its five capability scores.",
   benchmarks: "Inspect each benchmark slice, language group, category, and diagnostic metric.",
-  efficiency: "Compare score, footprint, quantization, and points per GB for local deployment choices.",
-  models: "Browse every model version with source links, benchmark coverage, run metadata, and raw metrics.",
+  efficiency: "Compare score, footprint, and points per GB for 4-bit local deployment choices.",
+  models: "Browse every 4-bit model version with source links, benchmark coverage, run metadata, and raw metrics.",
   methodology: "Understand the LAIA formula, included benchmarks, excluded judge and vision metrics, and reproducibility settings.",
 };
 
@@ -163,7 +163,6 @@ const INDEX_GB_LIMITS = [
 
 const LEADERBOARD_CHAPTERS = [
   { id: "leaderboard-landscape", label: "Footprint" },
-  { id: "leaderboard-formula", label: "Formula" },
   { id: "leaderboard-insights", label: "Insights" },
   { id: "leaderboard-operations", label: "Run Signals" },
 ];
@@ -543,15 +542,16 @@ export function App() {
     [rawRows],
   );
   const comparableRows = useMemo(() => buildComparableRows(publishableRows), [publishableRows]);
+  const publicRows = useMemo(() => comparableRows.filter(isFourBitRow), [comparableRows]);
   const filteredRows = useMemo(
-    () => applyFilters(comparableRows, filters),
-    [comparableRows, filters],
+    () => applyFilters(publicRows, filters),
+    [publicRows, filters],
   );
   const leaderboardRows = useMemo(
-    () => filteredRows.filter((row) => isFourBitRow(row) || isHostedOpenAIRow(row)).sort((a, b) => scoreForRank(b) - scoreForRank(a)),
+    () => filteredRows.sort((a, b) => scoreForRank(b) - scoreForRank(a)),
     [filteredRows],
   );
-  const options = useMemo(() => optionSets(comparableRows), [comparableRows]);
+  const options = useMemo(() => optionSets(publicRows), [publicRows]);
 
   if (error) {
     return <StateShell title="Benchmark data failed to load" detail={error} />;
@@ -593,7 +593,7 @@ export function App() {
       {page === "models" && (
         <ModelsPage
           rows={filteredRows}
-          allRows={comparableRows}
+          allRows={publicRows}
           selectedModelId={selectedModelId}
           onSelectedModelIdChange={setSelectedModelId}
         />
@@ -742,11 +742,10 @@ function LeaderboardPage({
 }) {
   const [parameterLimit, setParameterLimit] = useState("all");
   const [gbLimit, setGbLimit] = useState("all");
-  const [excludeClosedSource, setExcludeClosedSource] = useState(false);
   const activeChapter = useScrollSpy(LEADERBOARD_CHAPTERS.map((chapter) => chapter.id));
   const chartRows = useMemo(
-    () => topIndexRows(rows, parameterLimit, gbLimit, excludeClosedSource),
-    [rows, parameterLimit, gbLimit, excludeClosedSource],
+    () => topIndexRows(rows, parameterLimit, gbLimit),
+    [rows, parameterLimit, gbLimit],
   );
   const completedRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
   const topRow = chartRows[0] ?? rows[0] ?? null;
@@ -762,7 +761,7 @@ function LeaderboardPage({
             across knowledge, instructions, tools, coding, and grounding.
           </p>
           <div className="landing-proof" aria-label="Leaderboard summary">
-            <span><b>{completedRows.length}</b> scored rows</span>
+            <span><b>{completedRows.length}</b> 4-bit rows</span>
             <span><b>{topRow ? formatIndexNumber(numeric(topRow.model_intelligence_score) ?? 0) : "n/a"}</b> top score</span>
             <span><b>5</b> text capabilities</span>
           </div>
@@ -773,10 +772,8 @@ function LeaderboardPage({
           rows={chartRows}
           parameterLimit={parameterLimit}
           gbLimit={gbLimit}
-          excludeClosedSource={excludeClosedSource}
           onParameterLimitChange={setParameterLimit}
           onGbLimitChange={setGbLimit}
-          onExcludeClosedSourceChange={setExcludeClosedSource}
           onOpenModel={onOpenModel}
         />
       </section>
@@ -785,10 +782,6 @@ function LeaderboardPage({
         <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
         <div className="page-grid leaderboard-view">
           <LandscapeSection rows={rows} />
-
-          <section className="chapter-section" id="leaderboard-formula">
-            <LaiaFormulaNote />
-          </section>
 
           <LeaderboardInsights rows={rows} onOpenModel={onOpenModel} />
         </div>
@@ -848,18 +841,6 @@ function useScrollSpy(sectionIds: string[]) {
   }, [sectionIds.join("|")]);
 
   return activeId;
-}
-
-function LaiaFormulaNote() {
-  return (
-    <section className="laia-note" aria-label="LAIA Index formula">
-      <strong>LAIA Index</strong>
-      {TEXT_CAPABILITIES.map((capability) => (
-        <span key={capability.id}>{capability.label} {capability.weight} pts</span>
-      ))}
-      <em>Judge and vision benchmarks are excluded from the public score.</em>
-    </section>
-  );
 }
 
 function LandscapeSection({ rows }: { rows: LeaderboardRow[] }) {
@@ -1360,10 +1341,8 @@ function IndexPlotCard({
   rows,
   parameterLimit,
   gbLimit,
-  excludeClosedSource,
   onParameterLimitChange,
   onGbLimitChange,
-  onExcludeClosedSourceChange,
   onOpenModel,
 }: {
   title: string;
@@ -1371,10 +1350,8 @@ function IndexPlotCard({
   rows: LeaderboardRow[];
   parameterLimit: string;
   gbLimit: string;
-  excludeClosedSource: boolean;
   onParameterLimitChange: (value: string) => void;
   onGbLimitChange: (value: string) => void;
-  onExcludeClosedSourceChange: (value: boolean) => void;
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
   const maxScore = Math.max(...rows.map((row) => numeric(row.model_intelligence_score) ?? 0), 0.01);
@@ -1403,16 +1380,6 @@ function IndexPlotCard({
               ))}
             </select>
           </label>
-          <label>
-            <span>Source</span>
-            <button
-              className={`index-filter-toggle ${excludeClosedSource ? "active" : ""}`}
-              type="button"
-              onClick={() => onExcludeClosedSourceChange(!excludeClosedSource)}
-            >
-              {excludeClosedSource ? "Hosted hidden" : "Exclude hosted"}
-            </button>
-          </label>
         </div>
       </div>
       <div className="index-plot-list" aria-label={title}>
@@ -1434,7 +1401,7 @@ function IndexPlotCard({
                   <i
                     style={{
                       height: `${height}%`,
-                      background: isHostedOpenAIRow(row) ? "var(--ink)" : providerColor(row),
+                      background: providerColor(row),
                     }}
                   />
                 </span>
@@ -2208,12 +2175,11 @@ function EfficiencyPage({ rows }: { rows: LeaderboardRow[] }) {
       <div className="section-heading">
         <div>
           <p className="eyebrow">Efficiency</p>
-          <h2>Score, size, and quantization</h2>
+          <h2>Score and footprint</h2>
         </div>
-        <p>Use this page to see whether precision or memory footprint is winning.</p>
+        <p>Use this page to see which 4-bit models preserve the most benchmark value per local footprint.</p>
       </div>
       <EfficiencyScatter rows={rows} />
-      <QuantizationLadder rows={rows} />
       <EfficiencyBars rows={rows} />
     </section>
   );
@@ -2279,41 +2245,6 @@ function EfficiencyScatter({ rows }: { rows: LeaderboardRow[] }) {
             );
           })}
         </svg>
-      </div>
-    </section>
-  );
-}
-
-function QuantizationLadder({ rows }: { rows: LeaderboardRow[] }) {
-  const groups = Array.from(groupBy(rows, quantizationGroupKey).values())
-    .map((groupRows) => groupRows.sort((a, b) => quantizationRank(a) - quantizationRank(b)))
-    .filter((groupRows) => groupRows.length > 1)
-    .slice(0, 14);
-
-  return (
-    <section className="chart-card">
-      <div className="chart-card-heading">
-        <span className="metric-icon"><BarChart3 size={16} /></span>
-        <div>
-          <h3>Quantization ladder</h3>
-          <p>Same model family across available precision levels.</p>
-        </div>
-      </div>
-      <div className="ladder-list">
-        {groups.length ? groups.map((groupRows) => (
-          <div className="ladder-row" key={quantizationGroupKey(groupRows[0])}>
-            <ModelIdentity row={groupRows[0]} />
-            <div className="ladder-track">
-              {groupRows.map((row) => (
-                <div className={`ladder-chip quant-${quantizationTone(row)}`} key={row.variant_id}>
-                  <span>{quantizationLabel(row)}</span>
-                  <b>{formatPoints(row.model_intelligence_score)}</b>
-                  <small>{formatModelSize(row)}</small>
-                </div>
-              ))}
-            </div>
-          </div>
-        )) : <p className="empty-note">No multi-quantization groups visible.</p>}
       </div>
     </section>
   );
@@ -2621,8 +2552,8 @@ function MethodologyPage() {
             <p>Vision, factuality, and safety have different evaluation assumptions. They are not part of the public LAIA pages or headline score.</p>
           </article>
           <article>
-            <h4>Quantization</h4>
-            <p>4-bit, 8-bit, and 16-bit/BF16 rows are separate model versions. The public default shows 4-bit local models plus hosted references; all versions can be revealed.</p>
+            <h4>Public scope</h4>
+            <p>The public site shows 4-bit local model rows only. Other precision levels and hosted references stay out of the main comparison.</p>
           </article>
           <article>
             <h4>Reproducibility</h4>
@@ -2834,7 +2765,6 @@ function topIndexRows(
   rows: LeaderboardRow[],
   parameterLimit: string,
   gbLimit: string,
-  excludeClosedSource: boolean,
 ) {
   const maxParameters = parameterLimit === "all" ? null : Number(parameterLimit);
   const maxGb = gbLimit === "all" ? null : Number(gbLimit);
@@ -2846,7 +2776,6 @@ function topIndexRows(
       return (
         score !== null &&
         score > 0 &&
-        (!excludeClosedSource || !isHostedOpenAIRow(row)) &&
         (maxParameters === null || (parameters !== null && parameters <= maxParameters)) &&
         (maxGb === null || (size !== null && size <= maxGb))
       );

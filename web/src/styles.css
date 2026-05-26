@@ -4077,9 +4077,9 @@ body::before {
 @media (max-width: 860px) {
   .site-header {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 8px;
     min-height: auto;
-    padding: 12px 14px 14px;
+    padding: 8px 10px 10px;
   }
 
   .site-mark {
@@ -4088,34 +4088,36 @@ body::before {
   }
 
   .site-mark span {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    font-size: 0.82rem;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    font-size: 0.78rem;
   }
 
   .site-mark strong {
     overflow: hidden;
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .site-header nav {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     justify-self: stretch;
     width: 100%;
     max-width: 100%;
     overflow: visible;
-    border-radius: 18px;
-    padding: 5px;
+    border-radius: 14px;
+    padding: 4px;
+    box-shadow: 0 8px 22px rgba(21, 23, 19, 0.04);
   }
 
   .site-header nav button {
     min-width: 0;
-    padding: 9px 13px;
-    font-size: 0.66rem;
+    min-height: 32px;
+    padding: 6px 4px;
+    font-size: clamp(0.48rem, 1.75vw, 0.58rem);
     text-align: center;
     white-space: nowrap;
   }
@@ -4591,6 +4593,10 @@ body::before {
     overflow: visible;
   }
 
+  .scatter-tooltip {
+    display: none;
+  }
+
   .point-label {
     display: none;
   }
@@ -4687,12 +4693,31 @@ body::before {
   }
 
   .coverage-table {
-    padding-bottom: 6px;
+    gap: 9px;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
-  .coverage-header,
+  .coverage-header {
+    display: none;
+  }
+
   .coverage-model-row {
-    min-width: 540px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    min-width: 0;
+    gap: 6px;
+    border-left-width: 4px;
+    padding: 8px;
+  }
+
+  .coverage-model-name {
+    grid-column: 1 / -1;
+  }
+
+  .coverage-cell {
+    min-height: 26px;
+    padding-inline: 4px;
+    font-size: 0.56rem;
   }
 
   .benchmark-column-plot {
@@ -4731,8 +4756,7 @@ body::before {
 
   .benchmark-top-plot::after,
   .benchmark-mini-card::after,
-  .language-card::after,
-  .coverage-card::after {
+  .language-card::after {
     content: "Swipe chart";
     display: block;
     margin-top: 8px;
@@ -4741,10 +4765,6 @@ body::before {
     font-size: 0.56rem;
     font-weight: 900;
     text-transform: uppercase;
-  }
-
-  .coverage-card::after {
-    content: "Swipe table";
   }
 
   .language-card {
