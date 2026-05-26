@@ -300,6 +300,7 @@ class LMStudioNativeClient(NativeClient):
         request_extra: dict[str, Any] | None = None,
         images: list[ImagePayload | dict[str, str]] | None = None,
     ) -> GenerationResponse:
+        prompt = _lmstudio_sanitize_prompt(prompt)
         if _lmstudio_uses_no_think_system_prompt(model, reasoning_effort) and not images:
             return self._generate_chat_completion_no_think(
                 model=model,
@@ -398,12 +399,25 @@ class LMStudioNativeClient(NativeClient):
                 "enableThinking": False,
             }
 
-        raw, runtime = self._request_json(
-            self.chat_completions_endpoint(),
-            method="POST",
-            payload=payload,
-            headers=self._headers(),
-        )
+        start = time.perf_counter()
+        try:
+            raw, runtime = self._request_json(
+                self.chat_completions_endpoint(),
+                method="POST",
+                payload=payload,
+                headers=self._headers(),
+            )
+        except RuntimeError as exc:
+            salvaged_text = _lmstudio_parse_error_text(exc)
+            if salvaged_text is None:
+                raise
+            runtime = time.perf_counter() - start
+            raw = {
+                "laia_salvaged_parse_error": True,
+                "laia_fallback_endpoint": "chat_completions",
+                "error": str(exc),
+            }
+            return GenerationResponse(text=salvaged_text, raw=raw, runtime_seconds=runtime)
         message = _first_chat_completion_message(raw)
         text = str(message.get("content") or "")
         raw["laia_fallback_endpoint"] = "chat_completions"
@@ -439,12 +453,25 @@ class LMStudioNativeClient(NativeClient):
         if response_format is not None:
             payload["response_format"] = response_format
 
-        raw, runtime = self._request_json(
-            self.chat_completions_endpoint(),
-            method="POST",
-            payload=payload,
-            headers=self._headers(),
-        )
+        start = time.perf_counter()
+        try:
+            raw, runtime = self._request_json(
+                self.chat_completions_endpoint(),
+                method="POST",
+                payload=payload,
+                headers=self._headers(),
+            )
+        except RuntimeError as exc:
+            salvaged_text = _lmstudio_parse_error_text(exc)
+            if salvaged_text is None:
+                raise
+            runtime = time.perf_counter() - start
+            raw = {
+                "laia_salvaged_parse_error": True,
+                "laia_fallback_endpoint": "chat_completions",
+                "error": str(exc),
+            }
+            return GenerationResponse(text=salvaged_text, raw=raw, runtime_seconds=runtime)
         message = _first_chat_completion_message(raw)
         text = str(message.get("content") or "")
         return GenerationResponse(text=text, raw=raw, runtime_seconds=runtime)
@@ -587,9 +614,33 @@ def _lmstudio_uses_no_think_system_prompt(model: str, reasoning_effort: str | No
 def _lmstudio_parse_input_failure(exc: RuntimeError) -> bool:
     message = str(exc)
     return (
-        "/api/v1/chat" in message
+        ("/api/v1/chat" in message or "/v1/chat/completions" in message)
         and "Failed to parse input at pos 0" in message
     )
+
+
+def _lmstudio_sanitize_prompt(prompt: str) -> str:
+    return prompt.replace("\ufffd", "").replace("\u200b", "")
+
+
+def _lmstudio_parse_error_text(exc: RuntimeError) -> str | None:
+    if not _lmstudio_parse_input_failure(exc):
+        return None
+    message = str(exc)
+    json_start = message.find("{")
+    if json_start >= 0:
+        try:
+            payload = json.loads(message[json_start:])
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, dict):
+            error_text = payload.get("error")
+            if isinstance(error_text, str):
+                prefix = "Failed to parse input at pos 0:"
+                if prefix in error_text:
+                    text = error_text.split(prefix, 1)[1].strip()
+                    return text.replace("\ufffdchar", "").replace("\ufffd", "").strip()
+    return None
 
 
 def _lmstudio_no_think_messages(model: str, prompt: str) -> list[dict[str, str]]:
