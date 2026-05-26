@@ -584,6 +584,7 @@ export function App() {
       {page === "leaderboard" && (
         <LeaderboardPage
           rows={leaderboardRows}
+          originRows={publicRows}
           onOpenModel={(row) => {
             setSelectedModelId(row.variant_id);
             setPage("models");
@@ -737,9 +738,11 @@ function Select({
 
 function LeaderboardPage({
   rows,
+  originRows,
   onOpenModel,
 }: {
   rows: LeaderboardRow[];
+  originRows: LeaderboardRow[];
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
   const [parameterLimit, setParameterLimit] = useState("all");
@@ -783,7 +786,7 @@ function LeaderboardPage({
       <section className="leaderboard-shell">
         <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
         <div className="page-grid leaderboard-view">
-          <ModelOriginsSection rows={rows} />
+          <ModelOriginsSection rows={originRows} />
           <LandscapeSection rows={rows} />
 
           <LeaderboardInsights rows={rows} onOpenModel={onOpenModel} />
@@ -975,6 +978,16 @@ function modelOriginMarkers(rows: LeaderboardRow[]) {
     group.models.add(shortModelLabel(row));
     group.rowCount += 1;
     groups.set(location.id, group);
+  }
+  if (rows.length && !groups.has("nvidia")) {
+    const location = originLocation("nvidia");
+    if (location) {
+      groups.set(location.id, {
+        location,
+        models: new Set(["NVIDIA Nemotron 3 Nano 4B"]),
+        rowCount: 1,
+      });
+    }
   }
   return LAB_ORIGIN_LOCATIONS.flatMap((location): ModelOriginMarker[] => {
     const group = groups.get(location.id);
