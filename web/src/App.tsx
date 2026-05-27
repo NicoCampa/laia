@@ -3275,7 +3275,7 @@ function shortModelLabel(row: LeaderboardRow) {
 function formatModelName(value: string) {
   const lastSegment = value.split("/").pop() ?? value;
   const withoutQuantSuffix = lastSegment.split("@")[0];
-  if (/nemotron[-_\s]*3[-_\s]*nano/i.test(lastSegment)) return "NVIDIA Nemotron 3 Nano 4B";
+  if (/nemotron[-_\s]*3[-_\s]*nano/i.test(lastSegment)) return "Nemotron 3 Nano 4B";
   const lfm = withoutQuantSuffix.match(/\blfm\s*(\d+(?:\.\d+)?)\s*[-_\s]*(\d+(?:\.\d+)?)([bm])\b/i);
   if (lfm) return `LFM ${lfm[1]} ${formatBillionSize(Number(lfm[2]) / (lfm[3].toLowerCase() === "m" ? 1000 : 1))}B`;
   const clean = lastSegment
