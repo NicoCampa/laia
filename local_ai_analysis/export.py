@@ -9,12 +9,30 @@ from typing import Any
 from local_ai_analysis.db import LocalAIAnalysisDB
 
 
+OUTPUT_CAP_POLICY = {
+    "global_mmlu_lite": 128,
+    "ifbench": 4096,
+    "bfcl_v4": 1024,
+    "mbpp": 2048,
+    "rgb": 512,
+}
+
+OUTPUT_CAP_PRIMARY_METRICS = {
+    "global_mmlu_lite_pass_at_1": "global_mmlu_lite",
+    "ifbench_prompt_level_loose": "ifbench",
+    "bfcl_v4_selected_accuracy": "bfcl_v4",
+    "mbpp_pass_at_1": "mbpp",
+    "rgb_all_rate": "rgb",
+}
+
+
 def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
     db = LocalAIAnalysisDB(db_path)
     try:
         db.init_schema()
         language_breakdowns = _global_mmlu_language_breakdowns(db)
         rgb_language_breakdowns = _rgb_language_breakdowns(db)
+        output_cap_hits = _normalized_output_cap_hits(db)
         rows = []
         for row in db.leaderboard_rows():
             if not (
@@ -40,10 +58,14 @@ def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
             )
             if rgb_language_breakdown:
                 public["rgb_language_scores"] = rgb_language_breakdown
+            cap_hits = output_cap_hits.get((str(row.get("variant_id")), str(row.get("run_uuid"))))
+            if cap_hits:
+                public.update(cap_hits)
             rows.append(public)
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "tagline": "Reproducible local benchmark results for API-served AI models.",
+            "output_cap_policy": OUTPUT_CAP_POLICY,
             "leaderboard": rows,
             "filters": _filters(rows),
         }
@@ -392,6 +414,166 @@ def _rgb_language(value: Any) -> str | None:
     if text in {"zh", "chinese", "cn"} or text.startswith("zh_") or "_zh" in text:
         return "zh"
     return None
+
+
+def _normalized_output_cap_hits(
+    db: LocalAIAnalysisDB,
+) -> dict[tuple[str, str], dict[str, Any]]:
+    metric_names = list(OUTPUT_CAP_PRIMARY_METRICS)
+    placeholders = ", ".join("?" for _ in metric_names)
+    rows = db.conn.execute(
+        f"""
+        SELECT r.variant_id, br.run_uuid, r.metric_name, r.raw_json
+        FROM benchmark_result r
+        JOIN benchmark_run br ON r.run_id = br.id
+        WHERE r.metric_name IN ({placeholders})
+        """,
+        metric_names,
+    ).fetchall()
+    project_root = db.db_path.parent.parent
+    by_run: dict[tuple[str, str], dict[str, Any]] = {}
+    for variant_id, run_uuid, metric_name, raw_json in rows:
+        benchmark = OUTPUT_CAP_PRIMARY_METRICS.get(str(metric_name))
+        cap = OUTPUT_CAP_POLICY.get(str(benchmark))
+        if benchmark is None or cap is None:
+            continue
+        summary = _summary_from_raw_json(raw_json)
+        if not summary:
+            continue
+        hits, samples = _count_output_cap_hits(summary, cap=cap, project_root=project_root)
+        if samples <= 0:
+            continue
+
+        key = (str(variant_id), str(run_uuid))
+        bucket = by_run.setdefault(
+            key,
+            {
+                "benchmark_output_cap_hit_count": 0,
+                "benchmark_output_cap_hit_samples": 0,
+                "benchmark_output_cap_hit_rate": None,
+                "benchmark_output_cap_breakdown": [],
+            },
+        )
+        bucket["benchmark_output_cap_hit_count"] += hits
+        bucket["benchmark_output_cap_hit_samples"] += samples
+        bucket["benchmark_output_cap_breakdown"].append(
+            {
+                "benchmark": benchmark,
+                "max_output_tokens": cap,
+                "hits": hits,
+                "samples": samples,
+                "rate": hits / samples if samples else None,
+            }
+        )
+
+    for bucket in by_run.values():
+        samples = bucket["benchmark_output_cap_hit_samples"]
+        bucket["benchmark_output_cap_hit_rate"] = (
+            bucket["benchmark_output_cap_hit_count"] / samples if samples else None
+        )
+        bucket["benchmark_output_cap_breakdown"] = sorted(
+            bucket["benchmark_output_cap_breakdown"],
+            key=lambda item: list(OUTPUT_CAP_POLICY).index(item["benchmark"]),
+        )
+    return by_run
+
+
+def _summary_from_raw_json(raw_json: Any) -> dict[str, Any] | None:
+    try:
+        raw = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    summary = raw.get("summary")
+    return summary if isinstance(summary, dict) else None
+
+
+def _count_output_cap_hits(
+    summary: dict[str, Any],
+    *,
+    cap: int,
+    project_root: Path,
+) -> tuple[int, int]:
+    hits = 0
+    samples = 0
+    for path in _sample_paths(summary, project_root=project_root):
+        if not path.exists():
+            continue
+        with path.open("r", encoding="utf-8") as sample_file:
+            for line in sample_file:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                samples += 1
+                if _record_hit_output_cap(record, cap):
+                    hits += 1
+    return hits, samples
+
+
+def _sample_paths(summary: dict[str, Any], *, project_root: Path) -> list[Path]:
+    raw_paths: list[Any] = []
+    suite_cases = summary.get("suite_cases")
+    if isinstance(suite_cases, list):
+        raw_paths.extend(
+            case.get("samples_path")
+            for case in suite_cases
+            if isinstance(case, dict) and case.get("samples_path")
+        )
+    elif summary.get("samples_path"):
+        raw_paths.append(summary.get("samples_path"))
+
+    paths: list[Path] = []
+    for raw_path in raw_paths:
+        path = Path(str(raw_path))
+        if path.is_absolute():
+            paths.append(path)
+            continue
+        candidates = [project_root / path, Path.cwd() / path, path]
+        paths.append(next((candidate for candidate in candidates if candidate.exists()), candidates[0]))
+    return paths
+
+
+def _record_hit_output_cap(record: dict[str, Any], cap: int) -> bool:
+    if _record_finish_reason(record) == "length":
+        return True
+    usage = record.get("usage")
+    if isinstance(usage, dict):
+        completion_tokens = _to_int(usage.get("completion_tokens"))
+        if completion_tokens is not None and completion_tokens >= cap:
+            return True
+    return False
+
+
+def _record_finish_reason(record: dict[str, Any]) -> str | None:
+    if record.get("finish_reason") is not None:
+        return str(record.get("finish_reason")).lower()
+    raw_response = record.get("raw_response")
+    if not isinstance(raw_response, dict):
+        return None
+    choices = raw_response.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict) and first.get("finish_reason") is not None:
+            return str(first.get("finish_reason")).lower()
+    for key in ("done_reason", "stop_reason"):
+        if raw_response.get(key) is not None:
+            return str(raw_response.get(key)).lower()
+    return None
+
+
+def _to_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _to_float(value: Any) -> float | None:

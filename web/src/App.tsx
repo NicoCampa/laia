@@ -76,6 +76,10 @@ type LeaderboardRow = {
   benchmark_system_output_throughput_tokens_per_second?: number | null;
   benchmark_truncated_rate?: number | null;
   benchmark_truncated_count?: number | null;
+  benchmark_output_cap_hit_count?: number | null;
+  benchmark_output_cap_hit_samples?: number | null;
+  benchmark_output_cap_hit_rate?: number | null;
+  benchmark_output_cap_breakdown?: OutputCapBreakdown[] | string | null;
   started_at?: string | null;
   global_mmlu_lite_language_scores?: GlobalMMLULanguageScore[] | null;
   rgb_language_scores?: RGBLanguageScore[] | null;
@@ -96,9 +100,18 @@ type LanguageBreakdownScore = {
 type GlobalMMLULanguageScore = LanguageBreakdownScore;
 type RGBLanguageScore = LanguageBreakdownScore;
 
+type OutputCapBreakdown = {
+  benchmark: string;
+  max_output_tokens: number;
+  hits: number;
+  samples: number;
+  rate?: number | null;
+};
+
 type Payload = {
   generated_at: string;
   tagline: string;
+  output_cap_policy?: Record<string, number>;
   leaderboard: LeaderboardRow[];
 };
 
@@ -132,20 +145,20 @@ const PAGE_LABELS: Record<Page, string> = {
 const PAGE_HEADLINES: Record<Page, string> = {
   leaderboard: "Local model intelligence, measured on your machine.",
   benchmarks: "Benchmark evidence behind every score.",
-  models: "A practical catalog of 4-bit local models.",
+  models: "A practical catalog of 4-bit local models and hosted references.",
   methodology: "A score built for transparent comparison.",
 };
 
 const PAGE_COPY: Record<Page, string> = {
-  leaderboard: "Rank 4-bit local models by the text-only LAIA Index and its five capability scores.",
+  leaderboard: "Rank 4-bit local models and hosted OpenAI references by the text-only LAIA Index.",
   benchmarks: "Knowledge, instruction following, tool use, coding, and grounding are split into comparable slices.",
   models: "Ranked rows include source links, footprint, benchmark coverage, run metadata, and raw exported metrics.",
   methodology: "The public index keeps judge, safety, and vision results separate from the core local text comparison.",
 };
 
 const PAGE_SIGNALS: Record<Page, string[]> = {
-  leaderboard: ["4-bit local rows", "Merged benchmark runs", "Text-only LAIA Index"],
-  benchmarks: ["Capability-level tabs", "Language and category slices", "Invalid and truncation checks"],
+  leaderboard: ["4-bit rows + OpenAI refs", "Merged benchmark runs", "Text-only LAIA Index"],
+  benchmarks: ["Capability-level tabs", "Language and category slices", "Invalid and cap-hit checks"],
   models: ["Source and backend metadata", "Coverage status per benchmark", "Raw metric table"],
   methodology: ["100-point formula", "No external judge in the score", "4-bit public scope"],
 };
@@ -430,6 +443,18 @@ const RGB_COMPONENT_LABELS: Record<string, string> = {
 
 const CAPABILITIES = TEXT_CAPABILITIES;
 
+const OUTPUT_CAP_LABELS: Record<string, string> = {
+  global_mmlu_lite: "MMLU",
+  ifbench: "IFBench",
+  bfcl_v4: "BFCL",
+  mbpp: "MBPP",
+  rgb: "RGB",
+};
+
+const OUTPUT_CAP_ORDER = ["global_mmlu_lite", "ifbench", "bfcl_v4", "mbpp", "rgb"];
+
+const OUTPUT_CAP_SUMMARY = "MMLU 128 · IFBench 4096 · BFCL 1024 · MBPP 2048 · RGB 512";
+
 const LAIA_INDEX_WEIGHTS = {
   global_mmlu_lite_pass_at_1: 0.2,
   ifbench_prompt_level_loose: 0.2,
@@ -486,6 +511,8 @@ const RUN_SIGNAL_SUM_FIELDS = [
   "benchmark_completion_tokens",
   "benchmark_reasoning_tokens",
   "benchmark_truncated_count",
+  "benchmark_output_cap_hit_count",
+  "benchmark_output_cap_hit_samples",
   "benchmark_input_cost_usd",
   "benchmark_output_cost_usd",
   "benchmark_total_cost_usd",
@@ -507,6 +534,7 @@ const RAW_SCORE_COLUMNS = new Set<keyof LeaderboardRow>([
 
 const RAW_ERROR_COLUMNS = new Set<keyof LeaderboardRow>([
   "benchmark_truncated_rate",
+  "benchmark_output_cap_hit_rate",
   "global_mmlu_lite_invalid_rate",
   "bfcl_v4_invalid_rate",
   "mbpp_invalid_rate",
@@ -534,6 +562,8 @@ const RAW_TABLE_COLUMNS = [
   "benchmark_completion_tokens",
   "benchmark_output_tokens_per_second",
   "benchmark_truncated_rate",
+  "benchmark_output_cap_hit_rate",
+  "benchmark_output_cap_hit_count",
   "benchmark_total_cost_usd",
   "run_uuid",
 ];
@@ -557,7 +587,7 @@ export function App() {
     [rawRows],
   );
   const comparableRows = useMemo(() => buildComparableRows(publishableRows), [publishableRows]);
-  const publicRows = useMemo(() => comparableRows.filter(isFourBitRow), [comparableRows]);
+  const publicRows = useMemo(() => comparableRows.filter(isPublicLeaderboardRow), [comparableRows]);
   const filteredRows = useMemo(
     () => applyFilters(publicRows, filters),
     [publicRows, filters],
@@ -789,7 +819,7 @@ function LeaderboardPage({
             across knowledge, instructions, tools, coding, and grounding.
           </p>
           <div className="landing-proof" aria-label="Leaderboard summary">
-            <span><b>{completedRows.length}</b> 4-bit rows</span>
+            <span><b>{completedRows.length}</b> public rows</span>
             <span><b>{topRow ? formatIndexNumber(numeric(topRow.model_intelligence_score) ?? 0) : "n/a"}</b> top score</span>
             <span><b>5</b> text capabilities</span>
           </div>
@@ -1389,6 +1419,8 @@ type RunAggregate = {
   runtimeSeconds: number;
   samples: number;
   truncatedCount: number;
+  outputCapHitCount: number;
+  outputCapHitSamples: number;
   p95LatencySeconds: number | null;
   outputTokensPerSecond: number | null;
   latestStartedAt: string | null;
@@ -1433,11 +1465,15 @@ function LeaderboardInsights({
     })
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
-  const truncationItems: InsightItem[] = scoredRows
+  const capHitItems: InsightItem[] = scoredRows
     .flatMap((row) => {
       const stats = runStatsForRow(row, statsByKey);
-      return stats.truncatedCount > 0
-        ? [{ row, value: stats.truncatedCount, detail: `${formatCount(stats.samples)} samples inspected` }]
+      return stats.outputCapHitCount > 0
+        ? [{
+            row,
+            value: stats.outputCapHitCount,
+            detail: `${formatCapHitRatio(stats.outputCapHitCount, stats.outputCapHitSamples)} · ${formatOutputCapSources(row)}`,
+          }]
         : [];
     })
     .sort((a, b) => b.value - a.value)
@@ -1451,7 +1487,7 @@ function LeaderboardInsights({
             <p className="eyebrow">Benchmark Insight</p>
             <h2>What the suite is actually measuring</h2>
           </div>
-          <p>Coverage, run dates, token budget, and truncation make the headline score easier to trust.</p>
+          <p>Coverage, run dates, token budget, and cap-hit diagnostics make the headline score easier to trust.</p>
         </div>
         <div className="insight-grid two-column">
           <CoverageHeatmap rows={coverageRows} onOpenModel={onOpenModel} />
@@ -1465,7 +1501,7 @@ function LeaderboardInsights({
             <p className="eyebrow">Run Signals</p>
             <h2>Cost of producing the leaderboard</h2>
           </div>
-          <p>These charts expose practical benchmarking friction: tokens, slow runs, and outputs that hit limits.</p>
+          <p>These charts expose practical benchmarking friction: tokens, slow runs, and outputs that hit fixed caps.</p>
         </div>
         <div className="insight-grid three-column">
           <InsightBarChart
@@ -1484,12 +1520,12 @@ function LeaderboardInsights({
             onOpenModel={onOpenModel}
           />
           <InsightBarChart
-            title="Truncation watchlist"
-            subtitle="Runs where responses reached the configured output cap."
-            items={truncationItems}
+            title="Output cap hits"
+            subtitle={`Fixed per-benchmark caps: ${OUTPUT_CAP_SUMMARY}.`}
+            items={capHitItems}
             formatter={(value) => `${Math.round(value)}`}
             tone="truncation"
-            emptyLabel="No visible model reports truncated outputs."
+            emptyLabel="No visible model hit the fixed output caps."
             onOpenModel={onOpenModel}
           />
         </div>
@@ -2570,7 +2606,7 @@ function BenchmarkBar({ row, value, index }: { row: LeaderboardRow; value: numbe
       <ScoreBar value={value} tone="benchmark" />
       <strong>{formatPercent(value)}</strong>
       <span>{formatSamples(row)}</span>
-      <span>{formatTruncation(row)}</span>
+      <span>{formatOutputCapHits(row)}</span>
     </div>
   );
 }
@@ -2597,7 +2633,7 @@ function ModelsPage({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Model Catalog</p>
-          <h2>Pick from tested 4-bit models</h2>
+          <h2>Pick from tested local models and references</h2>
         </div>
         <p>Consumer rows stay compact first, then expand into sources, coverage, runtime, and raw metric details.</p>
       </div>
@@ -2619,7 +2655,7 @@ function ModelsPage({
           <p className="eyebrow">Model Registry</p>
           <h2>Coverage and source details</h2>
         </div>
-        <p>Open the details panel for links, benchmark status, token counts, runtime, and truncation metadata.</p>
+        <p>Open the details panel for links, benchmark status, token counts, runtime, and output cap metadata.</p>
       </div>
 
       <div className="model-registry">
@@ -2634,7 +2670,7 @@ function ModelsPage({
               <MetricPill label="Size" value={formatModelSize(row)} />
               <MetricPill label="LAIA" value={formatPoints(numeric(row.model_intelligence_score))} />
               <MetricPill label="Coverage" value={coverageLabel(row)} />
-              <MetricPill label="Truncation" value={formatTruncation(row).replace("trunc ", "")} />
+              <MetricPill label="Cap hits" value={formatOutputCapHits(row).replace("cap hits ", "")} />
             </div>
             <BenchmarkCoverage row={row} />
             <div className="registry-actions">
@@ -2797,7 +2833,7 @@ function ModelDetailsDrawer({ row, onClose }: { row: LeaderboardRow; onClose: ()
             <DetailItem label="Reasoning tokens" value={formatCount(numeric(row.benchmark_reasoning_tokens))} />
             <DetailItem label="Output tok/s" value={formatNumber(numeric(row.benchmark_output_tokens_per_second))} />
             <DetailItem label="P95 latency" value={formatSeconds(numeric(row.benchmark_p95_latency_seconds))} />
-            <DetailItem label="Truncated" value={formatTruncation(row).replace("trunc ", "")} />
+            <DetailItem label="Output cap hits" value={formatOutputCapHits(row).replace("cap hits ", "")} />
             <DetailItem label="Total cost" value={formatUsd(numeric(row.benchmark_total_cost_usd))} />
           </dl>
         </div>
@@ -2824,14 +2860,14 @@ function MethodologyPage() {
         <p>
           LAIA Index is a 100-point text-model score built from five non-judge benchmarks.
           The public comparison keeps other evaluation modes separate so a consumer can compare
-          local 4-bit models on one consistent surface.
+          local 4-bit models and hosted references on one consistent surface.
         </p>
       </div>
 
       <section className="trust-strip" aria-label="Consumer trust summary">
         <article>
           <span>Scope</span>
-          <strong>4-bit local rows</strong>
+          <strong>4-bit rows plus references</strong>
           <small>Hosted and larger precision rows stay outside the main comparison.</small>
         </article>
         <article>
@@ -2842,7 +2878,7 @@ function MethodologyPage() {
         <article>
           <span>Evidence</span>
           <strong>Run signals exposed</strong>
-          <small>Sample counts, tokens, latency, truncation, and sources remain visible.</small>
+          <small>Sample counts, tokens, latency, cap hits, and sources remain visible.</small>
         </article>
       </section>
 
@@ -2892,11 +2928,11 @@ function MethodologyPage() {
           </article>
           <article>
             <h4>Public scope</h4>
-            <p>The public site shows 4-bit local model rows only. Other precision levels and hosted references stay out of the main comparison.</p>
+            <p>The public site shows 4-bit local rows plus hosted OpenAI references. Other local precision levels stay out of the main comparison.</p>
           </article>
           <article>
             <h4>Reproducibility</h4>
-            <p>The site surfaces sample counts, truncation, token usage, runtime, and source metadata so unusual runs can be inspected instead of hidden.</p>
+            <p>The site surfaces sample counts, fixed-cap hits, token usage, runtime, and source metadata so unusual runs can be inspected instead of hidden.</p>
           </article>
         </div>
       </section>
@@ -3043,7 +3079,11 @@ function mergeLatestRunSignals(merged: LeaderboardRow, sourceRows: LeaderboardRo
   const completionTokens = numeric(merged.benchmark_completion_tokens) ?? 0;
   const totalTokens = numeric(merged.benchmark_total_tokens) ?? 0;
   const truncatedCount = numeric(merged.benchmark_truncated_count) ?? 0;
+  const outputCapHitCount = numeric(merged.benchmark_output_cap_hit_count) ?? 0;
+  const outputCapHitSamples = numeric(merged.benchmark_output_cap_hit_samples) ?? 0;
   merged.benchmark_truncated_rate = samples > 0 ? truncatedCount / samples : null;
+  merged.benchmark_output_cap_hit_rate = outputCapHitSamples > 0 ? outputCapHitCount / outputCapHitSamples : null;
+  merged.benchmark_output_cap_breakdown = mergeOutputCapBreakdowns(sources);
   merged.benchmark_avg_latency_seconds = samples > 0 && runtime > 0 ? runtime / samples : null;
   merged.benchmark_output_tokens_per_second = runtime > 0 ? completionTokens / runtime : null;
   merged.benchmark_total_tokens_per_second = runtime > 0 ? totalTokens / runtime : null;
@@ -3057,6 +3097,63 @@ function uniqueRowsByIdentity(rows: LeaderboardRow[]) {
     seen.add(key);
     return true;
   });
+}
+
+function mergeOutputCapBreakdowns(rows: LeaderboardRow[]) {
+  const byBenchmark = new Map<string, OutputCapBreakdown>();
+  for (const row of rows) {
+    for (const item of outputCapBreakdown(row)) {
+      const existing = byBenchmark.get(item.benchmark) ?? {
+        benchmark: item.benchmark,
+        max_output_tokens: item.max_output_tokens,
+        hits: 0,
+        samples: 0,
+        rate: null,
+      };
+      existing.hits += item.hits;
+      existing.samples += item.samples;
+      existing.max_output_tokens = item.max_output_tokens || existing.max_output_tokens;
+      existing.rate = existing.samples > 0 ? existing.hits / existing.samples : null;
+      byBenchmark.set(item.benchmark, existing);
+    }
+  }
+  return Array.from(byBenchmark.values()).sort(
+    (a, b) => outputCapSortIndex(a.benchmark) - outputCapSortIndex(b.benchmark),
+  );
+}
+
+function outputCapBreakdown(row: LeaderboardRow) {
+  const raw = row.benchmark_output_cap_breakdown;
+  let items: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      items = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(items)) return [];
+  return items.flatMap((item): OutputCapBreakdown[] => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const value = item as Record<string, unknown>;
+    const benchmark = typeof value.benchmark === "string" ? value.benchmark : "";
+    const maxTokens = numeric(value.max_output_tokens);
+    const hits = numeric(value.hits);
+    const samples = numeric(value.samples);
+    if (!benchmark || maxTokens === null || hits === null || samples === null) return [];
+    return [{
+      benchmark,
+      max_output_tokens: maxTokens,
+      hits,
+      samples,
+      rate: samples > 0 ? hits / samples : null,
+    }];
+  });
+}
+
+function outputCapSortIndex(benchmark: string) {
+  const index = OUTPUT_CAP_ORDER.indexOf(benchmark);
+  return index === -1 ? OUTPUT_CAP_ORDER.length : index;
 }
 
 function laiaIndexValues(row: LeaderboardRow) {
@@ -3135,6 +3232,8 @@ function emptyRunAggregate(): RunAggregate {
     runtimeSeconds: 0,
     samples: 0,
     truncatedCount: 0,
+    outputCapHitCount: 0,
+    outputCapHitSamples: 0,
     p95LatencySeconds: null,
     outputTokensPerSecond: null,
     latestStartedAt: null,
@@ -3154,6 +3253,8 @@ function runAggregates(rows: LeaderboardRow[]) {
     aggregate.runtimeSeconds += numeric(row.benchmark_runtime_seconds) ?? 0;
     aggregate.samples += numeric(row.benchmark_samples) ?? 0;
     aggregate.truncatedCount += numeric(row.benchmark_truncated_count) ?? 0;
+    aggregate.outputCapHitCount += numeric(row.benchmark_output_cap_hit_count) ?? numeric(row.benchmark_truncated_count) ?? 0;
+    aggregate.outputCapHitSamples += numeric(row.benchmark_output_cap_hit_samples) ?? numeric(row.benchmark_samples) ?? 0;
 
     const p95 = numeric(row.benchmark_p95_latency_seconds);
     if (p95 !== null) {
@@ -3191,6 +3292,8 @@ function runStatsForRow(row: LeaderboardRow, aggregates: Map<string, RunAggregat
     runtimeSeconds: numeric(row.benchmark_runtime_seconds) ?? 0,
     samples: numeric(row.benchmark_samples) ?? 0,
     truncatedCount: numeric(row.benchmark_truncated_count) ?? 0,
+    outputCapHitCount: numeric(row.benchmark_output_cap_hit_count) ?? numeric(row.benchmark_truncated_count) ?? 0,
+    outputCapHitSamples: numeric(row.benchmark_output_cap_hit_samples) ?? numeric(row.benchmark_samples) ?? 0,
     p95LatencySeconds: numeric(row.benchmark_p95_latency_seconds),
     outputTokensPerSecond: numeric(row.benchmark_output_tokens_per_second),
     latestStartedAt: row.started_at ?? null,
@@ -3226,6 +3329,10 @@ function rowToneClass(row: LeaderboardRow) {
 
 function isHostedOpenAIRow(row: LeaderboardRow) {
   return providerLabel(row) === "OpenAI";
+}
+
+function isPublicLeaderboardRow(row: LeaderboardRow) {
+  return isFourBitRow(row) || isHostedOpenAIRow(row);
 }
 
 function isFourBitRow(row: LeaderboardRow) {
@@ -3499,11 +3606,28 @@ function formatSamples(row: LeaderboardRow) {
   return `${value.toLocaleString()} samples`;
 }
 
-function formatTruncation(row: LeaderboardRow) {
-  const value = numeric(row.benchmark_truncated_rate);
-  if (value === null) return "trunc n/a";
-  const count = numeric(row.benchmark_truncated_count);
-  return count === null ? `${(value * 100).toFixed(1)}% trunc` : `${(value * 100).toFixed(1)}% trunc · ${count}`;
+function formatOutputCapHits(row: LeaderboardRow) {
+  const count = numeric(row.benchmark_output_cap_hit_count) ?? numeric(row.benchmark_truncated_count);
+  const samples = numeric(row.benchmark_output_cap_hit_samples) ?? numeric(row.benchmark_samples);
+  const rate = numeric(row.benchmark_output_cap_hit_rate) ?? (
+    count !== null && samples !== null && samples > 0 ? count / samples : null
+  );
+  if (rate === null) return "cap hits n/a";
+  return count === null ? `${(rate * 100).toFixed(1)}% cap hits` : `${(rate * 100).toFixed(1)}% cap hits · ${count}`;
+}
+
+function formatCapHitRatio(hits: number, samples: number) {
+  if (samples <= 0) return `${formatCount(hits)} hits`;
+  return `${formatCount(hits)}/${formatCount(samples)} samples`;
+}
+
+function formatOutputCapSources(row: LeaderboardRow) {
+  const sources = outputCapBreakdown(row)
+    .filter((item) => item.hits > 0)
+    .sort((a, b) => b.hits - a.hits)
+    .slice(0, 3)
+    .map((item) => `${OUTPUT_CAP_LABELS[item.benchmark] ?? humanizeColumn(item.benchmark)} ${formatCount(item.hits)}`);
+  return sources.length ? sources.join(" · ") : "Fixed caps";
 }
 
 function coverageLabel(row: LeaderboardRow) {

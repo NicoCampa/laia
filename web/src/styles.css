@@ -4246,29 +4246,52 @@ body::before {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
-  min-height: min(560px, calc(100svh - 128px));
+  min-height: min(500px, calc(100svh - 150px));
   border-radius: 28px;
   box-shadow: 0 24px 70px rgba(21, 23, 19, 0.08);
 }
 
 .leaderboard-landing .index-plot-list {
   height: 100%;
-  min-height: 300px;
-  padding-top: 14px;
-  padding-bottom: 6px;
+  min-height: 250px;
+  gap: 8px;
+  padding-top: 10px;
+  padding-bottom: 4px;
 }
 
 .leaderboard-landing .index-plot-column {
-  grid-template-rows: minmax(190px, 27vh) auto;
+  grid-template-rows: minmax(150px, 21vh) auto;
+  flex-basis: 70px;
+  min-width: 70px;
+  gap: 8px;
 }
 
 .leaderboard-landing .index-column-track {
   height: auto;
-  min-height: clamp(190px, 27vh, 280px);
+  min-height: clamp(150px, 21vh, 218px);
 }
 
 .leaderboard-landing .index-column-label {
-  grid-template-rows: 20px minmax(18px, auto) auto;
+  grid-template-rows: 18px minmax(24px, auto) auto;
+  gap: 6px;
+  min-height: 58px;
+}
+
+.leaderboard-landing .index-column-label .lab-icon {
+  width: 18px;
+  height: 18px;
+  margin-bottom: 2px;
+}
+
+.leaderboard-landing .index-column-label b {
+  min-height: 22px;
+  font-size: 0.6rem;
+  line-height: 1.08;
+}
+
+.leaderboard-landing .index-column-label span {
+  font-size: 0.49rem;
+  line-height: 1.1;
 }
 
 .leaderboard-landing .index-plot-heading {
@@ -4551,10 +4574,10 @@ body::before {
   .leaderboard-landing .index-plot-list {
     display: flex;
     height: auto;
-    min-height: 258px;
+    min-height: 224px;
     overflow-x: auto;
-    gap: 12px;
-    padding: 14px 4px 8px;
+    gap: 9px;
+    padding: 12px 4px 6px;
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
   }
@@ -4564,17 +4587,31 @@ body::before {
   }
 
   .leaderboard-landing .index-plot-column {
-    grid-template-rows: minmax(158px, 34vh) auto;
-    flex: 0 0 86px;
+    grid-template-rows: minmax(132px, 28vh) auto;
+    flex: 0 0 74px;
     scroll-snap-align: start;
   }
 
   .leaderboard-landing .index-column-track {
-    min-height: 158px;
+    min-height: 132px;
   }
 
   .leaderboard-landing .index-column-label {
-    grid-template-rows: 18px minmax(18px, auto) auto;
+    grid-template-rows: 17px minmax(21px, auto) auto;
+    gap: 5px;
+  }
+
+  .leaderboard-landing .index-column-label .lab-icon {
+    width: 17px;
+    height: 17px;
+  }
+
+  .leaderboard-landing .index-column-label b {
+    font-size: 0.56rem;
+  }
+
+  .leaderboard-landing .index-column-label span {
+    font-size: 0.46rem;
   }
 
   .leaderboard-landing + .leaderboard-shell {
@@ -4736,7 +4773,7 @@ body::before {
   }
 
   .leaderboard-landing .index-plot-column {
-    flex-basis: 78px;
+    flex-basis: 70px;
   }
 
   .leaderboard-shell {
@@ -4780,16 +4817,21 @@ body::before {
 }
 
 .leaderboard-landing .index-plot-card {
-  min-height: min(520px, calc(100svh - 126px));
+  min-height: min(500px, calc(100svh - 150px));
   border-radius: var(--radius-xl);
 }
 
 .leaderboard-landing .index-plot-list {
-  min-height: 286px;
+  min-height: 250px;
+}
+
+.leaderboard-landing .index-plot-column {
+  flex-basis: 70px;
+  min-width: 70px;
 }
 
 .leaderboard-landing .index-column-track {
-  min-height: clamp(178px, 24vh, 260px);
+  min-height: clamp(150px, 21vh, 218px);
 }
 
 .landscape-scatter,
