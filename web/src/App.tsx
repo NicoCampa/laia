@@ -102,7 +102,7 @@ type Payload = {
   leaderboard: LeaderboardRow[];
 };
 
-type Page = "leaderboard" | "benchmarks" | "efficiency" | "models" | "methodology";
+type Page = "leaderboard" | "benchmarks" | "models" | "methodology";
 
 type Filters = {
   query: string;
@@ -125,7 +125,6 @@ type Capability = {
 const PAGE_LABELS: Record<Page, string> = {
   leaderboard: "Leaderboard",
   benchmarks: "Benchmarks",
-  efficiency: "Efficiency",
   models: "Models",
   methodology: "Methodology",
 };
@@ -133,7 +132,6 @@ const PAGE_LABELS: Record<Page, string> = {
 const PAGE_COPY: Record<Page, string> = {
   leaderboard: "Rank 4-bit local models by the text-only LAIA Index and its five capability scores.",
   benchmarks: "Inspect each benchmark slice, language group, category, and diagnostic metric.",
-  efficiency: "Compare score, footprint, and points per GB for 4-bit local deployment choices.",
   models: "Browse every 4-bit model version with source links, benchmark coverage, run metadata, and raw metrics.",
   methodology: "Understand the LAIA formula, included benchmarks, excluded judge and vision metrics, and reproducibility settings.",
 };
@@ -592,7 +590,6 @@ export function App() {
         />
       )}
       {page === "benchmarks" && <BenchmarksPage rows={leaderboardRows} />}
-      {page === "efficiency" && <EfficiencyPage rows={leaderboardRows} />}
       {page === "models" && (
         <ModelsPage
           rows={filteredRows}
@@ -628,7 +625,7 @@ function SiteHeader({
   page: Page;
   onNavigate: (page: Page) => void;
 }) {
-  const pages: Page[] = ["leaderboard", "benchmarks", "efficiency", "models", "methodology"];
+  const pages: Page[] = ["leaderboard", "benchmarks", "models", "methodology"];
   return (
     <header className="site-header">
       <button className="site-mark" type="button" onClick={() => onNavigate("leaderboard")}>
@@ -2379,121 +2376,6 @@ function BenchmarkBar({ row, value, index }: { row: LeaderboardRow; value: numbe
       <span>{formatSamples(row)}</span>
       <span>{formatTruncation(row)}</span>
     </div>
-  );
-}
-
-function EfficiencyPage({ rows }: { rows: LeaderboardRow[] }) {
-  return (
-    <section className="page-grid">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Efficiency</p>
-          <h2>Score and footprint</h2>
-        </div>
-        <p>Use this page to see which 4-bit models preserve the most benchmark value per local footprint.</p>
-      </div>
-      <EfficiencyScatter rows={rows} />
-      <EfficiencyBars rows={rows} />
-    </section>
-  );
-}
-
-function EfficiencyScatter({ rows }: { rows: LeaderboardRow[] }) {
-  const points = rows
-    .map((row) => ({ row, x: modelSizeGb(row), y: numeric(row.model_intelligence_score) }))
-    .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
-  if (points.length < 2) return null;
-
-  const width = 920;
-  const height = 390;
-  const pad = { top: 28, right: 52, bottom: 50, left: 70 };
-  const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
-  const maxX = Math.max(1, Math.ceil(Math.max(...points.map((p) => p.x)) * 1.1));
-  const maxY = Math.max(0.12, Math.ceil(Math.max(...points.map((p) => p.y)) * 120) / 100);
-  const xFor = (x: number) => pad.left + (x / maxX) * plotW;
-  const yFor = (y: number) => pad.top + plotH - (y / maxY) * plotH;
-  const labeled = new Set([...points].sort((a, b) => b.y - a.y).slice(0, 5).map((p) => p.row.variant_id));
-
-  return (
-    <section className="chart-card">
-      <div className="chart-card-heading">
-        <span className="metric-icon"><Gauge size={16} /></span>
-        <div>
-          <h3>LAIA Index vs model size</h3>
-          <p>Memory footprint on x-axis, capability points on y-axis.</p>
-        </div>
-      </div>
-      <div className="scatter-shell">
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index versus model size">
-          {[0, maxX / 2, maxX].map((tick) => (
-            <g key={`x-${tick}`}>
-              <line className="grid-line" x1={xFor(tick)} x2={xFor(tick)} y1={pad.top} y2={pad.top + plotH} />
-              <text className="axis-label" x={xFor(tick)} y={height - 18} textAnchor="middle">
-                {tick === 0 ? "0" : `${tick.toFixed(tick < 10 ? 1 : 0)} GB`}
-              </text>
-            </g>
-          ))}
-          {[0, maxY / 2, maxY].map((tick) => (
-            <g key={`y-${tick}`}>
-              <line className="grid-line" x1={pad.left} x2={pad.left + plotW} y1={yFor(tick)} y2={yFor(tick)} />
-              <text className="axis-label" x={pad.left - 10} y={yFor(tick) + 4} textAnchor="end">
-                {formatPoints(tick)}
-              </text>
-            </g>
-          ))}
-          {points.map((point) => {
-            const isLabeled = labeled.has(point.row.variant_id);
-            return (
-              <g key={point.row.variant_id}>
-                <circle className={`scatter-point quant-${quantizationTone(point.row)}`} cx={xFor(point.x)} cy={yFor(point.y)} r={isLabeled ? 6 : 4.5}>
-                  <title>{displayModelName(point.row)} · {formatPoints(point.y)} · {formatModelSize(point.row)}</title>
-                </circle>
-                {isLabeled && (
-                  <text className="point-label" x={xFor(point.x) + 9} y={yFor(point.y) - 8}>
-                    {shortModelLabel(point.row)}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    </section>
-  );
-}
-
-function EfficiencyBars({ rows }: { rows: LeaderboardRow[] }) {
-  const items = rows
-    .map((row) => {
-      const size = modelSizeGb(row);
-      const score = numeric(row.model_intelligence_score);
-      return size && score ? { row, value: (score * 100) / size } : null;
-    })
-    .filter((item): item is { row: LeaderboardRow; value: number } => item !== null)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 14);
-  const max = Math.max(...items.map((item) => item.value), 0.01);
-
-  return (
-    <section className="chart-card">
-      <div className="chart-card-heading">
-        <span className="metric-icon"><Gauge size={16} /></span>
-        <div>
-          <h3>Best score per GB</h3>
-          <p>Higher means more benchmark value per local footprint.</p>
-        </div>
-      </div>
-      <div className="efficiency-bars">
-        {items.map(({ row, value }) => (
-          <div className="efficiency-row" key={`eff-${row.variant_id}`}>
-            <ModelIdentity row={row} />
-            <div className="efficiency-bar"><span style={{ width: `${(value / max) * 100}%` }} /></div>
-            <strong>{value.toFixed(1)} pts/GB</strong>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 

@@ -2102,15 +2102,13 @@ p {
   background: #dadad2;
 }
 
-.ladder-list,
-.efficiency-bars {
+.ladder-list {
   display: grid;
   gap: 10px;
   margin-top: 18px;
 }
 
-.ladder-row,
-.efficiency-row {
+.ladder-row {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.2fr) auto;
   gap: 18px;
@@ -2158,11 +2156,6 @@ p {
   display: block;
   height: 100%;
   background: var(--accent);
-}
-
-.efficiency-row > strong {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .full-table-shell {
@@ -2618,8 +2611,7 @@ td {
   .compact-efficiency-row,
   .benchmark-bar-row,
   .model-registry-row,
-  .ladder-row,
-  .efficiency-row {
+  .ladder-row {
     grid-template-columns: 1fr;
   }
 
@@ -3124,7 +3116,6 @@ input {
 .leaderboard-row,
 .model-registry-row,
 .benchmark-bar-row,
-.efficiency-row,
 .ladder-row,
 .compact-efficiency-row {
   border: 1px solid rgba(21, 23, 19, 0.1);
@@ -3138,7 +3129,6 @@ input {
 .leaderboard-row:hover,
 .model-registry-row:hover,
 .benchmark-bar-row:hover,
-.efficiency-row:hover,
 .ladder-row:hover {
   transform: translateY(-2px);
   border-color: rgba(21, 23, 19, 0.18);
@@ -3209,8 +3199,7 @@ input {
 
 .metric-bar,
 .capability-bar,
-.footprint-bar,
-.efficiency-meter {
+.footprint-bar {
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
@@ -3219,8 +3208,7 @@ input {
 
 .metric-bar span,
 .capability-bar span,
-.footprint-bar span,
-.efficiency-meter span {
+.footprint-bar span {
   border-radius: inherit;
 }
 
@@ -4586,7 +4574,6 @@ body::before {
 .insight-card,
 .model-registry-row,
 .leaderboard-row,
-.efficiency-row,
 .ladder-row,
 .method-card,
 .formula-grid article,
@@ -4633,8 +4620,7 @@ body::before {
 }
 
 .compact-efficiency-row,
-.insight-bar-row,
-.efficiency-row {
+.insight-bar-row {
   min-width: 0;
 }
 
@@ -4781,31 +4767,6 @@ body::before {
     grid-row: 1;
     min-width: 44px;
     font-size: 0.86rem;
-    text-align: right;
-  }
-
-  .efficiency-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px 12px;
-    align-items: center;
-    padding: 14px;
-    overflow: visible;
-  }
-
-  .efficiency-row .model-identity {
-    grid-column: 1 / -1;
-  }
-
-  .efficiency-row .efficiency-bar {
-    grid-column: 1;
-    min-width: 0;
-    height: 14px;
-  }
-
-  .efficiency-row > strong {
-    grid-column: 2;
-    min-width: 74px;
-    font-size: 0.9rem;
     text-align: right;
   }
 
