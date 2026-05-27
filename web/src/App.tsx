@@ -175,6 +175,7 @@ const INDEX_GB_LIMITS = [
 ];
 
 const LEADERBOARD_CHAPTERS = [
+  { id: "leaderboard-picks", label: "Budgets" },
   { id: "leaderboard-origins", label: "Origins" },
   { id: "leaderboard-landscape", label: "Footprint" },
   { id: "leaderboard-insights", label: "Insights" },
@@ -838,13 +839,13 @@ function ConsumerChoicePanel({
   if (!choices.length) return null;
 
   return (
-    <section className="consumer-choice-section" aria-label="Consumer model recommendations">
+    <section className="chapter-section consumer-choice-section" id="leaderboard-picks" aria-label="Consumer model recommendations">
       <div className="section-heading compact">
         <div>
           <p className="eyebrow">Start Here</p>
-          <h2>Shortlist the model that fits the job</h2>
+          <h2>Best models by memory budget</h2>
         </div>
-        <p>Three practical cuts of the same benchmark table: strongest score, compact footprint, and best points per GB.</p>
+        <p>Highest LAIA Index under common local footprint ceilings.</p>
       </div>
       <div className="consumer-choice-grid">
         {choices.map((choice) => (
@@ -868,7 +869,6 @@ function ConsumerChoicePanel({
 
 function consumerChoices(rows: LeaderboardRow[]) {
   const scoredRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
-  const used = new Set<string>();
   const choices: ConsumerChoice[] = [];
 
   const pushChoice = (
@@ -880,51 +880,25 @@ function consumerChoices(rows: LeaderboardRow[]) {
   ) => {
     if (!row) return;
     choices.push({ id, label, row, value, detail });
-    used.add(row.variant_id);
   };
 
-  const bestOverall = bestConsumerRow(scoredRows, () => true, (row) => scoreForRank(row), used);
-  pushChoice(
-    "overall",
-    "Best overall",
-    bestOverall,
-    bestOverall ? formatPoints(numeric(bestOverall.model_intelligence_score)) : "n/a",
-    "Highest current LAIA Index among visible 4-bit rows.",
-  );
-
-  const compact = bestConsumerRow(
-    scoredRows,
-    (row) => {
-      const size = modelSizeGb(row);
-      return size !== null && size <= 4;
-    },
-    (row) => scoreForRank(row),
-    used,
-  );
-  pushChoice(
-    "compact",
-    "Best under 4 GB",
-    compact,
-    compact ? formatModelSize(compact) : "n/a",
-    compact ? `${formatPoints(numeric(compact.model_intelligence_score))} with a small local footprint.` : "Compact row unavailable.",
-  );
-
-  const value = bestConsumerRow(
-    scoredRows,
-    (row) => modelSizeGb(row) !== null,
-    (row) => {
-      const size = modelSizeGb(row);
-      return size ? scoreForRank(row) / size : 0;
-    },
-    used,
-  );
-  pushChoice(
-    "value",
-    "Best points per GB",
-    value,
-    value && modelSizeGb(value) ? `${((scoreForRank(value) * 100) / (modelSizeGb(value) ?? 1)).toFixed(1)}` : "n/a",
-    value ? `${formatPoints(numeric(value.model_intelligence_score))} from ${formatModelSize(value)}.` : "Value row unavailable.",
-  );
+  for (const budget of [8, 4, 2]) {
+    const best = bestConsumerRow(
+      scoredRows,
+      (row) => {
+        const size = modelSizeGb(row);
+        return size !== null && size <= budget;
+      },
+      (row) => scoreForRank(row),
+    );
+    pushChoice(
+      `best-${budget}gb`,
+      `Best ${budget} GB`,
+      best,
+      best ? formatPoints(numeric(best.model_intelligence_score)) : "n/a",
+      best ? `${formatModelSize(best)} footprint within the ${budget} GB ceiling.` : `No tested row under ${budget} GB.`,
+    );
+  }
 
   return choices;
 }
@@ -933,13 +907,17 @@ function bestConsumerRow(
   rows: LeaderboardRow[],
   predicate: (row: LeaderboardRow) => boolean,
   valueFor: (row: LeaderboardRow) => number,
-  excluded: Set<string>,
 ) {
-  const preferred = rows
-    .filter((row) => !excluded.has(row.variant_id) && predicate(row))
-    .sort((a, b) => valueFor(b) - valueFor(a))[0];
-  if (preferred) return preferred;
-  return rows.filter(predicate).sort((a, b) => valueFor(b) - valueFor(a))[0] ?? null;
+  return rows.filter(predicate).sort((a, b) => {
+    const valueDelta = valueFor(b) - valueFor(a);
+    if (valueDelta !== 0) return valueDelta;
+    const aSize = modelSizeGb(a);
+    const bSize = modelSizeGb(b);
+    if (aSize !== null && bSize !== null) return aSize - bSize;
+    if (aSize !== null) return -1;
+    if (bSize !== null) return 1;
+    return 0;
+  })[0] ?? null;
 }
 
 function ChapterNav({
@@ -3288,6 +3266,11 @@ function formatModelName(value: string) {
   if (qwen) return `Qwen ${qwen[1]} ${qwen[2]}B`;
   const gemmaEdge = clean.match(/\bgemma\s*(\d+(?:\.\d+)?)\s*e\s*(\d+(?:\.\d+)?)\s*b\b/i);
   if (gemmaEdge) return `Gemma ${gemmaEdge[1]} E${gemmaEdge[2]}B`;
+  const falconH = clean.match(/\bfalcon\s*h\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)([bm])\b/i);
+  if (falconH) {
+    const size = falconH[3].toLowerCase() === "m" ? Number(falconH[2]) / 1000 : Number(falconH[2]);
+    return `Falcon H${falconH[1]} ${formatBillionSize(size)}B`;
+  }
   const generic = clean.match(/\b([a-z]+(?:\s+h)?)(?:\s+)?(\d+(?:\.\d+)?)?(?:\s+)?(\d+(?:\.\d+)?)([bm])\b/i);
   if (generic) {
     const family = titleCaseModelName(generic[1].trim());
