@@ -1027,7 +1027,7 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
           <p className="eyebrow">Model Origins</p>
           <h2>Model lab HQ map</h2>
         </div>
-        <p>Dots mark headquarters cities for each visible 4-bit model family.</p>
+        <p>Dots mark headquarters cities; logos identify each lab callout.</p>
       </div>
 
       <div className="origin-map-scroll">
@@ -1045,6 +1045,7 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
           {markers.map((marker) => {
             const point = originPoint(marker.location);
             const callout = originCalloutPoint(marker.location);
+            const logo = originLogoBox(marker.location);
             const active = activeId === marker.location.id;
             return (
               <g
@@ -1057,6 +1058,17 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
                 tabIndex={0}
               >
                 <path className="origin-leader" d={`M${callout.x},${callout.y} L${point.x},${point.y}`} />
+                <g className="origin-logo-badge" aria-hidden="true">
+                  <rect x={logo.x} y={logo.y} width={logo.size} height={logo.size} rx="8" />
+                  <image
+                    href={originLogoSrc(marker.location.id)}
+                    x={logo.x + 5}
+                    y={logo.y + 5}
+                    width={logo.size - 10}
+                    height={logo.size - 10}
+                    preserveAspectRatio="xMidYMid meet"
+                  />
+                </g>
                 <text
                   className="origin-label"
                   x={marker.location.labelX}
@@ -1108,7 +1120,7 @@ function modelOriginMarkers(rows: LeaderboardRow[]) {
     if (location) {
       groups.set(location.id, {
         location,
-        models: new Set(["NVIDIA Nemotron 3 Nano 4B"]),
+        models: new Set(["Nemotron 3 Nano 4B"]),
         rowCount: 1,
       });
     }
@@ -1153,6 +1165,31 @@ function originCalloutPoint(location: LabOriginLocation) {
     x: location.side === "left" ? location.labelX + 15 : location.labelX - 15,
     y: location.labelY + 9,
   };
+}
+
+function originLogoBox(location: LabOriginLocation) {
+  const size = 30;
+  const centerX = location.side === "left" ? location.labelX + 18 : location.labelX - 18;
+  const centerY = location.labelY + 8;
+  return { x: centerX - size / 2, y: centerY - size / 2, size };
+}
+
+function originLogoSrc(id: string) {
+  const logos: Record<string, string> = {
+    ai2: "/labs/ai2.png",
+    alibaba: "/labs/qwen.png",
+    google: "/labs/google.png",
+    huggingface: "/labs/huggingface.svg",
+    ibm: "/labs/ibm.png",
+    liquid: "/labs/liquidAI.jpeg",
+    meta: "/labs/meta.png",
+    microsoft: "/labs/microsoft.png",
+    mistral: "/labs/mistral.png",
+    nvidia: "/labs/nvidia.webp",
+    openai: "/labs/openai.png",
+    tii: "/labs/TechnologyInnovationINstitute.PNG",
+  };
+  return logos[id] ?? "/labs/ai2.png";
 }
 
 function originModelSummary(location: LabOriginLocation, models: string[]) {

@@ -1019,6 +1019,21 @@ p {
   pointer-events: none;
 }
 
+.origin-logo-badge {
+  pointer-events: none;
+}
+
+.origin-logo-badge rect {
+  fill: rgba(255, 254, 250, 0.94);
+  stroke: #111;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.origin-logo-badge image {
+  overflow: visible;
+}
+
 .origin-lab {
   font-size: 17px;
   font-weight: 950;
