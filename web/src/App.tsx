@@ -3433,14 +3433,15 @@ function fileSizeBytes(row: LeaderboardRow) {
     if (modelFileSize !== null) return modelFileSize;
   }
   const apiModelValue = apiModel(row);
-  if (apiModelValue && apiModelValue in KNOWN_LM_STUDIO_MODEL_SIZES) return KNOWN_LM_STUDIO_MODEL_SIZES[apiModelValue];
+  if (apiModelValue && apiModelValue in KNOWN_MODEL_FILE_SIZES) return KNOWN_MODEL_FILE_SIZES[apiModelValue];
   return null;
 }
 
-const KNOWN_LM_STUDIO_MODEL_SIZES: Record<string, number> = {
+const KNOWN_MODEL_FILE_SIZES: Record<string, number> = {
   "lfm2.5-350m@bf16": 711_500_000,
   "lfm2.5-350m@q8_0": 379_200_000,
   "lfm2.5-350m@q4_k_m": 229_300_000,
+  "nemotron-3-nano:4b": 3_006_477_107,
   "qwen3.5-0.8b@bf16": 1_700_000_000,
   "qwen3.5-0.8b@q8_0": 1_200_000_000,
   "qwen3.5-0.8b@q4_k_m": 934_900_000,
