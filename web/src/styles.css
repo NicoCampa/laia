@@ -1734,8 +1734,8 @@ p {
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
+  border: 0;
+  background: transparent;
   overflow: hidden;
   color: var(--ink);
   font-family: "JetBrains Mono", monospace;
@@ -3313,8 +3313,8 @@ input {
 
 .lab-icon {
   border-radius: var(--radius-md);
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px var(--line), 0 6px 18px rgba(21, 23, 19, 0.06);
+  background: transparent;
+  box-shadow: none;
 }
 
 .model-title strong,
