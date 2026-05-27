@@ -140,6 +140,32 @@ p {
   padding: 24px 0 14px;
 }
 
+.page-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+  gap: 24px;
+  align-items: end;
+}
+
+.page-hero-signals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.page-hero-signals span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  padding: 9px 11px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .eyebrow {
   display: inline-block;
   margin-bottom: 12px;
@@ -832,6 +858,109 @@ p {
   max-width: 440px;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.consumer-choice-section {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 22px;
+}
+
+.consumer-choice-grid,
+.consumer-summary-strip,
+.trust-strip,
+.benchmark-readiness-strip {
+  display: grid;
+  gap: 12px;
+}
+
+.consumer-choice-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.consumer-choice-card {
+  all: unset;
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  border: 1px solid rgba(21, 23, 19, 0.12);
+  border-left: 5px solid var(--provider-color, var(--accent));
+  border-radius: var(--radius-xl);
+  background: rgba(255, 254, 250, 0.88);
+  box-shadow: var(--shadow-soft);
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.consumer-choice-card:hover,
+.consumer-choice-card:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(21, 23, 19, 0.2);
+  box-shadow: var(--shadow);
+}
+
+.consumer-choice-card > span,
+.consumer-summary-strip span,
+.trust-strip span,
+.benchmark-readiness-strip span {
+  color: var(--quiet);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.consumer-choice-card > strong {
+  color: var(--ink);
+  font-size: clamp(1.65rem, 3vw, 2.4rem);
+  font-weight: 950;
+  line-height: 0.94;
+}
+
+.consumer-choice-card > small,
+.consumer-summary-strip small,
+.trust-strip small,
+.benchmark-readiness-strip small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.consumer-summary-strip,
+.trust-strip,
+.benchmark-readiness-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 16px;
+}
+
+.benchmark-readiness-strip {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.consumer-summary-strip article,
+.trust-strip article,
+.benchmark-readiness-strip article {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 254, 250, 0.86);
+  box-shadow: var(--shadow-soft);
+  padding: 14px;
+}
+
+.consumer-summary-strip strong,
+.trust-strip strong,
+.benchmark-readiness-strip strong {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.08;
+}
+
+.benchmark-readiness-strip strong {
+  font-size: 1.65rem;
 }
 
 .model-origin-section {
@@ -2564,6 +2693,7 @@ td {
 @media (max-width: 980px) {
   .site-header,
   .hero-band,
+  .page-hero,
   .leaderboard-shell,
   .section-heading,
   .landscape-grid {
@@ -2605,6 +2735,20 @@ td {
   .site-header nav {
     overflow-x: auto;
     justify-self: stretch;
+  }
+
+  .page-hero-signals {
+    justify-content: flex-start;
+  }
+
+  .consumer-choice-grid,
+  .consumer-summary-strip,
+  .trust-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .benchmark-readiness-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .leaderboard-row,
@@ -4204,7 +4348,7 @@ body::before {
 
   .site-header nav {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     justify-self: stretch;
     width: 100%;
     max-width: 100%;
@@ -4263,6 +4407,36 @@ body::before {
     max-width: 32rem;
     font-size: 0.96rem;
     line-height: 1.42;
+  }
+
+  .page-hero {
+    gap: 12px;
+  }
+
+  .page-hero-signals {
+    gap: 7px;
+  }
+
+  .page-hero-signals span {
+    padding: 7px 9px;
+    font-size: 0.58rem;
+  }
+
+  .consumer-choice-section {
+    margin-bottom: 20px;
+  }
+
+  .consumer-choice-card {
+    gap: 11px;
+    padding: 14px;
+  }
+
+  .consumer-choice-card > strong {
+    font-size: 1.7rem;
+  }
+
+  .benchmark-readiness-strip {
+    grid-template-columns: 1fr;
   }
 
   .landing-proof {
@@ -4552,6 +4726,10 @@ body::before {
 
   .leaderboard-shell {
     width: min(100% - 20px, 1240px);
+  }
+
+  .origin-map-scroll {
+    margin-inline: -10px;
   }
 }
 

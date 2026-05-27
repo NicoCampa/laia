@@ -129,11 +129,25 @@ const PAGE_LABELS: Record<Page, string> = {
   methodology: "Methodology",
 };
 
+const PAGE_HEADLINES: Record<Page, string> = {
+  leaderboard: "Local model intelligence, measured on your machine.",
+  benchmarks: "Benchmark evidence behind every score.",
+  models: "A practical catalog of 4-bit local models.",
+  methodology: "A score built for transparent comparison.",
+};
+
 const PAGE_COPY: Record<Page, string> = {
   leaderboard: "Rank 4-bit local models by the text-only LAIA Index and its five capability scores.",
-  benchmarks: "Inspect each benchmark slice, language group, category, and diagnostic metric.",
-  models: "Browse every 4-bit model version with source links, benchmark coverage, run metadata, and raw metrics.",
-  methodology: "Understand the LAIA formula, included benchmarks, excluded judge and vision metrics, and reproducibility settings.",
+  benchmarks: "Knowledge, instruction following, tool use, coding, and grounding are split into comparable slices.",
+  models: "Ranked rows include source links, footprint, benchmark coverage, run metadata, and raw exported metrics.",
+  methodology: "The public index keeps judge, safety, and vision results separate from the core local text comparison.",
+};
+
+const PAGE_SIGNALS: Record<Page, string[]> = {
+  leaderboard: ["4-bit local rows", "Merged benchmark runs", "Text-only LAIA Index"],
+  benchmarks: ["Capability-level tabs", "Language and category slices", "Invalid and truncation checks"],
+  models: ["Source and backend metadata", "Coverage status per benchmark", "Raw metric table"],
+  methodology: ["100-point formula", "No external judge in the score", "4-bit public scope"],
 };
 
 const emptyFilters: Filters = {
@@ -566,13 +580,7 @@ export function App() {
       <SiteHeader page={page} onNavigate={setPage} />
 
       {page !== "leaderboard" && (
-        <section className="hero-band">
-          <div>
-            <p className="eyebrow">Local AI Analysis</p>
-            <h1>{PAGE_LABELS[page]}</h1>
-            <p>{PAGE_COPY[page]}</p>
-          </div>
-        </section>
+        <PageHero page={page} />
       )}
 
       {page === "models" && (
@@ -645,6 +653,23 @@ function SiteHeader({
         ))}
       </nav>
     </header>
+  );
+}
+
+function PageHero({ page }: { page: Page }) {
+  return (
+    <section className={`hero-band page-hero page-${page}-hero`}>
+      <div>
+        <p className="eyebrow">Local AI Analysis</p>
+        <h1>{PAGE_HEADLINES[page]}</h1>
+        <p>{PAGE_COPY[page]}</p>
+      </div>
+      <div className="page-hero-signals" aria-label={`${PAGE_LABELS[page]} summary`}>
+        {PAGE_SIGNALS[page].map((signal) => (
+          <span key={`${page}-${signal}`}>{signal}</span>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -783,6 +808,7 @@ function LeaderboardPage({
       <section className="leaderboard-shell">
         <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
         <div className="page-grid leaderboard-view">
+          <ConsumerChoicePanel rows={rows} onOpenModel={onOpenModel} />
           <ModelOriginsSection rows={originRows} />
           <LandscapeSection rows={rows} />
 
@@ -791,6 +817,129 @@ function LeaderboardPage({
       </section>
     </>
   );
+}
+
+type ConsumerChoice = {
+  id: string;
+  label: string;
+  row: LeaderboardRow;
+  value: string;
+  detail: string;
+};
+
+function ConsumerChoicePanel({
+  rows,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  const choices = useMemo(() => consumerChoices(rows), [rows]);
+  if (!choices.length) return null;
+
+  return (
+    <section className="consumer-choice-section" aria-label="Consumer model recommendations">
+      <div className="section-heading compact">
+        <div>
+          <p className="eyebrow">Start Here</p>
+          <h2>Shortlist the model that fits the job</h2>
+        </div>
+        <p>Three practical cuts of the same benchmark table: strongest score, compact footprint, and best points per GB.</p>
+      </div>
+      <div className="consumer-choice-grid">
+        {choices.map((choice) => (
+          <button
+            className="consumer-choice-card"
+            key={choice.id}
+            type="button"
+            onClick={() => onOpenModel(choice.row)}
+            style={{ "--provider-color": providerColor(choice.row) } as CSSProperties}
+          >
+            <span>{choice.label}</span>
+            <ModelIdentity row={choice.row} />
+            <strong>{choice.value}</strong>
+            <small>{choice.detail}</small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function consumerChoices(rows: LeaderboardRow[]) {
+  const scoredRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
+  const used = new Set<string>();
+  const choices: ConsumerChoice[] = [];
+
+  const pushChoice = (
+    id: string,
+    label: string,
+    row: LeaderboardRow | null,
+    value: string,
+    detail: string,
+  ) => {
+    if (!row) return;
+    choices.push({ id, label, row, value, detail });
+    used.add(row.variant_id);
+  };
+
+  const bestOverall = bestConsumerRow(scoredRows, () => true, (row) => scoreForRank(row), used);
+  pushChoice(
+    "overall",
+    "Best overall",
+    bestOverall,
+    bestOverall ? formatPoints(numeric(bestOverall.model_intelligence_score)) : "n/a",
+    "Highest current LAIA Index among visible 4-bit rows.",
+  );
+
+  const compact = bestConsumerRow(
+    scoredRows,
+    (row) => {
+      const size = modelSizeGb(row);
+      return size !== null && size <= 4;
+    },
+    (row) => scoreForRank(row),
+    used,
+  );
+  pushChoice(
+    "compact",
+    "Best under 4 GB",
+    compact,
+    compact ? formatModelSize(compact) : "n/a",
+    compact ? `${formatPoints(numeric(compact.model_intelligence_score))} with a small local footprint.` : "Compact row unavailable.",
+  );
+
+  const value = bestConsumerRow(
+    scoredRows,
+    (row) => modelSizeGb(row) !== null,
+    (row) => {
+      const size = modelSizeGb(row);
+      return size ? scoreForRank(row) / size : 0;
+    },
+    used,
+  );
+  pushChoice(
+    "value",
+    "Best points per GB",
+    value,
+    value && modelSizeGb(value) ? `${((scoreForRank(value) * 100) / (modelSizeGb(value) ?? 1)).toFixed(1)}` : "n/a",
+    value ? `${formatPoints(numeric(value.model_intelligence_score))} from ${formatModelSize(value)}.` : "Value row unavailable.",
+  );
+
+  return choices;
+}
+
+function bestConsumerRow(
+  rows: LeaderboardRow[],
+  predicate: (row: LeaderboardRow) => boolean,
+  valueFor: (row: LeaderboardRow) => number,
+  excluded: Set<string>,
+) {
+  const preferred = rows
+    .filter((row) => !excluded.has(row.variant_id) && predicate(row))
+    .sort((a, b) => valueFor(b) - valueFor(a))[0];
+  if (preferred) return preferred;
+  return rows.filter(predicate).sort((a, b) => valueFor(b) - valueFor(a))[0] ?? null;
 }
 
 function ChapterNav({
@@ -1824,10 +1973,11 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
       <div className="section-heading">
         <div>
           <p className="eyebrow">Benchmark Pages</p>
-          <h2>Capability deep dives</h2>
+          <h2>Evidence behind the ranking</h2>
         </div>
-        <p>Choose a benchmark, then switch between its exported slices and diagnostic metrics.</p>
+        <p>Each tab isolates one consumer-facing capability and the diagnostics that explain outliers.</p>
       </div>
+      <BenchmarkReadinessStrip benchmarks={visibleBenchmarks} rows={rows} />
       <div className="benchmark-tabs" aria-label="Benchmark pages">
         {visibleBenchmarks.map((benchmark) => (
           <button
@@ -1847,6 +1997,37 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
         onMetricChange={setActiveMetricId}
         rows={rows}
       />
+    </section>
+  );
+}
+
+function BenchmarkReadinessStrip({
+  benchmarks,
+  rows,
+}: {
+  benchmarks: BenchmarkPageConfig[];
+  rows: LeaderboardRow[];
+}) {
+  const scoredModels = rows.filter((row) => numeric(row.model_intelligence_score) !== null).length;
+  const coverage = benchmarks.map((benchmark) => ({
+    benchmark,
+    completeRows: rows.filter((row) => benchmark.metrics.some((metric) => numeric(row[metric.metric]) !== null)).length,
+  }));
+
+  return (
+    <section className="benchmark-readiness-strip" aria-label="Benchmark readiness summary">
+      <article>
+        <span>Compared models</span>
+        <strong>{scoredModels}</strong>
+        <small>Rows with a current LAIA Index.</small>
+      </article>
+      {coverage.slice(0, 5).map(({ benchmark, completeRows }) => (
+        <article key={`readiness-${benchmark.id}`}>
+          <span>{benchmark.title}</span>
+          <strong>{completeRows}</strong>
+          <small>{benchmark.subtitle}</small>
+        </article>
+      ))}
     </section>
   );
 }
@@ -2400,11 +2581,12 @@ function ModelsPage({
     <section className="page-grid models-page">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Model Leaderboard</p>
-          <h2>Models ranked by LAIA Index</h2>
+          <p className="eyebrow">Model Catalog</p>
+          <h2>Pick from tested 4-bit models</h2>
         </div>
-        <p>Detailed ranking, source links, benchmark coverage, and raw metrics for every visible model version.</p>
+        <p>Consumer rows stay compact first, then expand into sources, coverage, runtime, and raw metric details.</p>
       </div>
+      <ModelPageSummary rows={rankedRows} />
 
       <div className="ranking-list models-ranking-list">
         {rankedRows.map((row, index) => (
@@ -2484,6 +2666,35 @@ function ModelsPage({
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+function ModelPageSummary({ rows }: { rows: LeaderboardRow[] }) {
+  const top = rows.find((row) => numeric(row.model_intelligence_score) !== null) ?? null;
+  const covered = rows.filter((row) => numeric(row.model_intelligence_coverage) !== null);
+  const mostCovered = [...covered].sort((a, b) => (numeric(b.model_intelligence_coverage) ?? 0) - (numeric(a.model_intelligence_coverage) ?? 0))[0] ?? null;
+  const smallest = [...rows]
+    .filter((row) => modelSizeGb(row) !== null)
+    .sort((a, b) => (modelSizeGb(a) ?? 0) - (modelSizeGb(b) ?? 0))[0] ?? null;
+
+  return (
+    <section className="consumer-summary-strip" aria-label="Model catalog summary">
+      <article>
+        <span>Current winner</span>
+        <strong>{top ? displayModelName(top) : "n/a"}</strong>
+        <small>{top ? formatPoints(numeric(top.model_intelligence_score)) : "No score yet"}</small>
+      </article>
+      <article>
+        <span>Smallest footprint</span>
+        <strong>{smallest ? displayModelName(smallest) : "n/a"}</strong>
+        <small>{smallest ? formatModelSize(smallest) : "No size metadata"}</small>
+      </article>
+      <article>
+        <span>Most complete row</span>
+        <strong>{mostCovered ? displayModelName(mostCovered) : "n/a"}</strong>
+        <small>{mostCovered ? coverageLabel(mostCovered) : "No coverage"}</small>
+      </article>
     </section>
   );
 }
@@ -2594,13 +2805,31 @@ function MethodologyPage() {
     <section className="methodology-page">
       <div className="method-hero">
         <p className="eyebrow">Methodology</p>
-        <h2>Text capability first. Judge and vision results are excluded.</h2>
+        <h2>Readable scores, inspectable evidence.</h2>
         <p>
-          LAIA Index is a 100-point text-model score built only from non-judge benchmarks.
-          Vision, factuality, and safety are kept out of the public leaderboard to avoid mixing
-          different evaluation assumptions with the core local text suite.
+          LAIA Index is a 100-point text-model score built from five non-judge benchmarks.
+          The public comparison keeps other evaluation modes separate so a consumer can compare
+          local 4-bit models on one consistent surface.
         </p>
       </div>
+
+      <section className="trust-strip" aria-label="Consumer trust summary">
+        <article>
+          <span>Scope</span>
+          <strong>4-bit local rows</strong>
+          <small>Hosted and larger precision rows stay outside the main comparison.</small>
+        </article>
+        <article>
+          <span>Score</span>
+          <strong>5 equal text capabilities</strong>
+          <small>Knowledge, instructions, tools, coding, and grounding each carry 20 points.</small>
+        </article>
+        <article>
+          <span>Evidence</span>
+          <strong>Run signals exposed</strong>
+          <small>Sample counts, tokens, latency, truncation, and sources remain visible.</small>
+        </article>
+      </section>
 
       <div className="method-grid">
         {CAPABILITIES.map((capability) => (
