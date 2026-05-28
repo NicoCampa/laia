@@ -1,20 +1,136 @@
 # Local AI Analysis
 
-Global MMLU Lite, IFBench, BFCL v4, OCRBench v2, MMMU, MBPP, RGB, SimpleQA, and
-HarmBench benchmarks for local AI models served through native Ollama, LM Studio,
-and oMLX APIs.
-
-The project is intentionally narrow: it benchmarks local API servers with deterministic
-generation protocols, records raw prompts and responses, normalizes results into DuckDB,
+Local AI Analysis benchmarks local AI models served through native Ollama, LM Studio,
+and oMLX APIs, records raw prompts and responses, normalizes the results into DuckDB,
 and publishes a React leaderboard.
 
-## Install
+The project exists to make local model capability impossible to ignore: to show what
+small and tiny language models can already do on consumer hardware and edge devices,
+to make those rows comparable, and to show when local models are already competitive
+with familiar closed-source API models that come with usage cost.
+
+## Public Dashboard
+
+![LAIA Index leaderboard](docs/images/laia-index.png)
+
+The homepage centers the **LAIA Index**, the public text-only comparison surface for
+4-bit local rows plus OpenAI reference rows.
+
+![Benchmark evidence page](docs/images/benchmark-evidence.png)
+
+The benchmark pages expose the bar plots behind each category score so the ranking is
+traceable back to the underlying measurements.
+
+## Why This Project Exists
+
+Too much of the conversation around AI still assumes that capability only lives in the
+cloud. Local AI Analysis tries to make the opposite case with auditable evidence.
+
+What local SLMs and TLMs unlock:
+
+- Private inference for prompts, context, and outputs when deployment requires it.
+- Greater deployment sovereignty for teams that do not want core inference tied to a
+  remote provider.
+- Offline and low-connectivity operation for field, industrial, education, mobile,
+  and robotics settings.
+- Lower-friction assistants, tools, and controllers that live next to the
+  application instead of behind an API hop.
+- Leaner deployment in settings where local inference can reduce unnecessary remote
+  traffic, operating cost, and infrastructure overhead.
+
+## Public Scope
+
+The public comparison surface is intentionally narrow:
+
+- **Included in the main LAIA Index surface:** 4-bit local text rows served through
+  Ollama, LM Studio, and oMLX, plus OpenAI reference rows for context.
+- **Included in the public website, but outside the LAIA Index:** OCRBench v2 and
+  MMMU as separate vision benchmarks.
+- **Reported separately, not included in the LAIA Index:** SimpleQA and HarmBench,
+  because they require a judge.
+- **Leaderboard rows are auditable measurements:** prompts, outputs, benchmark
+  settings, metadata, and normalized result fields remain visible in the exported
+  data model.
+
+## LAIA Index
+
+`model_intelligence_score` is the public text-only weighted score used on the website.
+It is stored in normalized 0-1 form, but the website and terminal leaderboard render
+it as points out of 100. Missing text benchmark families count as zero in the full
+score.
+
+Related fields:
+
+- `model_intelligence_score`: full weighted score with missing benchmark families
+  counted as zero.
+- `model_intelligence_coverage`: total benchmark-family weight actually present in
+  the row.
+- `model_intelligence_available_score`: weighted average over only the benchmark
+  families present in the row.
+
+Default LAIA Index weights:
+
+- Global MMLU Lite: 25%
+- IFBench: 20%
+- BFCL v4: 20%
+- MBPP: 20%
+- RGB: 15%
+
+OCRBench v2 and MMMU stay outside the index as vision metrics. SimpleQA and
+HarmBench stay outside the index because they require a judge.
+
+## Benchmark Families
+
+| Benchmark | What it measures | Leaderboard metric | LAIA Index role |
+| --- | --- | --- | --- |
+| Global MMLU Lite | Multilingual academic and factual breadth | `global_mmlu_lite_pass_at_1` | Included |
+| IFBench | Verifiable instruction following | `ifbench_prompt_level_loose` | Included |
+| BFCL v4 | Function calling in prompt mode | `bfcl_v4_selected_accuracy` | Included |
+| MBPP | Short Python program synthesis | `mbpp_pass_at_1` | Included |
+| RGB | RAG robustness across noise, rejection, integration, and factual-error checks | `rgb_all_rate` | Included |
+| OCRBench v2 | Bilingual visual OCR and document understanding | `ocrbench_v2_score` | Reported separately as vision |
+| MMMU | College-level multimodal reasoning | `mmmu_accuracy` | Reported separately as vision |
+| SimpleQA | Short-form factuality | `simpleqa_f1` | Reported separately because it requires a judge |
+| HarmBench | Safety refusal / attack success | `harmbench_refusal_rate` | Reported separately because it requires a judge |
+
+Detailed benchmark notes live in:
+
+- [docs/global-mmlu-lite.md](docs/global-mmlu-lite.md)
+- [docs/ifbench.md](docs/ifbench.md)
+- [docs/bfcl-v4.md](docs/bfcl-v4.md)
+- [docs/ocrbench-v2.md](docs/ocrbench-v2.md)
+- [docs/mmmu.md](docs/mmmu.md)
+- [docs/mbpp.md](docs/mbpp.md)
+- [docs/rgb.md](docs/rgb.md)
+- [docs/simpleqa.md](docs/simpleqa.md)
+- [docs/harmbench.md](docs/harmbench.md)
+
+## Quick Start
+
+Install the project:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[eval]"
+pip install --no-deps bfcl-eval==2026.3.23
 ```
+
+Run one smoke benchmark:
+
+```bash
+laia omlx Qwen3.5-9B-4bit --benchmark text --smoke
+```
+
+Start the dashboard:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+## Install
 
 The `eval` extra installs Hugging Face `datasets`, Pillow image decoding, the
 pinned AllenAI IFBench evaluator, and parser helpers used by BFCL.
@@ -116,7 +232,7 @@ and then run the normal benchmark pipeline. Successful non-dry runs refresh:
 - `web/public/results.json`
 - `web/dist/results.json` when `web/dist` exists
 
-## Website
+## Dashboard
 
 Run the dashboard:
 
@@ -159,10 +275,9 @@ Shortcut-generated full runs keep Global MMLU Lite complete, while capping the
 largest supporting benchmarks deterministically: BFCL v4 uses 1,000 stratified
 prompt-mode samples, RGB uses 100 sampled rows per curated slice, OCRBench v2
 uses 1,000 stratified image-question samples, and SimpleQA uses 500 stratified
-questions.
-OCRBench v2 shortcut runs default to a deterministic 1,000-sample stratified
-subset of the English and Chinese aggregate configs, instead of the full 10,000
-image-question set.
+questions. OCRBench v2 shortcut runs default to a deterministic 1,000-sample
+stratified subset of the English and Chinese aggregate configs, instead of the
+full 10,000 image-question set.
 
 Benchmark suite aliases:
 
@@ -204,39 +319,16 @@ Local benchmark outputs are kept under `results/`:
 
 The repository does not include synthetic benchmark rows or fake sample data.
 
-## Model Intelligence Score
-
-Normalized rows include a weighted `model_intelligence_score` for text-model
-capability based only on non-judge text benchmarks. The stored value is normalized
-from 0 to 1, but the website and terminal leaderboard present it as points out
-of 100, not as a benchmark percentage. Missing text benchmark families count as
-zero in the score, and `model_intelligence_coverage` records how much of the
-weighted text suite was actually run. `model_intelligence_available_score` is the
-weighted average over only the benchmarks present in that row and is also
-presented as points.
-
-Default weights:
-
-- Global MMLU Lite: 25%
-- IFBench: 20%
-- BFCL v4: 20%
-- MBPP: 20%
-- RGB: 15%
-
-OCRBench v2 and MMMU are intentionally kept as separate vision metrics. SimpleQA
-and HarmBench are intentionally excluded from `model_intelligence_score` because
-they require a judge. They remain available as separate factuality and
-safety metrics.
-
 ## Reproducibility
 
-Local shortcut commands default to `--reasoning-effort none`. Ollama maps that to
-native `think: false`; LM Studio maps it to native `reasoning: "off"` when the
-model exposes reasoning controls; oMLX maps it to
+Local AI Analysis treats each row as an auditable local measurement.
+
+Shortcut commands default to `--reasoning-effort none` for local runs. Ollama maps
+that to native `think: false`; LM Studio maps it to native `reasoning: "off"` when
+the model exposes reasoning controls; oMLX maps it to
 `chat_template_kwargs.enable_thinking=false`. OpenAI defaults to
 `--reasoning-effort auto`, which resolves to `none` for GPT-5.4/GPT-5.1 models
-and `minimal` for older GPT-5 reasoning models. Override it with
-`--reasoning-effort none`, `low`, `medium`, `high`, or `auto`.
+and `minimal` for older GPT-5 reasoning models.
 
 Shortcut commands also default to `--context-length 8192` for Ollama and
 LM Studio. Ollama receives `options.num_ctx=8192`; LM Studio receives
@@ -256,8 +348,21 @@ Every run records:
 - raw prompt/output JSONL with per-question runtime and API usage when available
 - backend, hardware, command arguments, and run UUID
 
-See [docs/global-mmlu-lite.md](docs/global-mmlu-lite.md), [docs/ifbench.md](docs/ifbench.md),
-[docs/bfcl-v4.md](docs/bfcl-v4.md), [docs/ocrbench-v2.md](docs/ocrbench-v2.md),
-[docs/mmmu.md](docs/mmmu.md), [docs/mbpp.md](docs/mbpp.md), [docs/rgb.md](docs/rgb.md),
-[docs/simpleqa.md](docs/simpleqa.md), [docs/harmbench.md](docs/harmbench.md),
-[docs/data-model.md](docs/data-model.md), and [docs/reproducibility.md](docs/reproducibility.md).
+The DuckDB schema stores benchmark rows as auditable measurements. See:
+
+- [docs/data-model.md](docs/data-model.md)
+- [docs/reproducibility.md](docs/reproducibility.md)
+
+## Benchmark Docs
+
+- [Global MMLU Lite](docs/global-mmlu-lite.md)
+- [IFBench](docs/ifbench.md)
+- [BFCL v4](docs/bfcl-v4.md)
+- [OCRBench v2](docs/ocrbench-v2.md)
+- [MMMU](docs/mmmu.md)
+- [MBPP](docs/mbpp.md)
+- [RGB](docs/rgb.md)
+- [SimpleQA](docs/simpleqa.md)
+- [HarmBench](docs/harmbench.md)
+- [Data model](docs/data-model.md)
+- [Reproducibility](docs/reproducibility.md)

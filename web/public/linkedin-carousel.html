@@ -503,9 +503,9 @@
 
     <section class="slide">
       <div class="slide-inner">
-        <div class="brand-row"><span class="mark">NC</span><span>Local vs hosted reference</span></div>
+        <div class="brand-row"><span class="mark">NC</span><span>Local vs OpenAI reference</span></div>
         <span class="topline">Comparison</span>
-        <h2>Best local rows can be compared against hosted references.</h2>
+        <h2>Best local rows can be compared against OpenAI references.</h2>
         <div id="compare-grid" class="compare-grid"></div>
         <div class="price-row">
           <div class="price"><small>GPT 5.4 Mini benchmark API cost</small>$3.24</div>
@@ -600,7 +600,7 @@
       if (q.includes("q4") || q.includes("4 bit")) return "4 bit";
       if (q.includes("q8") || q.includes("8 bit")) return "8 bit";
       if (q.includes("bf16") || q.includes("f16") || q.includes("16")) return "16 bit";
-      return "server";
+      return "closed source";
     }
 
     function score(row) {
@@ -662,7 +662,7 @@
           <article class="model-compare ${closed ? "closed" : ""}">
             <div class="model-head">
               <span class="logo-box"><img src="${p.icon}" alt="" /></span>
-              <div><strong>${modelName(row)}</strong><small>${closed ? "Hosted API" : quant(row)}</small></div>
+              <div><strong>${modelName(row)}</strong><small>${closed ? "Closed-source API" : quant(row)}</small></div>
             </div>
             <div style="font-size:58px;font-weight:1000">${Math.round(score(row))}<span style="font-size:24px;color:var(--muted)"> pts</span></div>
             ${caps.map(([label, value]) => `

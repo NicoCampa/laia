@@ -1,17 +1,21 @@
 import {
+  Bot,
   BookOpen,
   Braces,
   Code2,
+  Cpu,
   Database,
   FileText,
-  Gauge,
+  Flag,
   Info,
+  Leaf,
   ExternalLink,
   Lightbulb,
   LightbulbOff,
   Search,
+  Shield,
+  WifiOff,
   X,
-  Download,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -120,12 +124,19 @@ type Payload = {
   leaderboard: LeaderboardRow[];
 };
 
-type Page = "leaderboard" | "benchmarks" | "models" | "methodology";
+type Page = "leaderboard" | "benchmarks" | "models" | "methodology" | "mission";
 
 type Filters = {
   query: string;
   family: string;
   parameterSize: string;
+  memoryFootprint: string;
+  sortBy: string;
+};
+
+type SelectOption = {
+  value: string;
+  label: string;
 };
 
 type Capability = {
@@ -145,58 +156,46 @@ const PAGE_LABELS: Record<Page, string> = {
   benchmarks: "Benchmarks",
   models: "Models",
   methodology: "Methodology",
+  mission: "Mission",
 };
 
 const PAGE_HEADLINES: Record<Page, string> = {
   leaderboard: "Local model intelligence, measured on your machine.",
-  benchmarks: "Benchmark evidence behind every score.",
-  models: "A practical catalog of 4-bit local models and hosted references.",
+  benchmarks: "Benchmarks",
+  models: "A practical catalog of 4-bit local models and OpenAI references.",
   methodology: "A score built for transparent comparison.",
+  mission: "Why local models matter.",
 };
 
 const PAGE_COPY: Record<Page, string> = {
-  leaderboard: "Rank 4-bit local models and hosted OpenAI references by the text-only LAIA Index.",
+  leaderboard: "Rank 4-bit local models and OpenAI references by the text-only LAIA Index.",
   benchmarks: "Knowledge, instruction following, tool use, coding, and grounding are split into comparable slices.",
   models: "Ranked rows include source links, footprint, benchmark coverage, run metadata, and raw exported metrics.",
   methodology: "The public index keeps judge, safety, and vision results separate from the core local text comparison.",
+  mission: "The project exists to make local model capability easier to see, compare, and trust on consumer and edge hardware.",
 };
 
 const PAGE_SIGNALS: Record<Page, string[]> = {
   leaderboard: ["4-bit rows + OpenAI refs", "Merged benchmark runs", "Text-only LAIA Index"],
-  benchmarks: ["Capability-level tabs", "Language and category slices", "Invalid and cap-hit checks"],
+  benchmarks: [],
   models: ["Source and backend metadata", "Coverage status per benchmark", "Raw metric table"],
   methodology: ["100-point formula", "No external judge in the score", "4-bit public scope"],
+  mission: ["Consumer hardware", "Edge deployment", "Private by default"],
 };
 
 const emptyFilters: Filters = {
   query: "",
   family: "all",
   parameterSize: "all",
+  memoryFootprint: "all",
+  sortBy: "laia",
 };
-
-const INDEX_PARAMETER_LIMITS = [
-  { label: "Any parameters", value: "all" },
-  { label: "Up to 1B", value: "1" },
-  { label: "Up to 2B", value: "2" },
-  { label: "Up to 4B", value: "4" },
-  { label: "Up to 8B", value: "8" },
-  { label: "Up to 16B", value: "16" },
-];
-
-const INDEX_GB_LIMITS = [
-  { label: "Any GB", value: "all" },
-  { label: "Up to 1 GB", value: "1" },
-  { label: "Up to 2 GB", value: "2" },
-  { label: "Up to 4 GB", value: "4" },
-  { label: "Up to 8 GB", value: "8" },
-  { label: "Up to 16 GB", value: "16" },
-];
 
 const LEADERBOARD_CHAPTERS = [
   { id: "leaderboard-landscape", label: "Pareto" },
   { id: "leaderboard-release", label: "Release" },
+  { id: "leaderboard-top-benchmarks", label: "Top 5 by category" },
   { id: "leaderboard-origins", label: "Origins" },
-  { id: "leaderboard-read-guide", label: "Guide" },
 ];
 
 type BenchmarkMetric = {
@@ -216,6 +215,35 @@ type BenchmarkPageConfig = {
   metrics: BenchmarkMetric[];
 };
 
+type MethodologyChapter = {
+  id: string;
+  label: string;
+  title: string;
+  intro: string;
+};
+
+type MethodologyBenchmark = {
+  id: string;
+  title: string;
+  subtitle: string;
+  measures: string;
+  metric: string;
+  scope: string;
+  evaluator: string;
+  inclusion: string;
+  caveat: string;
+};
+
+type MethodologyNamedItem = {
+  label: string;
+  detail: string;
+};
+
+type MethodologyDefinition = {
+  term: string;
+  description: string;
+};
+
 const BENCHMARK_PAGES: BenchmarkPageConfig[] = [
   {
     id: "global-mmlu-lite",
@@ -225,7 +253,6 @@ const BENCHMARK_PAGES: BenchmarkPageConfig[] = [
     badge: "LAIA",
     metrics: [
       { id: "overall", label: "Overall", metric: "global_mmlu_lite_pass_at_1" },
-      { id: "micro", label: "Micro average", metric: "global_mmlu_lite_micro_pass_at_1" },
       { id: "invalid", label: "Invalid answers", metric: "global_mmlu_lite_invalid_rate", kind: "error" },
     ],
   },
@@ -323,6 +350,41 @@ const BENCHMARK_PAGES: BenchmarkPageConfig[] = [
     ],
   },
 ];
+
+const BENCHMARK_METRIC_INFO: Record<string, string> = {
+  global_mmlu_lite_pass_at_1: "Accuracy on the exported Global MMLU Lite questions across the multilingual knowledge set.",
+  global_mmlu_lite_invalid_rate: "Share of Global MMLU Lite questions where the output did not yield a valid answer.",
+  ifbench_prompt_level_loose: "IFBench prompt-level pass rate with loose matching to the requested format and constraints.",
+  ifbench_prompt_level_strict: "IFBench prompt-level pass rate with strict matching to the requested format and constraints.",
+  ifbench_instruction_level_loose: "IFBench instruction-level pass rate with loose matching across the prompt's instructions.",
+  ifbench_instruction_level_strict: "IFBench instruction-level pass rate with strict matching across the prompt's instructions.",
+  bfcl_v4_selected_accuracy: "Accuracy on the BFCL v4 selected subset used in the text-only comparison.",
+  bfcl_v4_non_live_accuracy: "Accuracy on BFCL v4 non-live tool calls.",
+  bfcl_v4_live_accuracy: "Accuracy on BFCL v4 live tool calls.",
+  bfcl_v4_multi_turn_accuracy: "Accuracy on BFCL v4 multi-turn tool-use tasks.",
+  bfcl_v4_agentic_accuracy: "Accuracy on BFCL v4 agentic tool-use tasks.",
+  bfcl_v4_invalid_rate: "Share of BFCL v4 outputs that did not produce a valid tool call.",
+  mbpp_pass_at_1: "Pass@1 on MBPP: first-attempt code that passes the benchmark tests.",
+  mbpp_compile_rate: "Share of MBPP generations that compile successfully.",
+  mbpp_runtime_error_rate: "Share of MBPP generations that fail with a runtime error.",
+  mbpp_invalid_rate: "Share of MBPP generations that produce an invalid benchmark output.",
+  rgb_all_rate: "Overall RGB grounding score across the exported evidence-based tasks.",
+  rgb_rejection_rate: "RGB negative-rejection rate: rejecting unsupported or distractor evidence.",
+  rgb_fact_check_rate: "RGB fact-check rate: verifying claims correctly against retrieved evidence.",
+  rgb_error_correction_rate: "RGB error-correction rate: fixing false statements using the retrieved evidence.",
+  ocrbench_v2_micro_score: "Micro average across the exported OCRBench v2 tasks.",
+  ocrbench_v2_en_score: "OCRBench v2 score on English OCR tasks.",
+  ocrbench_v2_cn_score: "OCRBench v2 score on Chinese OCR tasks.",
+  mmmu_accuracy: "Overall MMMU accuracy across the exported multimodal questions.",
+  mmmu_multiple_choice_accuracy: "MMMU accuracy on multiple-choice questions only.",
+  mmmu_open_accuracy: "MMMU accuracy on open-ended questions only.",
+  simpleqa_f1: "SimpleQA answer overlap score using token-level F1.",
+  simpleqa_correct_rate: "Share of SimpleQA answers judged correct.",
+  simpleqa_hallucination_rate: "Share of SimpleQA answers judged hallucinated.",
+  simpleqa_not_attempted_rate: "Share of SimpleQA questions left unanswered or declined.",
+  harmbench_refusal_rate: "Share of HarmBench harmful prompts the model refuses.",
+  harmbench_attack_success_rate: "Share of HarmBench harmful prompts that bypass refusal.",
+};
 
 const GLOBAL_MMLU_LANGUAGE_LABELS: Record<string, string> = {
   ar: "Arabic",
@@ -438,6 +500,16 @@ const TEXT_CAPABILITIES: Capability[] = [
   },
 ];
 
+const MODEL_SORT_OPTIONS: SelectOption[] = [
+  { value: "laia", label: "LAIA Index" },
+  ...TEXT_CAPABILITIES.map((capability) => ({
+    value: capability.id,
+    label: capability.label,
+  })),
+  { value: "parameter-size", label: "Parameter size" },
+  { value: "memory-footprint", label: "Memory footprint" },
+];
+
 const RGB_COMPONENT_LABELS: Record<string, string> = {
   noise_robustness: "Noise",
   negative_rejection: "Rejection",
@@ -521,46 +593,364 @@ const RUN_SIGNAL_MAX_FIELDS = [
   "benchmark_system_output_throughput_tokens_per_second",
 ] satisfies Array<keyof LeaderboardRow>;
 
-const RAW_SCORE_COLUMNS = new Set<keyof LeaderboardRow>([
-  "model_intelligence_score",
-  ...MERGED_BENCHMARK_METRICS,
-]);
+const METHODOLOGY_CHAPTERS: MethodologyChapter[] = [
+  {
+    id: "method-overview",
+    label: "Overview",
+    title: "Overview",
+    intro: "What the public site measures, what LAIA is for, and why separate benchmark families stay outside the headline score.",
+  },
+  {
+    id: "method-public-scope",
+    label: "Scope",
+    title: "Public scope",
+    intro: "The main public comparison is intentionally narrower than the full benchmark suite.",
+  },
+  {
+    id: "method-rows",
+    label: "Rows",
+    title: "How rows are built",
+    intro: "Comparable runs are merged into one public row before the LAIA columns are computed.",
+  },
+  {
+    id: "method-laia-index",
+    label: "LAIA Index",
+    title: "LAIA Index",
+    intro: "The headline score is stored as normalized data and rendered as points, alongside coverage and available-score fields.",
+  },
+  {
+    id: "method-index-benchmarks",
+    label: "Index benchmarks",
+    title: "Benchmarks in the index",
+    intro: "These five text-only, non-judge benchmark families feed the public LAIA score.",
+  },
+  {
+    id: "method-separate-benchmarks",
+    label: "Separate benchmarks",
+    title: "Benchmarks reported separately",
+    intro: "Vision, factuality, and safety stay visible in the project, but they do not change the headline public ranking.",
+  },
+  {
+    id: "method-reproducibility",
+    label: "Reproducibility",
+    title: "Reproducibility",
+    intro: "Every row is treated as an auditable local measurement with pinned revisions, deterministic defaults, and recorded run metadata.",
+  },
+  {
+    id: "method-outputs",
+    label: "Outputs",
+    title: "Outputs and data model",
+    intro: "The website is backed by exported normalized rows, but the raw artifacts and schema stay available under results/.",
+  },
+  {
+    id: "method-limitations",
+    label: "Limitations",
+    title: "Limitations and comparison rules",
+    intro: "Benchmark rows are only comparable when their benchmark-specific settings and evaluation assumptions match.",
+  },
+  {
+    id: "method-definitions",
+    label: "Definitions",
+    title: "Definitions",
+    intro: "Project-specific terms used throughout the site and export pipeline.",
+  },
+];
 
-const RAW_ERROR_COLUMNS = new Set<keyof LeaderboardRow>([
-  "benchmark_truncated_rate",
-  "benchmark_output_cap_hit_rate",
-  "global_mmlu_lite_invalid_rate",
-  "bfcl_v4_invalid_rate",
-  "mbpp_invalid_rate",
-  "mbpp_runtime_error_rate",
-  "mmmu_invalid_rate",
-  "simpleqa_hallucination_rate",
-  "harmbench_attack_success_rate",
-]);
+const METHODOLOGY_PUBLIC_SCOPE = {
+  main: [
+    "Publishable 4-bit local rows.",
+    "OpenAI reference rows shown on the same score surface for context.",
+    "The five text-only, non-judge benchmark families used by LAIA.",
+  ],
+  separate: [
+    "OCRBench v2 and MMMU as separate vision and multimodal diagnostics.",
+    "SimpleQA and HarmBench as separate judge-based factuality and safety diagnostics.",
+    "Supporting benchmark metrics that explain a row without changing the headline LAIA ranking.",
+  ],
+  excluded: [
+    "Non-4-bit local precision variants from the public main ranking.",
+    "Smoke rows, synthetic rows, and other non-publishable export rows.",
+    "Judge-dependent and multimodal metrics from the text-only LAIA score itself.",
+  ],
+};
 
-const RAW_TABLE_COLUMNS = [
-  "variant_name",
-  "family",
-  "model_release_date",
-  "parameter_size_b",
-  "quantization",
-  "model_intelligence_score",
-  "global_mmlu_lite_pass_at_1",
-  "ifbench_prompt_level_loose",
-  "bfcl_v4_selected_accuracy",
-  "mbpp_pass_at_1",
-  "rgb_all_rate",
-  "benchmark_samples",
-  "benchmark_runtime_seconds",
-  "benchmark_total_tokens",
-  "benchmark_prompt_tokens",
-  "benchmark_completion_tokens",
-  "benchmark_output_tokens_per_second",
-  "benchmark_truncated_rate",
-  "benchmark_output_cap_hit_rate",
-  "benchmark_output_cap_hit_count",
-  "benchmark_total_cost_usd",
-  "run_uuid",
+const METHODOLOGY_ROW_BUILD_STEPS = [
+  "Start from publishable normalized rows. Synthetic rows, smoke rows, and non-public comparison rows are filtered out before the public site is rendered.",
+  "Group comparable rows by displayed model name, provider, parameter size, and quantization label so equivalent reruns can be merged instead of ranked separately.",
+  "For each benchmark metric family, take the newest comparable run that actually contains that metric. Global MMLU Lite and RGB language breakdown arrays follow the newest run that exported them.",
+  "Merge run signals across the contributing runs. Count-like values, runtime, tokens, costs, and cap-hit counts are summed; latency-style fields keep the maximum exposed value; derived rates are recalculated on the merged row.",
+  "Carry forward the newest run identity fields (`started_at`, `run_uuid`, and `normalized_result_id`) and record how many rows contributed through `merged_run_count`.",
+  "Compute `model_intelligence_score`, `model_intelligence_coverage`, and `model_intelligence_available_score` on the merged row that the website exports.",
+];
+
+const METHODOLOGY_LAIA_FIELDS: MethodologyDefinition[] = [
+  {
+    term: "model_intelligence_score",
+    description: "Full-suite weighted text score with missing benchmark families counted as zero. The database stores a normalized 0-1 value; the site renders it as points out of 100.",
+  },
+  {
+    term: "model_intelligence_coverage",
+    description: "Total benchmark-family weight actually present in that row. Coverage tells you how much of the text suite was run before ranking the row by its full score.",
+  },
+  {
+    term: "model_intelligence_available_score",
+    description: "Weighted average over only the benchmark families present in the row. It removes the zero-for-missing-family penalty and is also rendered as points.",
+  },
+];
+
+const METHODOLOGY_PUBLISHED_WEIGHTS: MethodologyNamedItem[] = [
+  { label: "Global MMLU Lite", detail: "25%" },
+  { label: "IFBench", detail: "20%" },
+  { label: "BFCL v4", detail: "20%" },
+  { label: "MBPP", detail: "20%" },
+  { label: "RGB", detail: "15%" },
+];
+
+const METHODOLOGY_INDEX_BENCHMARKS: MethodologyBenchmark[] = [
+  {
+    id: "global-mmlu-lite",
+    title: "Global MMLU Lite",
+    subtitle: "Knowledge",
+    measures: "Multilingual academic and factual breadth through multiple-choice question answering across the supported language configs.",
+    metric: "global_mmlu_lite_pass_at_1",
+    scope: "Full runs use the supported language configs on the test split. Smoke mode uses 5 English questions.",
+    evaluator: "The runner extracts a single answer letter and reports generation pass@1. When configured, thinking blocks are stripped before parsing.",
+    inclusion: "Included in LAIA because it measures broad text knowledge without an external judge.",
+    caveat: "Compare it with other generation pass@1 Global MMLU Lite rows, not with log-likelihood MMLU variants.",
+  },
+  {
+    id: "ifbench",
+    title: "IFBench",
+    subtitle: "Instructions",
+    measures: "Precise instruction following with verifiable formatting and constraint checks.",
+    metric: "ifbench_prompt_level_loose",
+    scope: "The default run uses the full 300-prompt `allenai/IFBench_test` set. Smoke mode evaluates the first 5 prompts.",
+    evaluator: "The project uses the official AllenAI verification functions. The leaderboard-facing metric is prompt-level loose accuracy.",
+    inclusion: "Included in LAIA because it is a text-only, non-judge measure of instruction-following reliability.",
+    caveat: "Strict and instruction-level metrics are reported separately, but publishable comparisons should use prompt-level loose accuracy unless a stricter target is explicitly intended.",
+  },
+  {
+    id: "bfcl-v4",
+    title: "BFCL v4",
+    subtitle: "Tools",
+    measures: "Function selection and argument generation in prompt-mode tool calling.",
+    metric: "bfcl_v4_selected_accuracy",
+    scope: "The default shortcut category is `single_turn`. Shortcut-generated full runs use 1,000 deterministic stratified samples across the resolved BFCL categories.",
+    evaluator: "Local AI Analysis uses Berkeley's prompt-mode BFCL scoring path and checks whether the emitted function name and arguments match the expected call. The default score does not execute arbitrary tools.",
+    inclusion: "Included in LAIA because it supplies the tool-use benchmark family in the text-only, non-judge suite.",
+    caveat: "Single-turn, non-live, live, multi-turn, agentic, sampled, and all-scoring BFCL runs are not interchangeable. Category set, sample limit, strategy, and seed must match.",
+  },
+  {
+    id: "mbpp",
+    title: "MBPP",
+    subtitle: "Coding",
+    measures: "Short Python program synthesis from natural-language task descriptions.",
+    metric: "mbpp_pass_at_1",
+    scope: "The default full run uses the standard MBPP test split. `sanitized` and challenge-test variants are separate configurations.",
+    evaluator: "Generated Python is executed locally against the dataset assertions in an isolated-mode Python subprocess with a per-sample timeout.",
+    inclusion: "Included in LAIA because it provides executable coding evidence without an external judge.",
+    caveat: "Rows are only comparable when the MBPP config (`full` vs `sanitized`) and challenge-test setting match.",
+  },
+  {
+    id: "rgb",
+    title: "RGB",
+    subtitle: "Grounding",
+    measures: "Retrieval-grounded answering under noise, rejection, information integration, and factual-error detection.",
+    metric: "rgb_all_rate",
+    scope: "The default `suite` covers curated English and Chinese slices. Shortcut-generated full suite runs use 100 seeded random rows per slice, for 800 RGB calls total.",
+    evaluator: "The runner builds the document prompt and applies RGB's local lexical scoring logic from `evalue.py`. No external judge is used for the public RGB score.",
+    inclusion: "Included in LAIA because it measures evidence use and noise rejection inside the text-only, non-judge suite.",
+    caveat: "Suite rows and single-dataset RGB rows should not be mixed unless dataset, noise rate, passage settings, and sample strategy match.",
+  },
+];
+
+const METHODOLOGY_SEPARATE_BENCHMARKS: MethodologyBenchmark[] = [
+  {
+    id: "ocrbench-v2",
+    title: "OCRBench v2",
+    subtitle: "Vision",
+    measures: "Bilingual OCR, document parsing, visual text understanding, reasoning, and Chinese OCR tasks for multimodal models.",
+    metric: "ocrbench_v2_score",
+    scope: "Default full runs use the English and Chinese aggregate configs, but cap them to a deterministic 1,000-example stratified subset instead of all 10,000 examples.",
+    evaluator: "The local evaluator mirrors the official OCRBench v2 grouping and uses recorded evaluator version `ocrbench_v2_local_vqa_anls_iou_v1` for the local VQA, ANLS, counting, formula, and IoU checks.",
+    inclusion: "Reported separately because it is a vision benchmark for multimodal models rather than a text-only LAIA component.",
+    caveat: "Only compare rows that use the same evaluator version, config set, sample limit, sample strategy, and sample seed.",
+  },
+  {
+    id: "mmmu",
+    title: "MMMU",
+    subtitle: "Vision",
+    measures: "College-level multimodal reasoning across 30 subjects and six domains.",
+    metric: "mmmu_accuracy",
+    scope: "Default local runs use the validation split across all 30 subjects. Smoke mode always uses 5 Accounting samples.",
+    evaluator: "The local evaluator follows the official MMMU response parsing and exact-match logic for multiple-choice and open questions, recorded as `mmmu_official_parse_local_v1`.",
+    inclusion: "Reported separately because it is a multimodal benchmark and not part of the text-only LAIA ranking.",
+    caveat: "MMMU rows are only comparable when the split and subject list match.",
+  },
+  {
+    id: "simpleqa",
+    title: "SimpleQA",
+    subtitle: "Judge benchmark",
+    measures: "Short-form factual accuracy, incorrect attempted answers, and not-attempted behavior.",
+    metric: "simpleqa_f1",
+    scope: "Shortcut-generated full runs use 500 deterministic stratified questions by topic and answer type.",
+    evaluator: "By default, SimpleQA uses an LLM judge; a deterministic heuristic fallback exists for debugging, but it is not the official scoring method.",
+    inclusion: "Reported separately because it requires a judge and is intentionally excluded from `model_intelligence_score`.",
+    caveat: "Judge choice matters. Publishable comparisons should use a stronger pinned judge and record whether grading was LLM-based or heuristic.",
+  },
+  {
+    id: "harmbench",
+    title: "HarmBench",
+    subtitle: "Judge benchmark",
+    measures: "Refusal and harmful-completion behavior on the HarmBench text behavior set.",
+    metric: "harmbench_refusal_rate",
+    scope: "Default runs use the text behavior set with `standard,contextual` functional categories and skip the copyright slice.",
+    evaluator: "The benchmark grades outputs with a local judge model. A deterministic heuristic exists for debugging, but it is not the official HarmBench classifier.",
+    inclusion: "Reported separately because it requires a judge and measures safety/refusal behavior rather than general capability.",
+    caveat: "Rows are only comparable when the selected functional categories and judge model match.",
+  },
+];
+
+const METHODOLOGY_SUITE_ALIASES: MethodologyNamedItem[] = [
+  { label: "text", detail: "Text-only, non-judge benchmarks: Global MMLU Lite, IFBench, BFCL v4, MBPP, and RGB." },
+  { label: "vision", detail: "Multimodal, non-judge benchmarks: OCRBench v2 and MMMU." },
+  { label: "judge", detail: "Judge-based benchmarks: SimpleQA and HarmBench." },
+  { label: "suite", detail: "`text` plus `vision`, without judge-based benchmarks." },
+  { label: "full", detail: "Every benchmark family, including judge-based benchmarks." },
+];
+
+const METHODOLOGY_DEFAULT_CAPS: MethodologyNamedItem[] = [
+  { label: "BFCL v4", detail: "1,000 deterministic stratified prompt-mode samples across the resolved categories." },
+  { label: "RGB", detail: "100 seeded random rows per curated suite slice, 800 RGB calls total." },
+  { label: "OCRBench v2", detail: "1,000 deterministic stratified examples across the English and Chinese aggregate configs." },
+  { label: "SimpleQA", detail: "500 deterministic stratified questions by topic and answer type." },
+];
+
+const METHODOLOGY_PINNED_REVISIONS: MethodologyNamedItem[] = [
+  { label: "Global MMLU Lite", detail: "cbf2f73663ff201d4d56e891c8c2c18467aeea06" },
+  { label: "IFBench", detail: "2e8a48de45ff3bf41242f927254ca81b59ca3ae2" },
+  { label: "OCRBench v2", detail: "458b55b5f62bfd6eba7b5080da34fbc9a68c2626" },
+  { label: "MMMU", detail: "4619a102cf5ad2da1abf7e220fde1258d2434cb7" },
+  { label: "MBPP", detail: "4bb6404fdc6cacfda99d4ac4205087b89d32030c" },
+  { label: "RGB", detail: "65ec39e40e7dc9abb50e9bf1b4f32be3f6f16615" },
+  { label: "SimpleQA reference", detail: "652c89d0ca9df547706735883097e9537d40dc47" },
+  { label: "HarmBench", detail: "8e1604d1171fe8a48d8febecd22f600e462bdcdd" },
+];
+
+const METHODOLOGY_RECORDED_METADATA: MethodologyNamedItem[] = [
+  { label: "Provider and backend", detail: "Provider label, native API base URL, backend profile, hardware profile, and model id or tag." },
+  { label: "Benchmark settings", detail: "Dataset name, pinned revision, split, languages, sample limits, strategy, seed, and benchmark-specific config such as BFCL categories or RGB dataset/noise settings." },
+  { label: "Prompting and decoding", detail: "Prompt template, parser version, temperature, top-p, max tokens, seed, reasoning effort, and requested context length." },
+  { label: "Per-sample logs", detail: "Raw prompt, raw output, extracted answer, gold answer, correctness, runtime, and API usage when the backend exposes it." },
+  { label: "Run signals", detail: "Sample counts, token totals, latency, cap hits, throughput, and cost-like fields when they are available." },
+];
+
+const METHODOLOGY_OUTPUTS: MethodologyNamedItem[] = [
+  { label: "DuckDB database", detail: "results/local_ai_analysis.duckdb" },
+  { label: "Raw run events", detail: "results/raw_results.jsonl" },
+  { label: "Per-benchmark artifacts", detail: "results/<benchmark>/ with sample JSONL and summary files for each benchmark family." },
+  { label: "Generated configs", detail: "results/generated_configs/" },
+];
+
+const METHODOLOGY_AUDIT_FIELDS: string[] = [
+  "provider label and backend name",
+  "model id, variant name, quantization, and source link",
+  "run UUID, latest started-at time, and merged run count",
+  "benchmark sample counts, runtime, and output-cap hits",
+  "prompt, completion, reasoning, and total token totals",
+  "average and tail latency plus output throughput when available",
+  "vision, judge, and supporting metrics that stay outside the LAIA headline score",
+];
+
+const METHODOLOGY_LIMITATIONS: MethodologyNamedItem[] = [
+  { label: "Missing families are penalized", detail: "`model_intelligence_score` counts missing text benchmark families as zero, so check `model_intelligence_coverage` before treating rows as fully comparable." },
+  { label: "Public rows are 4-bit and reasoning-off", detail: "The public local comparison is built from 4-bit rows with reasoning disabled. Early local results did not show a large performance drop versus full-precision variants, but cross-precision rows are still kept out of the public main ranking." },
+  { label: "Global MMLU Lite is generation pass@1", detail: "Do not compare it directly with log-likelihood MMLU numbers from other leaderboards." },
+  { label: "BFCL scope must match", detail: "Category set, sample limit, strategy, and seed all affect the BFCL result surface." },
+  { label: "RGB scope must match", detail: "Suite rows and single-dataset RGB rows are not equivalent unless dataset, noise rate, and passage settings match." },
+  { label: "Vision is separate", detail: "OCRBench v2 and MMMU are reported separately because they measure multimodal capability, not text-only LAIA performance." },
+  { label: "Judge benchmarks are separate", detail: "SimpleQA and HarmBench depend on judge behavior, so they stay outside `model_intelligence_score`." },
+  { label: "MBPP runs local code", detail: "Generated Python is executed locally in an isolated-mode subprocess with a timeout, but it is not a hardened security sandbox." },
+];
+
+const METHODOLOGY_DEFINITIONS: MethodologyDefinition[] = [
+  {
+    term: "Benchmark row",
+    description: "A leaderboard-facing normalized result record that contains the benchmark metrics and metadata for one public row.",
+  },
+  {
+    term: "Merged run",
+    description: "A public row built by merging compatible benchmark metrics from multiple comparable runs of the same model/quantization surface.",
+  },
+  {
+    term: "Provider / backend",
+    description: "Provider is the lab or reference label shown on the site; backend is the native serving stack such as Ollama, LM Studio, or oMLX that produced the run.",
+  },
+  {
+    term: "Judge benchmark",
+    description: "A benchmark whose final label depends on another model or explicit judge logic, such as SimpleQA or HarmBench.",
+  },
+  {
+    term: "OpenAI reference",
+    description: "A closed-source API row shown on the same public surface for context, but not a 4-bit local model row.",
+  },
+  {
+    term: "Coverage",
+    description: "`model_intelligence_coverage`, the total benchmark-family weight present in the row.",
+  },
+  {
+    term: "Available score",
+    description: "`model_intelligence_available_score`, the weighted average over only the benchmark families present in the row.",
+  },
+];
+
+const MISSION_PILLARS = [
+  {
+    icon: <Cpu size={18} />,
+    title: "Consumer hardware first",
+    copy: "The mission is to increase awareness of how much capability now fits on laptops, desktops, phones, and edge devices instead of only large cloud clusters.",
+  },
+  {
+    icon: <Bot size={18} />,
+    title: "Built for real-world edge use",
+    copy: "Small and tiny language models are especially important where inference must live close to the machine: robotics, embedded systems, field devices, assistants, and other constrained environments.",
+  },
+  {
+    icon: <Shield size={18} />,
+    title: "Privacy and sovereignty",
+    copy: "Local execution keeps sensitive prompts, documents, and actions on the device or inside the organization that owns the hardware, which matters for privacy, control, and sovereign deployment.",
+  },
+  {
+    icon: <WifiOff size={18} />,
+    title: "Offline resilience",
+    copy: "When models run locally, useful systems can keep working with poor connectivity, limited bandwidth, or no internet access at all.",
+  },
+  {
+    icon: <Leaf size={18} />,
+    title: "Leaner deployment",
+    copy: "Efficient local models can reduce infrastructure overhead and unnecessary remote inference. In many practical settings that can also mean lower operating cost and lower emissions than shipping everything to a large remote service.",
+  },
+  {
+    icon: <BookOpen size={18} />,
+    title: "Awareness through measurement",
+    copy: "The project tries to replace vague impressions with auditable results, so people can see what local models can already do, where they still fail, and which tradeoffs are actually worth making.",
+  },
+];
+
+const MISSION_FOCUS_AREAS = [
+  "Make small and tiny model performance visible on one public comparison surface.",
+  "Show when local rows are already competitive with familiar closed-source API models that otherwise come with usage cost.",
+  "Show that practical local AI is not limited to hobby demos or isolated benchmarks.",
+  "Help developers choose models that can run on everyday hardware and edge devices.",
+  "Support robotics and embodied systems where latency, reliability, and on-device control matter.",
+  "Keep the conversation focused on measurable capability instead of marketing scale alone.",
+];
+
+const MISSION_OUTCOMES = [
+  "Total privacy for prompts, context, and outputs when deployment requires it.",
+  "Greater deployment sovereignty for teams that do not want core inference tied to a remote provider.",
+  "Offline and low-connectivity operation in field, industrial, education, and mobile settings.",
+  "Lower friction to build assistants, tools, and controllers that live next to the application instead of behind an API hop.",
 ];
 
 export function App() {
@@ -608,19 +998,6 @@ export function App() {
         onNavigate={setPage}
       />
 
-      {page !== "leaderboard" && (
-        <PageHero page={page} />
-      )}
-
-      {page === "models" && (
-        <FilterPanel
-          filters={filters}
-          options={options}
-          onChange={setFilters}
-          onClear={() => setFilters(emptyFilters)}
-        />
-      )}
-
       {page === "leaderboard" && (
         <LeaderboardPage
           rows={leaderboardRows}
@@ -639,16 +1016,63 @@ export function App() {
           selectedModelId={selectedModelId}
           onSelectedModelIdChange={setSelectedModelId}
           filters={filters}
+          options={options}
+          onFiltersChange={setFilters}
           onClearFilters={() => setFilters(emptyFilters)}
         />
       )}
       {page === "methodology" && <MethodologyPage />}
+      {page === "mission" && <MissionPage />}
 
-      <footer className="footer">
-        <span>Local AI Analysis</span>
-        <span>{payload.tagline}</span>
-      </footer>
+      <SiteFooter />
     </main>
+  );
+}
+
+function SiteFooter() {
+  const links = {
+    repo: "https://github.com/NicoCampa/laia",
+    issues: "https://github.com/NicoCampa/laia/issues",
+    owner: "https://github.com/NicoCampa",
+    readme: "https://github.com/NicoCampa/laia#readme",
+    license: "https://github.com/NicoCampa/laia/blob/main/LICENSE",
+  };
+  return (
+    <footer className="footer">
+      <div className="footer-brand">
+        <span className="footer-eyebrow">Local AI Analysis</span>
+        <strong>Independent local-model benchmarking, with closed-source references for context.</strong>
+        <p className="footer-note">Questions, corrections, and benchmark requests should go through the project repository.</p>
+      </div>
+      <div className="footer-columns">
+        <section className="footer-column" aria-labelledby="footer-contact-title">
+          <h3 id="footer-contact-title">Contact</h3>
+          <a href={links.issues} target="_blank" rel="noreferrer">
+            Open an issue
+            <ExternalLink size={14} />
+          </a>
+          <a href={links.owner} target="_blank" rel="noreferrer">
+            GitHub profile
+            <ExternalLink size={14} />
+          </a>
+        </section>
+        <section className="footer-column" aria-labelledby="footer-project-title">
+          <h3 id="footer-project-title">Project</h3>
+          <a href={links.repo} target="_blank" rel="noreferrer">
+            Repository
+            <ExternalLink size={14} />
+          </a>
+          <a href={links.readme} target="_blank" rel="noreferrer">
+            README
+            <ExternalLink size={14} />
+          </a>
+          <a href={links.license} target="_blank" rel="noreferrer">
+            Apache-2.0 license
+            <ExternalLink size={14} />
+          </a>
+        </section>
+      </div>
+    </footer>
   );
 }
 
@@ -672,10 +1096,12 @@ function SiteHeader({
   const pages: Page[] = ["leaderboard", "benchmarks", "models", "methodology"];
   return (
     <header className="site-header">
-      <button className="site-mark" type="button" onClick={() => onNavigate("leaderboard")}>
-        <span>NC</span>
-        <strong>Local AI Analysis</strong>
-      </button>
+      <div className="site-header-left">
+        <button className="site-mark" type="button" onClick={() => onNavigate("leaderboard")}>
+          <span>NC</span>
+          <strong>Local AI Analysis</strong>
+        </button>
+      </div>
       <nav aria-label="Primary navigation">
         {pages.map((item) => (
           <button
@@ -688,23 +1114,38 @@ function SiteHeader({
           </button>
         ))}
       </nav>
+      <div className="site-header-right">
+        <button
+          className={`site-mission-button ${page === "mission" ? "nav-active" : ""}`}
+          type="button"
+          onClick={() => onNavigate("mission")}
+        >
+          <span className="site-mission-icon" aria-hidden="true">
+            <Flag size={13} />
+          </span>
+          <span>Mission</span>
+        </button>
+      </div>
     </header>
   );
 }
 
 function PageHero({ page }: { page: Page }) {
+  const signals = PAGE_SIGNALS[page];
   return (
     <section className={`hero-band page-hero page-${page}-hero`}>
       <div>
-        <p className="eyebrow">Local AI Analysis</p>
+        {page !== "benchmarks" && <p className="eyebrow">Local AI Analysis</p>}
         <h1>{PAGE_HEADLINES[page]}</h1>
         <p>{PAGE_COPY[page]}</p>
       </div>
-      <div className="page-hero-signals" aria-label={`${PAGE_LABELS[page]} summary`}>
-        {PAGE_SIGNALS[page].map((signal) => (
-          <span key={`${page}-${signal}`}>{signal}</span>
-        ))}
-      </div>
+      {signals.length > 0 && (
+        <div className="page-hero-signals" aria-label={`${PAGE_LABELS[page]} summary`}>
+          {signals.map((signal) => (
+            <span key={`${page}-${signal}`}>{signal}</span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -713,18 +1154,11 @@ function FilterPanel({
   filters,
   options,
   onChange,
-  onClear,
 }: {
   filters: Filters;
   options: ReturnType<typeof optionSets>;
   onChange: (filters: Filters) => void;
-  onClear?: () => void;
 }) {
-  const quickFamilies = ["OpenAI", "Alibaba", "Google", "Mistral AI", "Meta", "NVIDIA"].filter((option) =>
-    options.families.includes(option),
-  );
-  const hasActiveFilters = filters.query !== "" || filters.family !== "all" || filters.parameterSize !== "all";
-
   return (
     <section className="filter-panel" aria-label="Filters">
       <label className="search-field">
@@ -740,45 +1174,34 @@ function FilterPanel({
         </div>
       </label>
       <Select
-        label="Family"
+        label="Lab"
         value={filters.family}
         options={options.families}
+        allLabel="All labs"
         onChange={(family) => onChange({ ...filters, family })}
       />
       <Select
-        label="Size"
+        label="Parameter Size"
         value={filters.parameterSize}
         options={options.parameterSizes}
+        allLabel="All parameter sizes"
         onChange={(parameterSize) => onChange({ ...filters, parameterSize })}
       />
-      <div className="quick-filters" aria-label="Quick provider filters">
-        <button
-          className={filters.family === "all" ? "active" : ""}
-          type="button"
-          onClick={() => onChange({ ...filters, family: "all" })}
-        >
-          All labs
-        </button>
-        {quickFamilies.map((family) => (
-          <button
-            className={filters.family === family ? "active" : ""}
-            key={family}
-            type="button"
-            onClick={() => onChange({ ...filters, family })}
-          >
-            {family}
-          </button>
-        ))}
-        {hasActiveFilters && onClear && (
-          <button
-            className="clear-filters-quick"
-            type="button"
-            onClick={onClear}
-          >
-            Reset
-          </button>
-        )}
-      </div>
+      <Select
+        label="Memory Footprint"
+        value={filters.memoryFootprint}
+        options={options.memoryFootprints}
+        allLabel="All memory"
+        onChange={(memoryFootprint) => onChange({ ...filters, memoryFootprint })}
+      />
+      <Select
+        label="Order By"
+        value={filters.sortBy}
+        options={options.sortOptions}
+        allLabel="Default order"
+        includeAllOption={false}
+        onChange={(sortBy) => onChange({ ...filters, sortBy })}
+      />
     </section>
   );
 }
@@ -787,20 +1210,25 @@ function Select({
   label,
   value,
   options,
+  allLabel,
+  includeAllOption = true,
   onChange,
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: SelectOption[];
+  allLabel: string;
+  includeAllOption?: boolean;
   onChange: (value: string) => void;
 }) {
+  const upToLabel = label === "Parameter Size" || label === "Memory Footprint";
   return (
     <label className="field">
-      <span>{label}</span>
+      <span>{upToLabel ? `${label} (Up To)` : label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="all">All</option>
+        {includeAllOption ? <option value="all">{allLabel}</option> : null}
         {options.map((option) => (
-          <option key={option} value={option}>{option}</option>
+          <option key={option.value} value={option.value}>{option.label}</option>
         ))}
       </select>
     </label>
@@ -816,12 +1244,7 @@ function LeaderboardPage({
   originRows: LeaderboardRow[];
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
-  const [parameterLimit, setParameterLimit] = useState("all");
-  const [gbLimit, setGbLimit] = useState("all");
-  const chartRows = useMemo(
-    () => topIndexRows(rows, parameterLimit, gbLimit),
-    [rows, parameterLimit, gbLimit],
-  );
+  const chartRows = useMemo(() => topIndexRows(rows), [rows]);
 
   return (
     <>
@@ -834,10 +1257,6 @@ function LeaderboardPage({
           title="LAIA score"
           subtitle="Higher is better"
           rows={chartRows}
-          parameterLimit={parameterLimit}
-          gbLimit={gbLimit}
-          onParameterLimitChange={setParameterLimit}
-          onGbLimitChange={setGbLimit}
           onOpenModel={onOpenModel}
         />
       </section>
@@ -847,20 +1266,65 @@ function LeaderboardPage({
         <div className="page-grid leaderboard-view">
           <LandscapeSection rows={rows} />
           <ReleaseDateSection rows={rows} />
+          <TopBenchmarkSection rows={rows} onOpenModel={onOpenModel} />
           <ModelOriginsSection rows={originRows} />
-          <HowToReadSection />
         </div>
       </section>
     </>
   );
 }
 
-function ChapterNav({ chapters }: { chapters: { id: string; label: string }[] }) {
+function ChapterNav({
+  chapters,
+  title = "Chapters",
+  ariaLabel = "Section chapters",
+}: {
+  chapters: { id: string; label: string }[];
+  title?: string;
+  ariaLabel?: string;
+}) {
+  const [activeId, setActiveId] = useState<string>(chapters[0]?.id ?? "");
+
+  useEffect(() => {
+    if (!chapters.length) return;
+
+    const updateActiveChapter = () => {
+      const offset = 132;
+      let currentId = chapters[0]?.id ?? "";
+
+      for (const chapter of chapters) {
+        const section = document.getElementById(chapter.id);
+        if (!section) continue;
+        const { top } = section.getBoundingClientRect();
+        if (top - offset <= 0) {
+          currentId = chapter.id;
+        } else {
+          break;
+        }
+      }
+
+      setActiveId(currentId);
+    };
+
+    updateActiveChapter();
+    window.addEventListener("scroll", updateActiveChapter, { passive: true });
+    window.addEventListener("resize", updateActiveChapter);
+    return () => {
+      window.removeEventListener("scroll", updateActiveChapter);
+      window.removeEventListener("resize", updateActiveChapter);
+    };
+  }, [chapters]);
+
   return (
-    <nav className="chapter-nav" aria-label="Homepage chapters">
-      <strong>Chapters</strong>
+    <nav className="chapter-nav" aria-label={ariaLabel}>
+      <strong>{title}</strong>
       {chapters.map((chapter) => (
-        <a href={`#${chapter.id}`} key={chapter.id}>
+        <a
+          className={activeId === chapter.id ? "active" : ""}
+          href={`#${chapter.id}`}
+          key={chapter.id}
+          aria-current={activeId === chapter.id ? "true" : undefined}
+        >
           {chapter.label}
         </a>
       ))}
@@ -888,26 +1352,27 @@ type ModelOriginMarker = {
 
 const ORIGIN_MAP = {
   width: 1320,
-  height: 600,
+  height: 660,
   mapX: 160,
-  mapY: 70,
+  mapY: 103,
   mapW: 1000,
   mapH: 500,
-  mapVisibleH: 395,
+  mapVisibleH: 455,
 };
+const ORIGIN_MAP_DISPLAY_SCALE = 0.72;
 
 const LAB_ORIGIN_LOCATIONS: LabOriginLocation[] = [
-  { id: "ai2", label: "AI2", city: "Seattle", country: "United States", lat: 47.6062, lon: -122.3321, labelX: 136, labelY: 82, side: "left" },
-  { id: "microsoft", label: "Microsoft", city: "Redmond", country: "United States", lat: 47.674, lon: -122.1215, labelX: 136, labelY: 132, side: "left" },
-  { id: "nvidia", label: "NVIDIA", city: "Santa Clara", country: "United States", lat: 37.3541, lon: -121.9552, labelX: 136, labelY: 196, side: "left" },
-  { id: "meta", label: "Meta", city: "Menlo Park", country: "United States", lat: 37.453, lon: -122.1817, labelX: 136, labelY: 250, side: "left" },
-  { id: "google", label: "Google", city: "Mountain View", country: "United States", lat: 37.3861, lon: -122.0839, labelX: 136, labelY: 304, side: "left" },
-  { id: "liquid", label: "Liquid AI", city: "Cambridge, MA", country: "United States", lat: 42.3736, lon: -71.1097, labelX: 136, labelY: 382, side: "left" },
-  { id: "ibm", label: "IBM", city: "Armonk", country: "United States", lat: 41.1265, lon: -73.714, labelX: 136, labelY: 442, side: "left" },
-  { id: "huggingface", label: "Hugging Face", city: "New York City", country: "United States", lat: 40.7128, lon: -74.006, labelX: 136, labelY: 502, side: "left" },
-  { id: "mistral", label: "Mistral AI", city: "Paris", country: "France", lat: 48.8566, lon: 2.3522, labelX: 1188, labelY: 176, side: "right" },
-  { id: "tii", label: "TII", city: "Abu Dhabi", country: "United Arab Emirates", lat: 24.4539, lon: 54.3773, labelX: 1188, labelY: 298, side: "right" },
-  { id: "alibaba", label: "Alibaba", city: "Hangzhou", country: "China", lat: 30.2741, lon: 120.1551, labelX: 1188, labelY: 408, side: "right" },
+  { id: "ai2", label: "AI2", city: "Seattle", country: "United States", lat: 47.6062, lon: -122.3321, labelX: 136, labelY: 110, side: "left" },
+  { id: "microsoft", label: "Microsoft", city: "Redmond", country: "United States", lat: 47.674, lon: -122.1215, labelX: 136, labelY: 178, side: "left" },
+  { id: "nvidia", label: "NVIDIA", city: "Santa Clara", country: "United States", lat: 37.3541, lon: -121.9552, labelX: 136, labelY: 246, side: "left" },
+  { id: "meta", label: "Meta", city: "Menlo Park", country: "United States", lat: 37.453, lon: -122.1817, labelX: 136, labelY: 314, side: "left" },
+  { id: "google", label: "Google", city: "Mountain View", country: "United States", lat: 37.3861, lon: -122.0839, labelX: 136, labelY: 382, side: "left" },
+  { id: "liquid", label: "Liquid AI", city: "Cambridge, MA", country: "United States", lat: 42.3736, lon: -71.1097, labelX: 136, labelY: 458, side: "left" },
+  { id: "ibm", label: "IBM", city: "Armonk", country: "United States", lat: 41.1265, lon: -73.714, labelX: 136, labelY: 526, side: "left" },
+  { id: "huggingface", label: "Hugging Face", city: "New York City", country: "United States", lat: 40.7128, lon: -74.006, labelX: 136, labelY: 594, side: "left" },
+  { id: "mistral", label: "Mistral AI", city: "Paris", country: "France", lat: 48.8566, lon: 2.3522, labelX: 1188, labelY: 212, side: "right" },
+  { id: "tii", label: "TII", city: "Abu Dhabi", country: "United Arab Emirates", lat: 24.4539, lon: 54.3773, labelX: 1188, labelY: 346, side: "right" },
+  { id: "alibaba", label: "Alibaba", city: "Hangzhou", country: "China", lat: 30.2741, lon: 120.1551, labelX: 1188, labelY: 474, side: "right" },
 ];
 
 function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
@@ -921,84 +1386,99 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
         <div>
           <h2>Model origins</h2>
         </div>
-        <p>Dots mark lab headquarters cities for the models in the public comparison.</p>
+        <p>Lab headquarters for the compared models.</p>
       </div>
 
       <div className="origin-map-scroll">
-        <svg
-          className="origin-world-map"
-          viewBox={`0 0 ${ORIGIN_MAP.width} ${ORIGIN_MAP.height}`}
-          role="img"
-          aria-label="World map showing model lab headquarters cities as dots"
+        <div
+          className="origin-map-stage-shell"
+          style={{
+            width: `${ORIGIN_MAP.width * ORIGIN_MAP_DISPLAY_SCALE}px`,
+            height: `${ORIGIN_MAP.height * ORIGIN_MAP_DISPLAY_SCALE}px`,
+          }}
         >
-          <defs>
-            <clipPath id="origin-map-land-clip">
-              <rect x="0" y="0" width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapVisibleH} />
-            </clipPath>
-          </defs>
-          <rect className="origin-map-background" x={ORIGIN_MAP.mapX} y={ORIGIN_MAP.mapY} width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapVisibleH} rx="22" />
-          <g className="origin-countries" transform={`translate(${ORIGIN_MAP.mapX} ${ORIGIN_MAP.mapY})`} clipPath="url(#origin-map-land-clip)">
-            <path d={WORLD_COUNTRY_PATH_WITHOUT_ANTARCTICA} />
-          </g>
+          <div
+            className="origin-map-stage"
+            style={{
+              transform: `scale(${ORIGIN_MAP_DISPLAY_SCALE})`,
+              transformOrigin: "top left",
+            }}
+          >
+          <svg
+            className="origin-world-map"
+            viewBox={`0 0 ${ORIGIN_MAP.width} ${ORIGIN_MAP.height}`}
+            role="img"
+            aria-label="World map showing model lab headquarters cities as dots"
+          >
+            <defs>
+              <clipPath id="origin-map-land-clip">
+                <rect x="0" y="0" width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapVisibleH} />
+              </clipPath>
+            </defs>
+            <rect className="origin-map-background" x={ORIGIN_MAP.mapX} y={ORIGIN_MAP.mapY} width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapVisibleH} rx="22" />
+            <g className="origin-countries" transform={`translate(${ORIGIN_MAP.mapX} ${ORIGIN_MAP.mapY})`} clipPath="url(#origin-map-land-clip)">
+              <path d={WORLD_COUNTRY_PATH_WITHOUT_ANTARCTICA} />
+            </g>
 
-          {markers.map((marker) => {
-            const point = originPoint(marker.location);
-            const callout = originCalloutPoint(marker.location);
-            const logo = originLogoBox(marker.location);
-            const active = activeId === marker.location.id;
-            return (
-              <g
-                className={`origin-connection${active ? " active" : ""}`}
-                key={`origin-line-${marker.location.id}`}
-                onMouseEnter={() => setActiveId(marker.location.id)}
-                onMouseLeave={() => setActiveId(null)}
-                onFocus={() => setActiveId(marker.location.id)}
-                onBlur={() => setActiveId(null)}
-                tabIndex={0}
-              >
-                <path className="origin-leader" d={`M${callout.x},${callout.y} L${point.x},${point.y}`} />
-                <g className="origin-logo-badge" aria-hidden="true">
-                  <rect x={logo.x} y={logo.y} width={logo.size} height={logo.size} rx="8" />
-                  <image
-                    href={originLogoSrc(marker.location.id)}
-                    x={logo.x + 5}
-                    y={logo.y + 5}
-                    width={logo.size - 10}
-                    height={logo.size - 10}
-                    preserveAspectRatio="xMidYMid meet"
-                  />
+            {markers.map((marker) => {
+              const point = originPoint(marker.location);
+              const callout = originCalloutPoint(marker.location);
+              const active = activeId === marker.location.id;
+              return (
+                <g className={`origin-connection${active ? " active" : ""}`} key={`origin-line-${marker.location.id}`}>
+                  <path className="origin-leader" d={`M${callout.x},${callout.y} L${point.x},${point.y}`} />
                 </g>
-                <text
-                  className="origin-label"
-                  x={marker.location.labelX}
-                  y={marker.location.labelY}
-                  textAnchor={marker.location.side === "left" ? "end" : "start"}
-                >
-                  <tspan className="origin-lab" x={marker.location.labelX}>{marker.location.label}</tspan>
-                  <tspan className="origin-city" x={marker.location.labelX} dy="1.25em">{marker.location.city}</tspan>
-                  <tspan className="origin-models" x={marker.location.labelX} dy="1.28em">{originModelSummary(marker.location, marker.models)}</tspan>
-                </text>
-              </g>
-            );
-          })}
+              );
+            })}
 
-          {markers.map((marker) => {
-            const point = originPoint(marker.location);
-            const active = activeId === marker.location.id;
-            return (
-              <g
-                className={`origin-dot-node${active ? " active" : ""}`}
-                key={`origin-dot-${marker.location.id}`}
-                onMouseEnter={() => setActiveId(marker.location.id)}
-                onMouseLeave={() => setActiveId(null)}
-              >
-                <circle className="origin-dot-halo" cx={point.x} cy={point.y} r={9 + Math.min(marker.rowCount, 5)} />
-                <circle className="origin-dot" cx={point.x} cy={point.y} r={4.8} />
-                <title>{`${marker.location.label}: ${marker.location.city}, ${marker.location.country}`}</title>
-              </g>
-            );
-          })}
-        </svg>
+            {markers.map((marker) => {
+              const point = originPoint(marker.location);
+              const active = activeId === marker.location.id;
+              return (
+                <g
+                  className={`origin-dot-node${active ? " active" : ""}`}
+                  key={`origin-dot-${marker.location.id}`}
+                  onMouseEnter={() => setActiveId(marker.location.id)}
+                  onMouseLeave={() => setActiveId(null)}
+                >
+                  <circle className="origin-dot-halo" cx={point.x} cy={point.y} r={9 + Math.min(marker.rowCount, 5)} />
+                  <circle className="origin-dot" cx={point.x} cy={point.y} r={4.8} />
+                  <title>{`${marker.location.label}: ${marker.location.city}, ${marker.location.country}`}</title>
+                </g>
+              );
+            })}
+          </svg>
+
+          <div className="origin-map-overlay" aria-hidden="true">
+            {markers.map((marker) => {
+              const box = originLabelBox(marker.location);
+              const active = activeId === marker.location.id;
+              return (
+                <div
+                  className="origin-map-overlay-item"
+                  key={`origin-card-${marker.location.id}`}
+                  style={{ left: `${box.x}px`, top: `${box.y}px`, width: `${box.width}px` }}
+                >
+                  <div
+                    className={`pareto-row origin-map-card${active ? " active" : ""}`}
+                    style={{ "--provider-color": originAccentColor(marker.location.id) } as CSSProperties}
+                    onMouseEnter={() => setActiveId(marker.location.id)}
+                    onMouseLeave={() => setActiveId(null)}
+                  >
+                    <span className="lab-icon" aria-hidden="true">
+                      <img src={originLogoSrc(marker.location.id)} alt="" />
+                    </span>
+                    <span>
+                      <b>{marker.location.label}</b>
+                      <small>{marker.location.city}</small>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -1059,17 +1539,24 @@ function originPoint(location: LabOriginLocation) {
 }
 
 function originCalloutPoint(location: LabOriginLocation) {
+  const box = originLabelBox(location);
   return {
-    x: location.side === "left" ? location.labelX + 15 : location.labelX - 15,
-    y: location.labelY + 9,
+    x: location.side === "left" ? box.x + box.width : box.x,
+    y: box.y + box.height / 2,
   };
 }
 
-function originLogoBox(location: LabOriginLocation) {
-  const size = 30;
-  const centerX = location.side === "left" ? location.labelX + 18 : location.labelX - 18;
-  const centerY = location.labelY + 8;
-  return { x: centerX - size / 2, y: centerY - size / 2, size };
+function originLabelBox(location: LabOriginLocation) {
+  const width = 194;
+  const height = 62;
+  const x = location.side === "left" ? location.labelX - width : location.labelX;
+  const y = location.labelY - height / 2;
+  return {
+    x,
+    y,
+    width,
+    height,
+  };
 }
 
 function originLogoSrc(id: string) {
@@ -1090,6 +1577,24 @@ function originLogoSrc(id: string) {
   return logos[id] ?? "/labs/ai2.png";
 }
 
+function originAccentColor(id: string) {
+  const providers: Record<string, string> = {
+    ai2: "AI2",
+    alibaba: "Alibaba",
+    google: "Google",
+    huggingface: "Hugging Face",
+    ibm: "IBM",
+    liquid: "Liquid AI",
+    meta: "Meta",
+    microsoft: "Microsoft",
+    mistral: "Mistral AI",
+    nvidia: "NVIDIA",
+    openai: "OpenAI",
+    tii: "TII",
+  };
+  return providerColorName(providers[id] ?? id);
+}
+
 function originModelSummary(location: LabOriginLocation, models: string[]) {
   const custom: Record<string, string> = {
     ai2: "Olmo 7B",
@@ -1102,7 +1607,7 @@ function originModelSummary(location: LabOriginLocation, models: string[]) {
     microsoft: "Phi 4 mini",
     mistral: "Ministral 3B / 8B",
     nvidia: "Nemotron 3 Nano",
-    openai: "GPT hosted",
+    openai: "GPT reference",
     tii: "Falcon H1 3B",
   };
   if (custom[location.id]) return custom[location.id];
@@ -1116,30 +1621,62 @@ function modelNameSort(a: string, b: string) {
 }
 
 function LandscapeSection({ rows }: { rows: LeaderboardRow[] }) {
-  const points = rows
-    .map((row) => ({ row, x: modelSizeGb(row), y: numeric(row.model_intelligence_score) }))
+  const [xAxis, setXAxis] = useState<"footprint" | "parameters">("footprint");
+  const localRows = useMemo(() => rows.filter((row) => !isHostedOpenAIRow(row)), [rows]);
+  const sizePoints = localRows
+    .map((row) => ({ row, x: paretoXAxisValue(row, "footprint"), y: numeric(row.model_intelligence_score) }))
     .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
-  if (points.length < 2) return null;
+  const parameterPoints = localRows
+    .map((row) => ({ row, x: paretoXAxisValue(row, "parameters"), y: numeric(row.model_intelligence_score) }))
+    .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
+  const hasSizeView = sizePoints.length >= 2;
+  const hasParameterView = parameterPoints.length >= 2;
+  if (!hasSizeView && !hasParameterView) return null;
+
+  const effectiveXAxis = xAxis === "parameters" && hasParameterView ? "parameters" : "footprint";
 
   return (
     <section className="landscape-section chapter-section" id="leaderboard-landscape">
       <div className="section-heading compact">
         <div>
           <h2>Pareto frontier</h2>
+          <p>No smaller, higher-scoring row exists.</p>
         </div>
-        <p>A point is on the frontier when no tested row is both smaller and higher scoring.</p>
+        <div className="section-heading-actions" aria-label="Pareto axis">
+          <button
+            className={`plot-toggle${effectiveXAxis === "footprint" ? " active" : ""}`}
+            type="button"
+            onClick={() => setXAxis("footprint")}
+          >
+            By memory footprint
+          </button>
+          <button
+            className={`plot-toggle${effectiveXAxis === "parameters" ? " active" : ""}`}
+            type="button"
+            onClick={() => setXAxis("parameters")}
+            disabled={!hasParameterView}
+          >
+            By parameter size
+          </button>
+        </div>
       </div>
       <div className="landscape-grid">
-        <SizeIntelligencePlot rows={rows} />
+        <SizeIntelligencePlot rows={localRows} xAxis={effectiveXAxis} />
       </div>
     </section>
   );
 }
 
-function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
+function SizeIntelligencePlot({
+  rows,
+  xAxis,
+}: {
+  rows: LeaderboardRow[];
+  xAxis: "footprint" | "parameters";
+}) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const points = rows
-    .map((row) => ({ row, x: modelSizeGb(row), y: numeric(row.model_intelligence_score) }))
+    .map((row) => ({ row, x: paretoXAxisValue(row, xAxis), y: numeric(row.model_intelligence_score) }))
     .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
   const width = 720;
   const height = 460;
@@ -1150,7 +1687,7 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
   const maxY = 1;
   const xFor = (x: number) => pad.left + (x / maxX) * plotW;
   const yFor = (y: number) => pad.top + plotH - (y / maxY) * plotH;
-  const frontier = efficiencyFrontierRows(rows);
+  const frontier = efficiencyFrontierRows(rows, xAxis);
   const frontierIds = new Set(frontier.map((item) => item.row.variant_id));
   const paretoList = frontier.slice().sort((a, b) => a.size - b.size);
   const frontierPolyline = frontier
@@ -1170,20 +1707,17 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
 
   return (
     <article className="landscape-panel">
-      <div className="panel-heading">
-        <span className="metric-icon"><Gauge size={16} /></span>
-        <div>
-          <h3>Score vs size</h3>
-          <p>The outlined path marks models no smaller, higher-scoring row beats.</p>
-        </div>
-      </div>
       <div className="landscape-scatter">
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index versus model size in GB">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label={xAxis === "parameters" ? "LAIA Index versus parameter size in billions" : "LAIA Index versus model size in GB"}
+        >
           {[0, maxX / 2, maxX].map((tick) => (
             <g key={`landscape-x-${tick}`}>
               <line className="grid-line" x1={xFor(tick)} x2={xFor(tick)} y1={pad.top} y2={pad.top + plotH} />
               <text className="axis-label" x={xFor(tick)} y={height - 16} textAnchor="middle">
-                {tick === 0 ? "0" : `${tick.toFixed(tick < 10 ? 1 : 0)} GB`}
+                {formatParetoTick(tick, xAxis)}
               </text>
             </g>
           ))}
@@ -1229,7 +1763,7 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
                   r={isFrontier ? 6 : 4.5}
                   style={{ fill: providerColor(point.row) }}
                 >
-                  <title>{displayModelName(point.row)} · {formatPoints(point.y)} · {formatModelSize(point.row)}</title>
+                  <title>{displayModelName(point.row)} · {formatPoints(point.y)} · {formatParetoXAxisValue(point.row, xAxis)}</title>
                 </circle>
               </g>
             );
@@ -1259,7 +1793,7 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
         <div>
           {paretoList.map((point) => (
             <button
-              className="pareto-row"
+              className={`pareto-row ${rowToneClass(point.row)}`}
               key={`pareto-row-${point.row.variant_id}`}
               type="button"
               onMouseEnter={() => setHoveredId(point.row.variant_id)}
@@ -1271,7 +1805,7 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
               <LabIcon row={point.row} />
               <span>
                 <b>{shortModelLabel(point.row)}</b>
-                <small>{formatPoints(point.score)} · {formatModelSize(point.row)}</small>
+                <small>{formatPoints(point.score)} · {formatParetoXAxisValue(point.row, xAxis)}</small>
               </span>
             </button>
           ))}
@@ -1281,10 +1815,10 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
   );
 }
 
-function efficiencyFrontierRows(rows: LeaderboardRow[]) {
+function efficiencyFrontierRows(rows: LeaderboardRow[], xAxis: "footprint" | "parameters" = "footprint") {
   const candidates = rows
     .map((row) => {
-      const size = modelSizeGb(row);
+      const size = paretoXAxisValue(row, xAxis);
       const score = numeric(row.model_intelligence_score);
       return size !== null && score !== null ? { row, size, score } : null;
     })
@@ -1299,6 +1833,24 @@ function efficiencyFrontierRows(rows: LeaderboardRow[]) {
     .sort((a, b) => a.size - b.size || b.score - a.score);
 }
 
+function paretoXAxisValue(row: LeaderboardRow, xAxis: "footprint" | "parameters") {
+  return xAxis === "parameters" ? numeric(row.parameter_size_b) : modelSizeGb(row);
+}
+
+function formatParetoXAxisValue(row: LeaderboardRow, xAxis: "footprint" | "parameters") {
+  if (xAxis === "parameters") {
+    const value = numeric(row.parameter_size_b);
+    return value === null ? "n/a" : `${formatBillionSize(value)}B params`;
+  }
+  return formatModelSize(row);
+}
+
+function formatParetoTick(value: number, xAxis: "footprint" | "parameters") {
+  if (value === 0) return "0";
+  if (xAxis === "parameters") return `${formatBillionSize(value)}B`;
+  return `${value.toFixed(value < 10 ? 1 : 0)} GB`;
+}
+
 function ReleaseDateSection({ rows }: { rows: LeaderboardRow[] }) {
   const points = releaseDatePoints(rows);
   if (points.length < 2) return null;
@@ -1308,11 +1860,65 @@ function ReleaseDateSection({ rows }: { rows: LeaderboardRow[] }) {
       <div className="section-heading compact">
         <div>
           <h2>Score by release date</h2>
+          <p>Each dot uses the model release date recorded in the public model registry.</p>
         </div>
-        <p>Newer is not automatically better; this shows score against model release timing.</p>
       </div>
       <div className="landscape-grid">
         <ReleaseDatePlot rows={rows} />
+      </div>
+    </section>
+  );
+}
+
+function TopBenchmarkSection({
+  rows,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  const groups = useMemo(() => topRowsByCapability(rows), [rows]);
+  const visibleGroups = groups.filter((group) => group.rows.length);
+  if (!visibleGroups.length) return null;
+
+  return (
+    <section className="chapter-section benchmark-top-section" id="leaderboard-top-benchmarks">
+      <div className="section-heading compact">
+        <div>
+          <h2>Top 5 by category</h2>
+        </div>
+        <p>Highest-scoring models in each LAIA category.</p>
+      </div>
+      <div className="benchmark-top-grid">
+        {visibleGroups.map(({ capability, rows: topRows }) => (
+          <article className="benchmark-top-card" key={`top-capability-${capability.id}`}>
+            <div className="benchmark-top-card-head">
+              <span className="metric-icon">{capability.icon}</span>
+              <div>
+                <h3>{capability.label}</h3>
+                <p>{capability.benchmark} · {capability.metricLabel}</p>
+              </div>
+            </div>
+            <div className="benchmark-top-list">
+              {topRows.map(({ row, value }, index) => (
+                <button
+                  className={`benchmark-top-row ${rowToneClass(row)}`}
+                  key={`top-${capability.id}-${row.variant_id}`}
+                  type="button"
+                  style={{ "--provider-color": providerColor(row) } as CSSProperties}
+                  onClick={() => onOpenModel(row)}
+                >
+                  <span className="benchmark-top-rank">{index + 1}</span>
+                  <LabIcon row={row} />
+                  <span>
+                    <b>{shortModelLabel(row)}</b>
+                    <small>{formatPercent(value)}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -1351,13 +1957,6 @@ function ReleaseDatePlot({ rows }: { rows: LeaderboardRow[] }) {
 
   return (
     <article className="landscape-panel">
-      <div className="panel-heading">
-        <span className="metric-icon"><Gauge size={16} /></span>
-        <div>
-          <h3>Score vs release date</h3>
-          <p>Each dot uses the model release date recorded in the public model registry.</p>
-        </div>
-      </div>
       <div className="landscape-scatter">
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index versus model release date">
           {xTicks.map((tick) => (
@@ -1423,7 +2022,7 @@ function ReleaseDatePlot({ rows }: { rows: LeaderboardRow[] }) {
         <div>
           {latestRows.map((point) => (
             <button
-              className="pareto-row"
+              className={`pareto-row ${rowToneClass(point.row)}`}
               key={`release-row-${point.row.variant_id}`}
               type="button"
               onMouseEnter={() => setHoveredId(point.row.variant_id)}
@@ -1477,54 +2076,15 @@ function formatYearTick(time: number) {
   return String(new Date(time).getUTCFullYear());
 }
 
-function HowToReadSection() {
-  return (
-    <section className="chapter-section read-guide-section" id="leaderboard-read-guide">
-      <div className="section-heading compact">
-        <div>
-          <h2>How to read this</h2>
-        </div>
-        <p>Use score first, then size and coverage to choose a model that fits your machine.</p>
-      </div>
-      <div className="read-guide-grid">
-        <article>
-          <strong>Score</strong>
-          <p>LAIA combines five text benchmarks. Higher is better.</p>
-        </article>
-        <article>
-          <strong>Size</strong>
-          <p>Estimated local memory footprint in GB. Lower is easier to run.</p>
-        </article>
-        <article>
-          <strong>Released</strong>
-          <p>Model release month when available, not the benchmark run date.</p>
-        </article>
-        <article>
-          <strong>Coverage</strong>
-          <p>How many LAIA components have current data for that row.</p>
-        </article>
-      </div>
-    </section>
-  );
-}
-
 function IndexPlotCard({
   title,
   subtitle,
   rows,
-  parameterLimit,
-  gbLimit,
-  onParameterLimitChange,
-  onGbLimitChange,
   onOpenModel,
 }: {
   title: string;
   subtitle: string;
   rows: LeaderboardRow[];
-  parameterLimit: string;
-  gbLimit: string;
-  onParameterLimitChange: (value: string) => void;
-  onGbLimitChange: (value: string) => void;
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
   const maxScore = Math.max(...rows.map((row) => numeric(row.model_intelligence_score) ?? 0), 0.01);
@@ -1535,27 +2095,9 @@ function IndexPlotCard({
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
-        <div className="index-plot-controls" aria-label="Index plot filters">
-          <label>
-            <span>Parameters</span>
-            <select value={parameterLimit} onChange={(event) => onParameterLimitChange(event.target.value)}>
-              {INDEX_PARAMETER_LIMITS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Size</span>
-            <select value={gbLimit} onChange={(event) => onGbLimitChange(event.target.value)}>
-              {INDEX_GB_LIMITS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-        </div>
       </div>
       <div className="index-plot-list" aria-label={title}>
-        {rows.length === 0 && <p className="empty-note">No rows match the selected size limits.</p>}
+        {rows.length === 0 && <p className="empty-note">No rows available for the chart.</p>}
         {rows.map((row, index) => {
           const score = numeric(row.model_intelligence_score);
           const height = score === null ? 0 : Math.max(4, (score / maxScore) * 100);
@@ -1582,7 +2124,7 @@ function IndexPlotCard({
               <div className="index-column-label">
                 <LabIcon row={row} />
                 <b>{shortModelLabel(row)}</b>
-                <span>{quantizationLabel(row)} · {formatModelSize(row)}</span>
+                <span>{indexColumnMetaLabel(row)}</span>
               </div>
             </button>
           );
@@ -1596,10 +2138,12 @@ function LeaderboardRowCard({
   row,
   rank,
   maxModelSizeGb,
+  onOpenDetails,
 }: {
   row: LeaderboardRow;
   rank: number;
   maxModelSizeGb: number;
+  onOpenDetails?: (row: LeaderboardRow) => void;
 }) {
   return (
     <article
@@ -1607,7 +2151,17 @@ function LeaderboardRowCard({
       style={{ "--provider-color": providerColor(row) } as CSSProperties}
     >
       <div className="rank-number">{String(rank).padStart(2, "0")}</div>
-      <ModelIdentity row={row} />
+      <ModelIdentity row={row} showClosedSourceBadge={false}>
+        {onOpenDetails && (
+          <div className="leaderboard-row-actions">
+            <ModelSourceLink row={row} />
+            <button className="details-button" type="button" onClick={() => onOpenDetails(row)}>
+              <Info size={14} aria-hidden="true" />
+              Details
+            </button>
+          </div>
+        )}
+      </ModelIdentity>
       <div className="model-barplot">
         <CapabilityStrip row={row} compact maxModelSizeGb={maxModelSizeGb} />
       </div>
@@ -1615,7 +2169,15 @@ function LeaderboardRowCard({
   );
 }
 
-function ModelIdentity({ row }: { row: LeaderboardRow }) {
+function ModelIdentity({
+  row,
+  children,
+  showClosedSourceBadge = true,
+}: {
+  row: LeaderboardRow;
+  children?: ReactNode;
+  showClosedSourceBadge?: boolean;
+}) {
   const reasoningEnabled = reasoningKey(row) !== "off";
   const ReasoningIcon = reasoningEnabled ? Lightbulb : LightbulbOff;
   const openai = isHostedOpenAIRow(row);
@@ -1625,16 +2187,17 @@ function ModelIdentity({ row }: { row: LeaderboardRow }) {
       <div>
         <div className="model-title-line">
           <strong>{displayModelName(row)}</strong>
-          <span className={`model-badge quant-${quantizationTone(row)}`}>{quantizationLabel(row)}</span>
+          {!openai && <span className={`model-badge quant-${quantizationTone(row)}`}>{quantizationLabel(row)}</span>}
           <span
             className={`model-badge icon-only reasoning-badge ${reasoningEnabled ? "on" : "off"}`}
             title={reasoningEnabled ? `Reasoning ${reasoningValue(row)}` : "Reasoning disabled"}
           >
             <ReasoningIcon size={13} aria-hidden="true" />
           </span>
-          {openai && <span className="model-badge closed-source">Closed source</span>}
+          {openai && showClosedSourceBadge && <span className="model-badge closed-source">Closed source</span>}
         </div>
-        <span>{providerLabel(row)} · {displayParameter(row)} · {formatReleaseDate(row)}</span>
+        <span className="model-meta-line">{modelMetaLine(row)}</span>
+        {children}
       </div>
     </div>
   );
@@ -1652,36 +2215,40 @@ function CapabilityStrip({
   const size = modelSizeGb(row);
   if (compact) {
     const score = numeric(row.model_intelligence_score);
-    const capabilityItems = TEXT_CAPABILITIES.map((capability) => {
-      const value = numeric(capability.value(row));
-      return {
-        id: capability.id,
-        label: capability.label,
-        value,
-        display: formatPercent(value),
-      };
-    });
+    const capabilityItems = [
+      {
+        id: "laia",
+        label: "LAIA Index",
+        value: score,
+        display: formatPoints(score),
+        accentClass: "laia-summary",
+      },
+      ...TEXT_CAPABILITIES.map((capability) => {
+        const value = numeric(capability.value(row));
+        return {
+          id: capability.id,
+          label: capability.label,
+          value,
+          display: formatPercent(value),
+          accentClass: "",
+        };
+      }),
+    ];
 
     return (
       <div className="capability-strip compact">
-        <div className="compact-score-line">
-          <span>LAIA</span>
-          <div className="compact-score-track" aria-label={`LAIA Index: ${formatPoints(score)}`}>
-            <i style={{ width: `${score === null ? 0 : Math.max(2, Math.min(100, score * 100))}%` }} />
-          </div>
-          <strong>{formatPoints(score)}</strong>
-        </div>
         <div className="compact-metric-grid">
           {capabilityItems.map((item) => (
-            <div className={`compact-metric ${item.value === null ? "missing" : ""}`} key={item.id}>
+            <div
+              className={`compact-metric ${item.accentClass} ${item.value === null ? "missing" : ""}`}
+              key={item.id}
+              title={item.label}
+              aria-label={`${item.label}: ${item.display}`}
+            >
               <span>{item.label}</span>
               <b>{item.display}</b>
             </div>
           ))}
-          <div className={`compact-metric footprint ${size === null ? "missing" : ""}`}>
-            <span>GB</span>
-            <b>{size === null ? "n/a" : formatModelSize(row)}</b>
-          </div>
         </div>
       </div>
     );
@@ -1753,8 +2320,6 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
   );
   const [activeBenchmarkId, setActiveBenchmarkId] = useState(visibleBenchmarks[0]?.id ?? BENCHMARK_PAGES[0].id);
   const activeBenchmark = visibleBenchmarks.find((benchmark) => benchmark.id === activeBenchmarkId) ?? visibleBenchmarks[0];
-  const [activeMetricId, setActiveMetricId] = useState(activeBenchmark?.metrics[0]?.id ?? "");
-  const activeMetric = activeBenchmark?.metrics.find((metric) => metric.id === activeMetricId) ?? activeBenchmark?.metrics[0];
 
   useEffect(() => {
     if (!activeBenchmark) return;
@@ -1765,15 +2330,7 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
     ));
   }, [activeBenchmark?.id, visibleBenchmarks]);
 
-  useEffect(() => {
-    if (!activeBenchmark) return;
-    setActiveMetricId((current) => {
-      const stillAvailable = activeBenchmark.metrics.some((metric) => metric.id === current);
-      return stillAvailable ? current : activeBenchmark.metrics[0].id;
-    });
-  }, [activeBenchmark?.id, activeBenchmark?.metrics]);
-
-  if (!activeBenchmark || !activeMetric) {
+  if (!activeBenchmark) {
     return (
       <section className="page-grid benchmarks-page">
         <p className="empty-note">No completed LAIA benchmark metrics are available for the current filters.</p>
@@ -1783,30 +2340,27 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
 
   return (
     <section className="page-grid benchmarks-page">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Benchmark Pages</p>
-          <h2>Evidence behind the ranking</h2>
+      <header className="benchmarks-landing">
+        <div className="benchmarks-landing-copy">
+          <h1>Benchmarks</h1>
+          <p>Open one capability at a time and inspect the metric slices behind the score.</p>
         </div>
-        <p>Each tab isolates one consumer-facing capability and the diagnostics that explain outliers.</p>
-      </div>
-      <div className="benchmark-tabs" aria-label="Benchmark pages">
-        {visibleBenchmarks.map((benchmark) => (
-          <button
-            className={benchmark.id === activeBenchmark.id ? "active" : ""}
-            key={benchmark.id}
-            type="button"
-            onClick={() => setActiveBenchmarkId(benchmark.id)}
-          >
-            <span>{benchmark.title}</span>
-            <small>{benchmark.subtitle}</small>
-          </button>
-        ))}
-      </div>
+        <div className="benchmark-tabs benchmarks-hero-tabs" aria-label="Benchmark pages">
+          {visibleBenchmarks.map((benchmark) => (
+            <button
+              className={benchmark.id === activeBenchmark.id ? "active" : ""}
+              key={benchmark.id}
+              type="button"
+              onClick={() => setActiveBenchmarkId(benchmark.id)}
+            >
+              <span>{benchmark.title}</span>
+              <small>{benchmark.subtitle}</small>
+            </button>
+          ))}
+        </div>
+      </header>
       <BenchmarkDetailPage
         benchmark={activeBenchmark}
-        activeMetric={activeMetric}
-        onMetricChange={setActiveMetricId}
         rows={rows}
       />
     </section>
@@ -1815,43 +2369,18 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
 
 function BenchmarkDetailPage({
   benchmark,
-  activeMetric,
-  onMetricChange,
   rows,
 }: {
   benchmark: BenchmarkPageConfig;
-  activeMetric: BenchmarkMetric;
-  onMetricChange: (id: string) => void;
   rows: LeaderboardRow[];
 }) {
   return (
     <section className="benchmark-detail">
-      <div className="benchmark-detail-heading">
-        <div>
-          <p className="eyebrow">{benchmark.badge}</p>
-          <h3>{benchmark.title}</h3>
-          <p>{benchmark.subtitle} · {benchmark.capability}</p>
-        </div>
-        <div className="metric-tabs" aria-label={`${benchmark.title} metrics`}>
-          {benchmark.metrics.map((metric) => (
-            <button
-              className={metric.id === activeMetric.id ? "active" : ""}
-              type="button"
-              key={metric.id}
-              onClick={() => onMetricChange(metric.id)}
-            >
-              {metric.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <BenchmarkTopPlot benchmark={benchmark} metric={activeMetric} rows={rows} />
       <div className="benchmark-small-multiples">
         {benchmark.metrics
-          .filter((metric) => metric.id !== activeMetric.id)
           .filter((metric) => metricHasData(rows, metric))
           .map((metric) => (
-            <BenchmarkMiniPlot benchmark={benchmark} metric={metric} rows={rows} key={`${benchmark.id}-${metric.id}`} />
+            <BenchmarkTopPlot benchmark={benchmark} metric={metric} rows={rows} key={`${benchmark.id}-${metric.id}`} />
           ))}
       </div>
       {benchmark.id === "global-mmlu-lite" && <GlobalMMLULanguageSection rows={rows} />}
@@ -1872,24 +2401,13 @@ function GlobalMMLULanguageSection({ rows }: { rows: LeaderboardRow[] }) {
     });
     return Array.from(codes).sort((a, b) => languageLabel(a).localeCompare(languageLabel(b)));
   }, [rows]);
-  const [selectedLanguage, setSelectedLanguage] = useState("all");
-  const [rowLimit, setRowLimit] = useState("16");
   const [breakdownMode, setBreakdownMode] = useState<"region" | "language">("region");
-  const visibleLimit = rowLimit === "all" ? null : Number(rowLimit);
   const availableRegions = GLOBAL_MMLU_LANGUAGE_REGIONS
     .map((region) => ({
       ...region,
       languages: region.languages.filter((language) => languageCodes.includes(language)),
     }))
     .filter((region) => region.languages.length > 0);
-  const shownLanguages =
-    selectedLanguage === "all" ? languageCodes : languageCodes.filter((language) => language === selectedLanguage);
-
-  useEffect(() => {
-    if (selectedLanguage !== "all" && !languageCodes.includes(selectedLanguage)) {
-      setSelectedLanguage("all");
-    }
-  }, [languageCodes, selectedLanguage]);
 
   if (!languageCodes.length) {
     return (
@@ -1903,7 +2421,13 @@ function GlobalMMLULanguageSection({ rows }: { rows: LeaderboardRow[] }) {
     <section className="language-section">
       <div className="benchmark-plot-title">
         <div>
-          <h4>Language breakdown</h4>
+          <div className="benchmark-plot-title-row">
+            <h4>Language breakdown</h4>
+            <PlotInfoButton
+              label="Language breakdown info"
+              detail="Region view averages the exported Global MMLU Lite language accuracies inside each region. Language view shows those same exported scores one language at a time."
+            />
+          </div>
           <p>
             Global MMLU Lite language accuracy. Regional averages are diagnostic geographic groupings, not claims about
             speakers or cultures.
@@ -1920,29 +2444,6 @@ function GlobalMMLULanguageSection({ rows }: { rows: LeaderboardRow[] }) {
               <option value="language">Languages</option>
             </select>
           </label>
-          <label className="language-filter">
-            <span>Language</span>
-            <select
-              value={selectedLanguage}
-              onChange={(event) => setSelectedLanguage(event.target.value)}
-              disabled={breakdownMode === "region"}
-            >
-              <option value="all">All languages</option>
-              {languageCodes.map((language) => (
-                <option value={language} key={language}>
-                  {languageLabel(language)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="language-filter">
-            <span>Rows</span>
-            <select value={rowLimit} onChange={(event) => setRowLimit(event.target.value)}>
-              <option value="8">Top 8</option>
-              <option value="16">Top 16</option>
-              <option value="all">All rows</option>
-            </select>
-          </label>
         </div>
       </div>
       {breakdownMode === "region" ? (
@@ -1951,15 +2452,15 @@ function GlobalMMLULanguageSection({ rows }: { rows: LeaderboardRow[] }) {
             <GlobalMMLURegionPlot
               rows={rows}
               region={region}
-              limit={visibleLimit}
+              limit={null}
               key={region.id}
             />
           ))}
         </div>
       ) : (
-        <div className={`language-grid ${selectedLanguage !== "all" ? "single-language" : ""}`}>
-          {shownLanguages.map((language) => (
-            <GlobalMMLULanguagePlot rows={rows} language={language} limit={visibleLimit} key={language} />
+        <div className="language-grid">
+          {languageCodes.map((language) => (
+            <GlobalMMLULanguagePlot rows={rows} language={language} limit={null} key={language} />
           ))}
         </div>
       )}
@@ -2008,9 +2509,7 @@ function GlobalMMLURegionPlot({
 
   return (
     <GlobalMMLUColumnPlot
-      code={`${items.length}/${allItems.length}`}
       items={items}
-      totalItems={allItems.length}
       max={Math.max(...items.map((item) => item.value), 0.01)}
       subtitle={subtitle}
       title={title}
@@ -2038,9 +2537,7 @@ function GlobalMMLULanguagePlot({
 
   return (
     <GlobalMMLUColumnPlot
-      code={`${language.toUpperCase()} · ${items.length}/${allItems.length}`}
       items={items}
-      totalItems={allItems.length}
       max={Math.max(...items.map((item) => item.value), 0.01)}
       title={languageLabel(language)}
     />
@@ -2049,17 +2546,13 @@ function GlobalMMLULanguagePlot({
 
 function GlobalMMLUColumnPlot({
   title,
-  code,
   subtitle,
   items,
-  totalItems,
   max,
 }: {
   title: string;
-  code: string;
   subtitle?: string;
   items: Array<{ row: LeaderboardRow; score: LanguageBreakdownScore; value: number }>;
-  totalItems: number;
   max: number;
 }) {
   return (
@@ -2069,7 +2562,6 @@ function GlobalMMLUColumnPlot({
           <h5>{title}</h5>
           {subtitle && <p>{subtitle}</p>}
         </div>
-        <span>{code}</span>
       </div>
       <div className="language-column-plot">
         {items.length ? items.map(({ row, score, value }) => (
@@ -2110,8 +2602,6 @@ function RGBLanguageSection({ rows }: { rows: LeaderboardRow[] }) {
     return Array.from(codes).sort((a, b) => languageLabel(a).localeCompare(languageLabel(b)));
   }, [rows]);
   const [selectedLanguage, setSelectedLanguage] = useState("all");
-  const [rowLimit, setRowLimit] = useState("16");
-  const visibleLimit = rowLimit === "all" ? null : Number(rowLimit);
   const shownLanguages =
     selectedLanguage === "all" ? languageCodes : languageCodes.filter((language) => language === selectedLanguage);
 
@@ -2133,7 +2623,13 @@ function RGBLanguageSection({ rows }: { rows: LeaderboardRow[] }) {
     <section className="language-section">
       <div className="benchmark-plot-title">
         <div>
-          <h4>Language breakdown</h4>
+          <div className="benchmark-plot-title-row">
+            <h4>Language breakdown</h4>
+            <PlotInfoButton
+              label="RGB language breakdown info"
+              detail="Each card is the exported RGB score for one language slice."
+            />
+          </div>
           <p>
             RGB language score across English and Chinese grounding cases. Scores combine noise robustness, rejection,
             information integration, and error detection with the RGB suite weights.
@@ -2151,19 +2647,11 @@ function RGBLanguageSection({ rows }: { rows: LeaderboardRow[] }) {
               ))}
             </select>
           </label>
-          <label className="language-filter">
-            <span>Rows</span>
-            <select value={rowLimit} onChange={(event) => setRowLimit(event.target.value)}>
-              <option value="8">Top 8</option>
-              <option value="16">Top 16</option>
-              <option value="all">All rows</option>
-            </select>
-          </label>
         </div>
       </div>
       <div className={`language-grid ${selectedLanguage !== "all" ? "single-language" : ""}`}>
         {shownLanguages.map((language) => (
-          <RGBLanguagePlot rows={rows} language={language} limit={visibleLimit} key={language} />
+          <RGBLanguagePlot rows={rows} language={language} limit={null} key={language} />
         ))}
       </div>
     </section>
@@ -2190,9 +2678,7 @@ function RGBLanguagePlot({
 
   return (
     <GlobalMMLUColumnPlot
-      code={`${language.toUpperCase()} · ${items.length}/${allItems.length}`}
       items={items}
-      totalItems={allItems.length}
       max={Math.max(...items.map((item) => item.value), 0.01)}
       subtitle={rgbLanguageSubtitle(items)}
       title={languageLabel(language)}
@@ -2209,14 +2695,20 @@ function BenchmarkTopPlot({
   metric: BenchmarkMetric;
   rows: LeaderboardRow[];
 }) {
-  const items = benchmarkMetricItems(rows, metric).slice(0, 12);
+  const items = benchmarkMetricItems(rows, metric);
   const max = Math.max(...items.map((item) => item.value), 0.01);
   return (
     <section className="benchmark-top-plot">
       <div className="benchmark-plot-title">
         <div>
-          <h4>{metric.label}</h4>
-          <p>{benchmark.subtitle} · Top completed rows</p>
+          <div className="benchmark-plot-title-row">
+            <h4>{metric.label}</h4>
+            <PlotInfoButton
+              label={`${metric.label} info`}
+              detail={benchmarkMetricInfo(benchmark, metric)}
+            />
+          </div>
+          <p>{benchmark.subtitle}</p>
         </div>
         <span>{metric.kind === "error" ? "Lower is better" : "Higher is better"}</span>
       </div>
@@ -2257,7 +2749,7 @@ function BenchmarkMiniPlot({
   metric: BenchmarkMetric;
   rows: LeaderboardRow[];
 }) {
-  const items = benchmarkMetricItems(rows, metric).slice(0, 8);
+  const items = benchmarkMetricItems(rows, metric);
   const max = Math.max(...items.map((item) => item.value), 0.01);
   return (
     <article className="benchmark-mini-card">
@@ -2299,6 +2791,21 @@ function benchmarkMetricItems(rows: LeaderboardRow[], metric: BenchmarkMetric) {
 
 function metricHasData(rows: LeaderboardRow[], metric: BenchmarkMetric) {
   return rows.some((row) => numeric(row[metric.metric]) !== null);
+}
+
+function benchmarkMetricInfo(benchmark: BenchmarkPageConfig, metric: BenchmarkMetric) {
+  return BENCHMARK_METRIC_INFO[String(metric.metric)] ?? `${benchmark.subtitle}. ${benchmark.capability}`;
+}
+
+function PlotInfoButton({ label, detail }: { label: string; detail: string }) {
+  return (
+    <button className="plot-info-button" type="button" aria-label={label}>
+      <span className="plot-info-glyph" aria-hidden="true">
+        (i)
+      </span>
+      <span className="plot-info-tooltip">{detail}</span>
+    </button>
+  );
 }
 
 function BenchmarkBarChart({ capability, rows }: { capability: Capability; rows: LeaderboardRow[] }) {
@@ -2347,6 +2854,8 @@ function ModelsPage({
   selectedModelId,
   onSelectedModelIdChange,
   filters,
+  options,
+  onFiltersChange,
   onClearFilters,
 }: {
   rows: LeaderboardRow[];
@@ -2354,11 +2863,18 @@ function ModelsPage({
   selectedModelId: string | null;
   onSelectedModelIdChange: (value: string | null) => void;
   filters: Filters;
+  options: ReturnType<typeof optionSets>;
+  onFiltersChange: (filters: Filters) => void;
   onClearFilters: () => void;
 }) {
-  const hasActiveFilters = filters.query !== "" || filters.family !== "all" || filters.parameterSize !== "all";
+  const hasActiveFilters = (
+    filters.query !== ""
+    || filters.family !== "all"
+    || filters.parameterSize !== "all"
+    || filters.memoryFootprint !== "all"
+  );
   const tableRows = hasActiveFilters ? rows : allRows;
-  const rankedRows = [...tableRows].sort((a, b) => scoreForRank(b) - scoreForRank(a));
+  const rankedRows = sortModelRows(tableRows, filters.sortBy);
   const maxModelSize = rankedRows.length
     ? Math.max(...rankedRows.map(modelSizeGb).filter((size): size is number => size !== null), 0.01)
     : 0.01;
@@ -2366,66 +2882,20 @@ function ModelsPage({
     ? tableRows.find((row) => row.variant_id === selectedModelId) ?? null
     : null;
 
-  const handleExportJSON = (data: LeaderboardRow[]) => {
-    const cleanRows = data.map((row) => {
-      const clean: Record<string, unknown> = {};
-      for (const key of Object.keys(row)) {
-        if (typeof row[key] !== "function" && typeof row[key] !== "object") {
-          clean[key] = row[key];
-        } else if (row[key] === null) {
-          clean[key] = null;
-        }
-      }
-      return clean;
-    });
-
-    const blob = new Blob([JSON.stringify(cleanRows, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "local_ai_leaderboard_data.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = (data: LeaderboardRow[]) => {
-    if (data.length === 0) return;
-
-    const headers = RAW_TABLE_COLUMNS;
-    const csvRows = [
-      headers.join(","),
-      ...data.map((row) =>
-        headers
-          .map((fieldName) => {
-            const val = row[fieldName];
-            const stringVal = val === null || val === undefined ? "" : String(val);
-            const escaped = stringVal.replace(/"/g, '""');
-            return escaped.includes(",") || escaped.includes('"') || escaped.includes("\n")
-              ? `"${escaped}"`
-              : escaped;
-          })
-          .join(","),
-      ),
-    ];
-
-    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "local_ai_leaderboard_data.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <section className="page-grid models-page">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">Model Catalog</p>
-          <h2>Pick from tested local models and references</h2>
+      <header className="models-landing">
+        <div className="models-landing-copy">
+          <h1>Models</h1>
+          <p>Search, filter, and inspect the tested rows, source links, benchmark coverage, and runtime metadata.</p>
         </div>
-        <p>Consumer rows stay compact first, then expand into sources, coverage, runtime, and raw metric details.</p>
-      </div>
+      </header>
+
+      <FilterPanel
+        filters={filters}
+        options={options}
+        onChange={onFiltersChange}
+      />
 
       {tableRows.length === 0 ? (
         <div className="empty-state-card">
@@ -2442,13 +2912,19 @@ function ModelsPage({
             {filters.family !== "all" && (
               <span>
                 {" "}
-                Family: <strong>{filters.family}</strong>
+                Lab: <strong>{filters.family}</strong>
               </span>
             )}
             {filters.parameterSize !== "all" && (
               <span>
                 {" "}
-                Size: <strong>{filters.parameterSize}</strong>
+                Parameter size: <strong>{`Up to ${formatBillionSize(Number(filters.parameterSize))}B`}</strong>
+              </span>
+            )}
+            {filters.memoryFootprint !== "all" && (
+              <span>
+                {" "}
+                Memory footprint: <strong>{`Up to ${formatGigabyteSize(Number(filters.memoryFootprint))} GB`}</strong>
               </span>
             )}
             .
@@ -2459,150 +2935,22 @@ function ModelsPage({
         </div>
       ) : (
         <>
-          <ModelPageSummary rows={rankedRows} />
-
           <div className="ranking-list models-ranking-list">
             {rankedRows.map((row, index) => (
               <LeaderboardRowCard
                 row={row}
                 rank={index + 1}
                 maxModelSizeGb={maxModelSize}
+                onOpenDetails={(selected) => onSelectedModelIdChange(selected.variant_id)}
                 key={`models-rank-${row.normalized_result_id ?? row.variant_id}`}
               />
             ))}
           </div>
 
-          <div className="section-heading compact">
-            <div>
-              <p className="eyebrow">Model Registry</p>
-              <h2>Coverage and source details</h2>
-            </div>
-            <p>Open the details panel for links, benchmark status, token counts, runtime, and output cap metadata.</p>
-          </div>
-
-          <div className="model-registry">
-            {tableRows.map((row) => (
-              <article
-                className={`model-registry-row ${rowToneClass(row)}`}
-                key={`registry-${row.normalized_result_id ?? row.variant_id}`}
-                style={{ "--provider-color": providerColor(row) } as CSSProperties}
-              >
-                <ModelIdentity row={row} />
-                <div className="registry-metrics">
-                  <MetricPill label="Size" value={formatModelSize(row)} />
-                  <MetricPill label="Released" value={formatReleaseDate(row)} />
-                  <MetricPill label="LAIA" value={formatPoints(numeric(row.model_intelligence_score))} />
-                  <MetricPill label="Coverage" value={coverageLabel(row)} />
-                  <MetricPill label="Cap hits" value={formatOutputCapHits(row).replace("cap hits ", "")} />
-                </div>
-                <BenchmarkCoverage row={row} />
-                <div className="registry-actions">
-                  <ModelSourceLink row={row} />
-                  <button className="details-button" type="button" onClick={() => onSelectedModelIdChange(row.variant_id)}>
-                    <Info size={14} aria-hidden="true" />
-                    Details
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-
           {selectedRow && <ModelDetailsDrawer row={selectedRow} onClose={() => onSelectedModelIdChange(null)} />}
-
-          <div className="section-heading compact">
-            <div>
-              <p className="eyebrow">Score Table</p>
-              <h2>Latest successful metrics</h2>
-            </div>
-            <div className="section-heading-actions">
-              <p>Column-level view after merging only the newest saved benchmark metric for each model version.</p>
-              <div className="export-buttons">
-                <button
-                  className="text-button export-button"
-                  type="button"
-                  onClick={() => handleExportJSON(tableRows)}
-                  title="Export filtered data as JSON"
-                >
-                  <Download size={12} aria-hidden="true" />
-                  JSON
-                </button>
-                <button
-                  className="text-button export-button"
-                  type="button"
-                  onClick={() => handleExportCSV(tableRows)}
-                  title="Export filtered data as CSV"
-                >
-                  <Download size={12} aria-hidden="true" />
-                  CSV
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="full-table-shell">
-            <table>
-              <thead>
-                <tr>
-                  {RAW_TABLE_COLUMNS.map((column) => <th key={column}>{humanizeColumn(column)}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {tableRows.map((row) => (
-                  <tr className={rowToneClass(row)} key={row.normalized_result_id ?? row.variant_id}>
-                    {RAW_TABLE_COLUMNS.map((column) => (
-                      <td
-                        className={rawCellClass(column as keyof LeaderboardRow, row[column])}
-                        key={column}
-                        style={rawCellStyle(column as keyof LeaderboardRow, row[column])}
-                      >
-                        {formatCell(row[column])}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </>
       )}
     </section>
-  );
-}
-
-function ModelPageSummary({ rows }: { rows: LeaderboardRow[] }) {
-  const top = rows.find((row) => numeric(row.model_intelligence_score) !== null) ?? null;
-  const covered = rows.filter((row) => numeric(row.model_intelligence_coverage) !== null);
-  const mostCovered = [...covered].sort((a, b) => (numeric(b.model_intelligence_coverage) ?? 0) - (numeric(a.model_intelligence_coverage) ?? 0))[0] ?? null;
-  const smallest = [...rows]
-    .filter((row) => modelSizeGb(row) !== null)
-    .sort((a, b) => (modelSizeGb(a) ?? 0) - (modelSizeGb(b) ?? 0))[0] ?? null;
-
-  return (
-    <section className="consumer-summary-strip" aria-label="Model catalog summary">
-      <article>
-        <span>Current winner</span>
-        <strong>{top ? displayModelName(top) : "n/a"}</strong>
-        <small>{top ? formatPoints(numeric(top.model_intelligence_score)) : "No score yet"}</small>
-      </article>
-      <article>
-        <span>Smallest footprint</span>
-        <strong>{smallest ? displayModelName(smallest) : "n/a"}</strong>
-        <small>{smallest ? formatModelSize(smallest) : "No size metadata"}</small>
-      </article>
-      <article>
-        <span>Most complete row</span>
-        <strong>{mostCovered ? displayModelName(mostCovered) : "n/a"}</strong>
-        <small>{mostCovered ? coverageLabel(mostCovered) : "No coverage"}</small>
-      </article>
-    </section>
-  );
-}
-
-function MetricPill({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="metric-pill">
-      <small>{label}</small>
-      <b>{value}</b>
-    </span>
   );
 }
 
@@ -2700,90 +3048,404 @@ function DetailItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MethodologyPage() {
+function MethodologySectionHeader({ section }: { section: MethodologyChapter }) {
   return (
-    <section className="methodology-page">
-      <div className="method-hero">
-        <p className="eyebrow">Methodology</p>
-        <h2>Readable scores, inspectable evidence.</h2>
-        <p>
-          LAIA Index is a 100-point text-model score built from five non-judge benchmarks.
-          The public comparison keeps other evaluation modes separate so a consumer can compare
-          local 4-bit models and hosted references on one consistent surface.
-        </p>
-      </div>
+    <header className="methodology-section-head">
+      <h2>{section.title}</h2>
+      <p>{section.intro}</p>
+    </header>
+  );
+}
 
-      <section className="trust-strip" aria-label="Consumer trust summary">
-        <article>
-          <span>Scope</span>
-          <strong>4-bit rows plus references</strong>
-          <small>Hosted and larger precision rows stay outside the main comparison.</small>
-        </article>
-        <article>
-          <span>Score</span>
-          <strong>5 equal text capabilities</strong>
-          <small>Knowledge, instructions, tools, coding, and grounding each carry 20 points.</small>
-        </article>
-        <article>
-          <span>Evidence</span>
-          <strong>Run signals exposed</strong>
-          <small>Sample counts, tokens, latency, cap hits, and sources remain visible.</small>
-        </article>
+function MethodologySchema({
+  items,
+}: {
+  items: MethodologyNamedItem[];
+}) {
+  return (
+    <dl className="methodology-schema">
+      {items.map((item) => (
+        <div className="methodology-schema-row" key={`${item.label}-${item.detail}`}>
+          <dt>{item.label}</dt>
+          <dd>{item.detail}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function MethodologyBenchmarkCard({ benchmark }: { benchmark: MethodologyBenchmark }) {
+  return (
+    <article className="methodology-benchmark">
+      <div className="methodology-benchmark-head">
+        <span>{benchmark.subtitle}</span>
+        <h3>{benchmark.title}</h3>
+      </div>
+      <MethodologySchema
+        items={[
+          { label: "What it measures", detail: benchmark.measures },
+          { label: "Leaderboard metric", detail: benchmark.metric },
+          { label: "Default evaluation scope / cap", detail: benchmark.scope },
+          { label: "Evaluator / scoring note", detail: benchmark.evaluator },
+          { label: "Inclusion", detail: benchmark.inclusion },
+          { label: "Comparison caveat", detail: benchmark.caveat },
+        ]}
+      />
+    </article>
+  );
+}
+
+function MethodologyPage() {
+  const [
+    overviewSection,
+    publicScopeSection,
+    rowsSection,
+    laiaSection,
+    indexBenchmarksSection,
+    separateBenchmarksSection,
+    reproducibilitySection,
+    outputsSection,
+    limitationsSection,
+    definitionsSection,
+  ] = METHODOLOGY_CHAPTERS;
+
+  return (
+    <>
+      <section className="methodology-landing">
+        <div className="methodology-landing-copy">
+          <p className="eyebrow">Methodology</p>
+          <h1>How LAIA works</h1>
+          <p>
+            How Local AI Analysis builds comparable rows, computes the LAIA Index,
+            and keeps benchmark evidence auditable for local 4-bit models and
+            OpenAI references.
+          </p>
+        </div>
       </section>
 
-      <div className="method-grid">
-        {CAPABILITIES.map((capability) => (
-          <article className="method-card" key={capability.id}>
-            <span className="metric-icon">{capability.icon}</span>
-            <div>
-              <h3>{capability.label}</h3>
-              <p>{capability.benchmark} · {capability.metricLabel}</p>
-              <small>{capability.description}</small>
-            </div>
-            <b>{capability.includedInLaia ? `${capability.weight} pts` : "Separate"}</b>
-          </article>
-        ))}
-      </div>
+      <section className="methodology-shell">
+        <ChapterNav
+          chapters={METHODOLOGY_CHAPTERS}
+          title="On this page"
+          ariaLabel="Methodology contents"
+        />
 
-      <section className="method-section">
-        <div>
-          <p className="eyebrow">LAIA Formula</p>
-          <h3>100 points from non-judge text benchmarks</h3>
+        <div className="methodology-view">
+          <section className="chapter-section methodology-section" id={overviewSection.id}>
+            <MethodologySectionHeader section={overviewSection} />
+            <div className="methodology-prose">
+              <p>
+                Local AI Analysis publishes a public text-only comparison surface
+                for 4-bit local rows plus OpenAI reference rows. The headline
+                LAIA score is meant to answer one question: how strong is this
+                row on a comparable text benchmark mix without relying on an
+                external judge.
+              </p>
+              <p>
+                Vision, factuality, and safety are still part of the project, but
+                they stay outside the main ranking because they introduce
+                different evaluation assumptions. The public site keeps those
+                metrics visible as separate diagnostics instead of blending them
+                into one opaque score.
+              </p>
+              <p>
+                The methodology is deliberately auditable. Benchmark metrics,
+                sample caps, runtime, token usage, cap hits, backend metadata,
+                run identifiers, and source links remain visible in the export and
+                on the site.
+              </p>
+            </div>
+          </section>
+
+          <section className="chapter-section methodology-section" id={publicScopeSection.id}>
+            <MethodologySectionHeader section={publicScopeSection} />
+            <div className="methodology-split-grid">
+              <article className="methodology-summary-card">
+                <h3>Main comparison</h3>
+                <ul>
+                  {METHODOLOGY_PUBLIC_SCOPE.main.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+              <article className="methodology-summary-card">
+                <h3>Reported separately</h3>
+                <ul>
+                  {METHODOLOGY_PUBLIC_SCOPE.separate.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+              <article className="methodology-summary-card">
+                <h3>Excluded from the public ranking</h3>
+                <ul>
+                  {METHODOLOGY_PUBLIC_SCOPE.excluded.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section className="chapter-section methodology-section" id={rowsSection.id}>
+            <MethodologySectionHeader section={rowsSection} />
+            <ol className="methodology-step-list">
+              {METHODOLOGY_ROW_BUILD_STEPS.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <p className="methodology-note">
+              In practice, the public row is not just the newest single run. It is
+              a merged export surface built from the latest comparable benchmark
+              evidence that exists for that model and quantization.
+            </p>
+          </section>
+
+          <section className="chapter-section methodology-section" id={laiaSection.id}>
+            <MethodologySectionHeader section={laiaSection} />
+            <div className="methodology-prose">
+              <p>
+                LAIA Index is the project&apos;s headline text-only score. The
+                stored values are normalized from 0 to 1 in the database and export,
+                while the website renders them as points out of 100.
+              </p>
+              <p>
+                The three intelligence fields serve different jobs: the full
+                ranking score, the benchmark-family coverage check, and the
+                within-coverage average for rows that are still missing parts of
+                the text suite.
+              </p>
+            </div>
+            <div className="methodology-score-grid">
+              {METHODOLOGY_LAIA_FIELDS.map((field) => (
+                <article className="methodology-score-card" key={field.term}>
+                  <code>{field.term}</code>
+                  <p>{field.description}</p>
+                </article>
+              ))}
+            </div>
+            <div className="methodology-weight-strip" aria-label="Published LAIA weights">
+              {METHODOLOGY_PUBLISHED_WEIGHTS.map((item) => (
+                <article className="methodology-weight-item" key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.detail}</strong>
+                </article>
+              ))}
+            </div>
+            <p className="methodology-note">
+              Published LAIA weighting is shown once here. OCRBench v2 and MMMU
+              stay separate as vision metrics, while SimpleQA and HarmBench stay
+              separate because they require a judge.
+            </p>
+          </section>
+
+          <section className="chapter-section methodology-section" id={indexBenchmarksSection.id}>
+            <MethodologySectionHeader section={indexBenchmarksSection} />
+            <div className="methodology-benchmark-list">
+              {METHODOLOGY_INDEX_BENCHMARKS.map((benchmark) => (
+                <MethodologyBenchmarkCard benchmark={benchmark} key={benchmark.id} />
+              ))}
+            </div>
+          </section>
+
+          <section className="chapter-section methodology-section" id={separateBenchmarksSection.id}>
+            <MethodologySectionHeader section={separateBenchmarksSection} />
+            <div className="methodology-benchmark-list">
+              {METHODOLOGY_SEPARATE_BENCHMARKS.map((benchmark) => (
+                <MethodologyBenchmarkCard benchmark={benchmark} key={benchmark.id} />
+              ))}
+            </div>
+          </section>
+
+          <section className="chapter-section methodology-section" id={reproducibilitySection.id}>
+            <MethodologySectionHeader section={reproducibilitySection} />
+            <div className="methodology-prose">
+              <p>
+                Local AI Analysis treats each row as an auditable local measurement.
+                Shortcut-generated configs pin upstream dataset revisions, use
+                deterministic caps where the suite would otherwise become too
+                heavy, and keep benchmark-specific settings in the generated
+                config and exported artifacts.
+              </p>
+            </div>
+            <div className="methodology-dual-grid">
+              <article className="methodology-summary-card">
+                <h3>Suite aliases</h3>
+                <MethodologySchema items={METHODOLOGY_SUITE_ALIASES} />
+              </article>
+              <article className="methodology-summary-card">
+                <h3>Deterministic default caps</h3>
+                <MethodologySchema items={METHODOLOGY_DEFAULT_CAPS} />
+              </article>
+            </div>
+            <div className="methodology-dual-grid">
+              <article className="methodology-summary-card">
+                <h3>Reasoning and context defaults</h3>
+                <ul>
+                  <li>Local shortcut commands default to <code>reasoning-effort none</code>.</li>
+                  <li>OpenAI defaults to <code>reasoning-effort auto</code>, which resolves by model family.</li>
+                  <li>Shortcut commands default to <code>context-length 8192</code> for Ollama and LM Studio.</li>
+                  <li>Changing prompts or benchmark settings creates new sample rows instead of silently reusing incompatible ones.</li>
+                </ul>
+              </article>
+              <article className="methodology-summary-card">
+                <h3>Resume behavior</h3>
+                <p>
+                  <code>--resume-samples</code> reuses matching sample rows from an
+                  existing benchmark&apos;s <code>samples.jsonl</code>. The match
+                  includes dataset identity, split, sample id, and rendered prompt,
+                  so changing prompts or benchmark settings starts new sample rows
+                  instead of mixing incompatible evidence.
+                </p>
+              </article>
+            </div>
+            <article className="methodology-summary-card">
+              <h3>Pinned dataset revisions</h3>
+              <MethodologySchema items={METHODOLOGY_PINNED_REVISIONS} />
+            </article>
+            <article className="methodology-summary-card">
+              <h3>Recorded metadata and run signals</h3>
+              <MethodologySchema items={METHODOLOGY_RECORDED_METADATA} />
+            </article>
+          </section>
+
+          <section className="chapter-section methodology-section" id={outputsSection.id}>
+            <MethodologySectionHeader section={outputsSection} />
+            <div className="methodology-prose">
+              <p>
+                The website is fed from exported normalized rows, but the full local
+                measurement stack stays on disk under <code>results/</code>. That
+                includes the DuckDB database, raw run events, generated configs,
+                and benchmark-specific sample and summary artifacts.
+              </p>
+              <p>
+                In the schema, the auditable pipeline runs from <code>base_model</code>
+                {" "}and <code>model_variant</code> through <code>benchmark_run</code>,
+                {" "}<code>benchmark_task</code>, and <code>benchmark_result</code>,
+                {" "}then into the leaderboard-facing <code>normalized_result</code>
+                {" "}row that the site exports.
+              </p>
+            </div>
+            <div className="methodology-dual-grid">
+              <article className="methodology-summary-card">
+                <h3>What is written under results/</h3>
+                <MethodologySchema items={METHODOLOGY_OUTPUTS} />
+              </article>
+              <article className="methodology-summary-card">
+                <h3>What a normalized row represents</h3>
+                <p>
+                  A normalized row is the leaderboard-facing record for one public
+                  model surface. It contains the exported benchmark metrics,
+                  intelligence fields, source and backend metadata, and the merged
+                  run signals used by the site.
+                </p>
+              </article>
+            </div>
+            <article className="methodology-summary-card">
+              <h3>Auditable fields still visible</h3>
+              <ul>
+                {METHODOLOGY_AUDIT_FIELDS.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          </section>
+
+          <section className="chapter-section methodology-section" id={limitationsSection.id}>
+            <MethodologySectionHeader section={limitationsSection} />
+            <div className="methodology-key-grid">
+              {METHODOLOGY_LIMITATIONS.map((item) => (
+                <article className="methodology-key-item" key={item.label}>
+                  <h3>{item.label}</h3>
+                  <p>{item.detail}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="chapter-section methodology-section" id={definitionsSection.id}>
+            <MethodologySectionHeader section={definitionsSection} />
+            <dl className="methodology-definition-grid">
+              {METHODOLOGY_DEFINITIONS.map((item) => (
+                <div className="methodology-definition" key={item.term}>
+                  <dt>{item.term}</dt>
+                  <dd>{item.description}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
         </div>
-        <div className="formula-grid">
-          {TEXT_CAPABILITIES.map((capability) => (
-            <article key={`formula-${capability.id}`}>
-              <span>{capability.weight} pts</span>
-              <strong>{capability.label}</strong>
-              <small>{capability.benchmark} · {capability.metricLabel}</small>
+      </section>
+    </>
+  );
+}
+
+function MissionPage() {
+  return (
+    <section className="page-grid mission-page">
+      <header className="mission-landing">
+        <div className="mission-landing-copy">
+          <p className="eyebrow">Mission</p>
+          <h1>Make local model capability impossible to ignore.</h1>
+          <p>
+            Local AI Analysis exists to increase awareness of what small and tiny
+            language models can already do on consumer hardware and edge devices,
+            to show when they are already competitive with famous closed-source
+            API models that come with per-call cost, and to make that progress
+            legible through public, comparable evidence.
+          </p>
+        </div>
+      </header>
+
+      <section className="mission-section">
+        <div className="mission-section-head">
+          <h2>Why this project exists</h2>
+          <p>
+            Too much of the conversation around AI still assumes that capability
+            only lives in the cloud. That misses what becomes possible when
+            performant models fit directly into products, machines, and devices
+            that people actually own and operate.
+          </p>
+        </div>
+        <div className="mission-pillar-grid">
+          {MISSION_PILLARS.map((item) => (
+            <article className="mission-pillar" key={item.title}>
+              <span className="mission-pillar-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <h3>{item.title}</h3>
+              <p>{item.copy}</p>
             </article>
           ))}
         </div>
       </section>
 
-      <section className="method-section">
-        <div>
-          <p className="eyebrow">Interpretation</p>
-          <h3>What is included and what is not</h3>
-        </div>
-        <div className="method-copy-grid">
-          <article>
-            <h4>Included in LAIA</h4>
-            <p>Global MMLU Lite, IFBench, BFCL v4, MBPP, and RGB are treated as the core text suite. They do not require an external LLM judge for the final score.</p>
-          </article>
-          <article>
-            <h4>Reported separately</h4>
-            <p>Vision, factuality, and safety have different evaluation assumptions. They are not part of the public LAIA pages or headline score.</p>
-          </article>
-          <article>
-            <h4>Public scope</h4>
-            <p>The public site shows 4-bit local rows plus hosted OpenAI references. Other local precision levels stay out of the main comparison.</p>
-          </article>
-          <article>
-            <h4>Reproducibility</h4>
-            <p>The site surfaces sample counts, fixed-cap hits, token usage, runtime, and source metadata so unusual runs can be inspected instead of hidden.</p>
-          </article>
-        </div>
+      <section className="mission-section mission-section-split">
+        <article className="mission-panel">
+          <h2>What we want to push forward</h2>
+          <ul className="mission-list">
+            {MISSION_FOCUS_AREAS.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </article>
+        <article className="mission-panel">
+          <h2>What local SLMs and TLMs unlock</h2>
+          <ul className="mission-list">
+            {MISSION_OUTCOMES.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </article>
+      </section>
+
+      <section className="mission-statement">
+        <p>
+          The long-term goal is simple: make it easier for builders, researchers,
+          and organizations to take local models seriously as real deployment
+          infrastructure, especially when privacy, sovereignty, offline use,
+          latency, or edge integration matter more than raw scale.
+        </p>
       </section>
     </section>
   );
@@ -3028,6 +3690,8 @@ function bestComparableRun(rows: LeaderboardRow[]) {
 
 function applyFilters(rows: LeaderboardRow[], filters: Filters) {
   const query = filters.query.trim().toLowerCase();
+  const parameterLimit = filters.parameterSize === "all" ? null : Number(filters.parameterSize);
+  const memoryLimit = filters.memoryFootprint === "all" ? null : Number(filters.memoryFootprint);
   return rows.filter((row) => {
     const searchable = [
       row.variant_name,
@@ -3038,34 +3702,35 @@ function applyFilters(rows: LeaderboardRow[], filters: Filters) {
       quantizationLabel(row),
       formatModelSize(row),
     ].join(" ").toLowerCase();
+    const parameterSize = numeric(row.parameter_size_b);
+    const memoryFootprint = modelSizeGb(row);
     return (
       (!query || searchable.includes(query)) &&
-      (filters.family === "all" || row.family === filters.family || providerLabel(row) === filters.family) &&
-      (filters.parameterSize === "all" || String(row.parameter_size_b) === filters.parameterSize)
+      (filters.family === "all" || providerLabel(row) === filters.family) &&
+      (parameterLimit === null || (parameterSize !== null && parameterSize > 0 && parameterSize <= parameterLimit)) &&
+      (memoryLimit === null || (memoryFootprint !== null && memoryFootprint > 0 && memoryFootprint <= memoryLimit))
     );
   });
 }
 
-function topIndexRows(
-  rows: LeaderboardRow[],
-  parameterLimit: string,
-  gbLimit: string,
-) {
-  const maxParameters = parameterLimit === "all" ? null : Number(parameterLimit);
-  const maxGb = gbLimit === "all" ? null : Number(gbLimit);
+function topIndexRows(rows: LeaderboardRow[]) {
   return rows
     .filter((row) => {
       const score = numeric(row.model_intelligence_score);
-      const parameters = numeric(row.parameter_size_b);
-      const size = modelSizeGb(row);
-      return (
-        score !== null &&
-        score > 0 &&
-        (maxParameters === null || (parameters !== null && parameters <= maxParameters)) &&
-        (maxGb === null || (size !== null && size <= maxGb))
-      );
+      return score !== null && score > 0;
     })
     .sort((a, b) => scoreForRank(b) - scoreForRank(a));
+}
+
+function topRowsByCapability(rows: LeaderboardRow[], limit = 5) {
+  return TEXT_CAPABILITIES.map((capability) => ({
+    capability,
+    rows: rows
+      .map((row) => ({ row, value: capability.value(row) }))
+      .filter((item): item is { row: LeaderboardRow; value: number } => item.value !== null)
+      .sort((a, b) => b.value - a.value || scoreForRank(b.row) - scoreForRank(a.row))
+      .slice(0, limit),
+  }));
 }
 
 function comparableRowKey(row: LeaderboardRow) {
@@ -3073,9 +3738,37 @@ function comparableRowKey(row: LeaderboardRow) {
 }
 
 function optionSets(rows: LeaderboardRow[]) {
+  const familyOptions = unique(rows.map((row) => providerLabel(row))).map((family) => ({
+    value: family,
+    label: family,
+  }));
+  const parameterSizeOptions = [...new Set(
+    rows
+      .map((row) => numeric(row.parameter_size_b))
+      .filter((value): value is number => value !== null && value > 0)
+      .map((value) => Number(value.toFixed(3))),
+  )]
+    .sort((a, b) => a - b)
+    .map((value) => ({
+      value: String(value),
+      label: `Up to ${formatBillionSize(value)}B`,
+    }));
+  const memoryFootprintOptions = [...new Set(
+    rows
+      .map((row) => modelSizeGb(row))
+      .filter((value): value is number => value !== null && value > 0)
+      .map((value) => Number(value.toFixed(3))),
+  )]
+    .sort((a, b) => a - b)
+    .map((value) => ({
+      value: String(value),
+      label: `Up to ${formatGigabyteSize(value)} GB`,
+    }));
   return {
-    families: unique(rows.flatMap((row) => [row.family, providerLabel(row)])),
-    parameterSizes: unique(rows.map((row) => String(row.parameter_size_b))),
+    families: familyOptions,
+    parameterSizes: parameterSizeOptions,
+    memoryFootprints: memoryFootprintOptions,
+    sortOptions: MODEL_SORT_OPTIONS,
   };
 }
 
@@ -3090,6 +3783,36 @@ function groupBy<T>(items: T[], keyFor: (item: T) => string) {
 
 function scoreForRank(row: LeaderboardRow) {
   return numeric(row.model_intelligence_score) ?? numeric(row.global_mmlu_lite_pass_at_1) ?? numeric(row.rgb_all_rate) ?? 0;
+}
+
+function sortModelRows(rows: LeaderboardRow[], sortBy: string) {
+  const capability = TEXT_CAPABILITIES.find((item) => item.id === sortBy) ?? null;
+  return [...rows].sort((a, b) => {
+    if (sortBy === "parameter-size") {
+      const delta = compareNullableNumbers(numeric(a.parameter_size_b), numeric(b.parameter_size_b), "asc");
+      if (delta !== 0) return delta;
+    } else if (sortBy === "memory-footprint") {
+      const delta = compareNullableNumbers(modelSizeGb(a), modelSizeGb(b), "asc");
+      if (delta !== 0) return delta;
+    } else if (capability) {
+      const delta = compareNullableNumbers(capability.value(a), capability.value(b), "desc");
+      if (delta !== 0) return delta;
+    } else {
+      const delta = compareNullableNumbers(numeric(a.model_intelligence_score), numeric(b.model_intelligence_score), "desc");
+      if (delta !== 0) return delta;
+    }
+
+    const scoreDelta = scoreForRank(b) - scoreForRank(a);
+    if (scoreDelta !== 0) return scoreDelta;
+    return displayModelName(a).localeCompare(displayModelName(b), undefined, { numeric: true, sensitivity: "base" });
+  });
+}
+
+function compareNullableNumbers(a: number | null, b: number | null, direction: "asc" | "desc") {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return direction === "asc" ? a - b : b - a;
 }
 
 function rowToneClass(row: LeaderboardRow) {
@@ -3210,6 +3933,21 @@ function displayParameter(row: LeaderboardRow) {
   return match ? `${match[1]}B` : "n/a";
 }
 
+function modelMetaLine(row: LeaderboardRow) {
+  const items = [providerLabel(row)];
+  if (isHostedOpenAIRow(row)) {
+    items.push("Closed source");
+  } else {
+    const parameter = displayParameter(row);
+    const footprint = formatModelSize(row);
+    if (parameter !== "n/a") items.push(parameter);
+    if (footprint !== "n/a") items.push(footprint);
+  }
+  const release = formatReleaseDate(row);
+  if (release !== "release n/a") items.push(release);
+  return items.join(" · ");
+}
+
 function providerLabel(row: LeaderboardRow) {
   const source = `${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.model_repo ?? ""} ${row.variant_name}`.toLowerCase();
   if (source.includes("openai") || /\bgpt-[\w.-]+/.test(source)) return "OpenAI";
@@ -3279,7 +4017,12 @@ function quantizationLabel(row: LeaderboardRow) {
   if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return "5 bit";
   if (/\b(?:q4|q4_k_m|4\s*bit|4bit)\b/.test(source)) return "4 bit";
   if (row.quantization && row.quantization.toUpperCase() !== "SERVER") return titleCaseModelName(row.quantization.replace(/_/g, " "));
-  return "Server";
+  return "Closed source";
+}
+
+function indexColumnMetaLabel(row: LeaderboardRow) {
+  if (isHostedOpenAIRow(row)) return "Closed source";
+  return `${quantizationLabel(row)} · ${formatModelSize(row)}`;
 }
 
 function quantizationRank(row: LeaderboardRow) {
@@ -3401,7 +4144,7 @@ function coverageLabel(row: LeaderboardRow) {
 
 function modelSourceLink(row: LeaderboardRow) {
   if (isHostedOpenAIRow(row)) {
-    return { label: "Hosted API", href: "", kind: "hosted" };
+    return { label: "Closed source", href: "", kind: "hosted" };
   }
   const candidates = [
     row.model_repo,
@@ -3410,7 +4153,7 @@ function modelSourceLink(row: LeaderboardRow) {
   ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
   const exactRepo = candidates.find((value) => /^[\w.-]+\/[\w.-]+$/.test(value) && !value.includes("@"));
   if (exactRepo) {
-    return { label: "Hugging Face", href: `https://huggingface.co/${exactRepo}`, kind: "exact" };
+    return { label: "HF repo", href: `https://huggingface.co/${exactRepo}`, kind: "exact" };
   }
   const search = [apiModel(row), displayModelName(row), providerLabel(row)].filter(Boolean).join(" ");
   if (search.trim()) {
@@ -3455,42 +4198,6 @@ function formatUsd(value?: number | null) {
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
 }
 
-function formatCell(value: unknown) {
-  if (value === null || value === undefined || value === "") return "n/a";
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return "n/a";
-    if (Math.abs(value) <= 1 && value !== 0) return value.toFixed(4);
-    return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
-  }
-  return String(value);
-}
-
-function rawCellClass(column: keyof LeaderboardRow, value: unknown) {
-  const numericValue = numeric(value);
-  if (!RAW_SCORE_COLUMNS.has(column) && !RAW_ERROR_COLUMNS.has(column)) return undefined;
-  return numericValue === null ? "score-heat-cell missing" : "score-heat-cell";
-}
-
-function rawCellStyle(column: keyof LeaderboardRow, value: unknown): CSSProperties | undefined {
-  const numericValue = numeric(value);
-  if (numericValue === null) return undefined;
-  if (RAW_SCORE_COLUMNS.has(column)) return heatmapStyle(numericValue);
-  if (RAW_ERROR_COLUMNS.has(column)) return heatmapStyle(numericValue, true);
-  return undefined;
-}
-
-function heatmapStyle(value: number, invert = false): CSSProperties {
-  const clamped = Math.max(0, Math.min(1, value));
-  const quality = invert ? 1 - clamped : clamped;
-  const hue = 10 + quality * 95;
-  const background = `hsl(${hue}, 92%, 88%)`;
-  const border = `hsl(${hue}, 70%, 62%)`;
-  return {
-    background,
-    boxShadow: `inset 0 0 0 1px ${border}`,
-  };
-}
-
 function humanizeColumn(value: string) {
   return value.replace(/_/g, " ");
 }
@@ -3531,6 +4238,11 @@ function formatIndexNumber(value: number) {
 
 function formatBillionSize(value: number) {
   if (value < 1) return value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/0$/, "");
+}
+
+function formatGigabyteSize(value: number) {
+  if (value < 10) return value.toFixed(1).replace(/\.0$/, "");
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/0$/, "");
 }
 
