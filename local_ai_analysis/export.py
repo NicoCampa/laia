@@ -25,6 +25,25 @@ OUTPUT_CAP_PRIMARY_METRICS = {
     "rgb_all_rate": "rgb",
 }
 
+MODEL_RELEASE_DATES = [
+    ("gpt-5.4-mini", "2026-03-18", "OpenAI release notes"),
+    ("gpt-5.4-nano", "2026-03-18", "OpenAI release notes"),
+    ("falcon h1", "2025-05-01", "Hugging Face model created date"),
+    ("gemma 4", "2026-03-02", "Hugging Face model created date"),
+    ("granite 4.1", "2026-04-29", "IBM Granite model card"),
+    ("lfm2.5 1.2b", "2026-01-06", "Hugging Face model created date"),
+    ("lfm2.5-350m", "2026-03-31", "Liquid AI release post"),
+    ("lfm2.5 350m", "2026-03-31", "Liquid AI release post"),
+    ("llama 3.2", "2024-09-25", "Meta release post"),
+    ("ministral 3", "2025-10-31", "Hugging Face model created date"),
+    ("nemotron 3 nano", "2026-03-16", "NVIDIA GTC release"),
+    ("olmo 3", "2025-11-19", "Hugging Face model created date"),
+    ("phi 4 mini", "2025-02-19", "Hugging Face model created date"),
+    ("qwen3.5", "2026-03-02", "Qwen release window"),
+    ("smollm2", "2024-10-31", "Hugging Face model created date"),
+    ("smollm3", "2025-07-08", "Hugging Face Transformers docs"),
+]
+
 
 def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
     db = LocalAIAnalysisDB(db_path)
@@ -48,6 +67,7 @@ def leaderboard_payload(db_path: str | Path) -> dict[str, Any]:
             ):
                 continue
             public = _public_row(row)
+            public.update(_release_metadata(public))
             language_breakdown = language_breakdowns.get(
                 (str(row.get("variant_id")), str(row.get("run_uuid")))
             )
@@ -199,6 +219,23 @@ def _public_row(row: dict[str, Any]) -> dict[str, Any]:
         "metadata_json",
     ]
     return {key: row.get(key) for key in keys}
+
+
+def _release_metadata(row: dict[str, Any]) -> dict[str, str | None]:
+    text = " ".join(
+        str(row.get(key) or "")
+        for key in ("base_model_name", "variant_name", "family", "model_repo")
+    ).lower()
+    for needle, date, source in MODEL_RELEASE_DATES:
+        if needle in text:
+            return {
+                "model_release_date": date,
+                "model_release_source": source,
+            }
+    return {
+        "model_release_date": None,
+        "model_release_source": None,
+    }
 
 
 def _global_mmlu_language_breakdowns(

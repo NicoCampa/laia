@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   BookOpen,
   Braces,
   Code2,
@@ -11,12 +10,16 @@ import {
   Lightbulb,
   LightbulbOff,
   Search,
-  Table2,
   X,
+  Download,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { WORLD_COUNTRY_PATH } from "./worldMapPaths";
+
+const WORLD_COUNTRY_PATH_WITHOUT_ANTARCTICA = WORLD_COUNTRY_PATH
+  .replace(/M1000,485\.3[\s\S]*?L1000,485\.3Z/, "")
+  .replace(/M0,485\.3[\s\S]*?L0,485\.3Z/, "");
 
 type LeaderboardRow = {
   [key: string]: unknown;
@@ -30,6 +33,8 @@ type LeaderboardRow = {
   quantization: string;
   precision?: string | null;
   model_repo?: string | null;
+  model_release_date?: string | null;
+  model_release_source?: string | null;
   file_name?: string | null;
   file_size_bytes?: number | null;
   backend_name?: string | null;
@@ -188,11 +193,10 @@ const INDEX_GB_LIMITS = [
 ];
 
 const LEADERBOARD_CHAPTERS = [
-  { id: "leaderboard-picks", label: "Budgets" },
+  { id: "leaderboard-landscape", label: "Pareto" },
+  { id: "leaderboard-release", label: "Release" },
   { id: "leaderboard-origins", label: "Origins" },
-  { id: "leaderboard-landscape", label: "Footprint" },
-  { id: "leaderboard-insights", label: "Insights" },
-  { id: "leaderboard-operations", label: "Run Signals" },
+  { id: "leaderboard-read-guide", label: "Guide" },
 ];
 
 type BenchmarkMetric = {
@@ -443,17 +447,7 @@ const RGB_COMPONENT_LABELS: Record<string, string> = {
 
 const CAPABILITIES = TEXT_CAPABILITIES;
 
-const OUTPUT_CAP_LABELS: Record<string, string> = {
-  global_mmlu_lite: "MMLU",
-  ifbench: "IFBench",
-  bfcl_v4: "BFCL",
-  mbpp: "MBPP",
-  rgb: "RGB",
-};
-
 const OUTPUT_CAP_ORDER = ["global_mmlu_lite", "ifbench", "bfcl_v4", "mbpp", "rgb"];
-
-const OUTPUT_CAP_SUMMARY = "MMLU 128 · IFBench 4096 · BFCL 1024 · MBPP 2048 · RGB 512";
 
 const LAIA_INDEX_WEIGHTS = {
   global_mmlu_lite_pass_at_1: 0.2,
@@ -547,6 +541,7 @@ const RAW_ERROR_COLUMNS = new Set<keyof LeaderboardRow>([
 const RAW_TABLE_COLUMNS = [
   "variant_name",
   "family",
+  "model_release_date",
   "parameter_size_b",
   "quantization",
   "model_intelligence_score",
@@ -608,14 +603,22 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <SiteHeader page={page} onNavigate={setPage} />
+      <SiteHeader
+        page={page}
+        onNavigate={setPage}
+      />
 
       {page !== "leaderboard" && (
         <PageHero page={page} />
       )}
 
       {page === "models" && (
-        <FilterPanel filters={filters} options={options} onChange={setFilters} />
+        <FilterPanel
+          filters={filters}
+          options={options}
+          onChange={setFilters}
+          onClear={() => setFilters(emptyFilters)}
+        />
       )}
 
       {page === "leaderboard" && (
@@ -635,6 +638,8 @@ export function App() {
           allRows={publicRows}
           selectedModelId={selectedModelId}
           onSelectedModelIdChange={setSelectedModelId}
+          filters={filters}
+          onClearFilters={() => setFilters(emptyFilters)}
         />
       )}
       {page === "methodology" && <MethodologyPage />}
@@ -708,14 +713,18 @@ function FilterPanel({
   filters,
   options,
   onChange,
+  onClear,
 }: {
   filters: Filters;
   options: ReturnType<typeof optionSets>;
   onChange: (filters: Filters) => void;
+  onClear?: () => void;
 }) {
   const quickFamilies = ["OpenAI", "Alibaba", "Google", "Mistral AI", "Meta", "NVIDIA"].filter((option) =>
     options.families.includes(option),
   );
+  const hasActiveFilters = filters.query !== "" || filters.family !== "all" || filters.parameterSize !== "all";
+
   return (
     <section className="filter-panel" aria-label="Filters">
       <label className="search-field">
@@ -760,6 +769,15 @@ function FilterPanel({
             {family}
           </button>
         ))}
+        {hasActiveFilters && onClear && (
+          <button
+            className="clear-filters-quick"
+            type="button"
+            onClick={onClear}
+          >
+            Reset
+          </button>
+        )}
       </div>
     </section>
   );
@@ -800,33 +818,21 @@ function LeaderboardPage({
 }) {
   const [parameterLimit, setParameterLimit] = useState("all");
   const [gbLimit, setGbLimit] = useState("all");
-  const activeChapter = useScrollSpy(LEADERBOARD_CHAPTERS.map((chapter) => chapter.id));
   const chartRows = useMemo(
     () => topIndexRows(rows, parameterLimit, gbLimit),
     [rows, parameterLimit, gbLimit],
   );
-  const completedRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
-  const topRow = chartRows[0] ?? rows[0] ?? null;
 
   return (
     <>
       <section className="leaderboard-landing">
         <div className="leaderboard-landing-copy">
-          <p className="eyebrow">Local AI Analysis</p>
-          <h1>Local model intelligence, measured on your machine.</h1>
-          <p>
-            A public benchmark for small and local models, centered on a text-only LAIA Index
-            across knowledge, instructions, tools, coding, and grounding.
-          </p>
-          <div className="landing-proof" aria-label="Leaderboard summary">
-            <span><b>{completedRows.length}</b> public rows</span>
-            <span><b>{topRow ? formatIndexNumber(numeric(topRow.model_intelligence_score) ?? 0) : "n/a"}</b> top score</span>
-            <span><b>5</b> text capabilities</span>
-          </div>
+          <h1>Independently benchmarked SML and TML</h1>
+          <p>SML/TML means small and tiny language models, compared with the same text-only LAIA score.</p>
         </div>
         <IndexPlotCard
-          title="Intelligence Index"
-          subtitle="Text intelligence points · Higher is better"
+          title="LAIA score"
+          subtitle="Higher is better"
           rows={chartRows}
           parameterLimit={parameterLimit}
           gbLimit={gbLimit}
@@ -837,170 +843,29 @@ function LeaderboardPage({
       </section>
 
       <section className="leaderboard-shell">
-        <ChapterNav chapters={LEADERBOARD_CHAPTERS} activeId={activeChapter} />
+        <ChapterNav chapters={LEADERBOARD_CHAPTERS} />
         <div className="page-grid leaderboard-view">
-          <ConsumerChoicePanel rows={rows} onOpenModel={onOpenModel} />
-          <ModelOriginsSection rows={originRows} />
           <LandscapeSection rows={rows} />
-
-          <LeaderboardInsights rows={rows} onOpenModel={onOpenModel} />
+          <ReleaseDateSection rows={rows} />
+          <ModelOriginsSection rows={originRows} />
+          <HowToReadSection />
         </div>
       </section>
     </>
   );
 }
 
-type ConsumerChoice = {
-  id: string;
-  label: string;
-  row: LeaderboardRow;
-  value: string;
-  detail: string;
-};
-
-function ConsumerChoicePanel({
-  rows,
-  onOpenModel,
-}: {
-  rows: LeaderboardRow[];
-  onOpenModel: (row: LeaderboardRow) => void;
-}) {
-  const choices = useMemo(() => consumerChoices(rows), [rows]);
-  if (!choices.length) return null;
-
+function ChapterNav({ chapters }: { chapters: { id: string; label: string }[] }) {
   return (
-    <section className="chapter-section consumer-choice-section" id="leaderboard-picks" aria-label="Consumer model recommendations">
-      <div className="section-heading compact">
-        <div>
-          <p className="eyebrow">Start Here</p>
-          <h2>Best models by memory budget</h2>
-        </div>
-        <p>Highest LAIA Index under common local footprint ceilings.</p>
-      </div>
-      <div className="consumer-choice-grid">
-        {choices.map((choice) => (
-          <button
-            className="consumer-choice-card"
-            key={choice.id}
-            type="button"
-            onClick={() => onOpenModel(choice.row)}
-            style={{ "--provider-color": providerColor(choice.row) } as CSSProperties}
-          >
-            <span>{choice.label}</span>
-            <ModelIdentity row={choice.row} />
-            <strong>{choice.value}</strong>
-            <small>{choice.detail}</small>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function consumerChoices(rows: LeaderboardRow[]) {
-  const scoredRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
-  const choices: ConsumerChoice[] = [];
-
-  const pushChoice = (
-    id: string,
-    label: string,
-    row: LeaderboardRow | null,
-    value: string,
-    detail: string,
-  ) => {
-    if (!row) return;
-    choices.push({ id, label, row, value, detail });
-  };
-
-  for (const budget of [8, 4, 2]) {
-    const best = bestConsumerRow(
-      scoredRows,
-      (row) => {
-        const size = modelSizeGb(row);
-        return size !== null && size <= budget;
-      },
-      (row) => scoreForRank(row),
-    );
-    pushChoice(
-      `best-${budget}gb`,
-      `Best ${budget} GB`,
-      best,
-      best ? formatPoints(numeric(best.model_intelligence_score)) : "n/a",
-      best ? `${formatModelSize(best)} footprint within the ${budget} GB ceiling.` : `No tested row under ${budget} GB.`,
-    );
-  }
-
-  return choices;
-}
-
-function bestConsumerRow(
-  rows: LeaderboardRow[],
-  predicate: (row: LeaderboardRow) => boolean,
-  valueFor: (row: LeaderboardRow) => number,
-) {
-  return rows.filter(predicate).sort((a, b) => {
-    const valueDelta = valueFor(b) - valueFor(a);
-    if (valueDelta !== 0) return valueDelta;
-    const aSize = modelSizeGb(a);
-    const bSize = modelSizeGb(b);
-    if (aSize !== null && bSize !== null) return aSize - bSize;
-    if (aSize !== null) return -1;
-    if (bSize !== null) return 1;
-    return 0;
-  })[0] ?? null;
-}
-
-function ChapterNav({
-  chapters,
-  activeId,
-}: {
-  chapters: { id: string; label: string }[];
-  activeId: string;
-}) {
-  return (
-    <nav className="chapter-nav" aria-label="Leaderboard chapters">
+    <nav className="chapter-nav" aria-label="Homepage chapters">
       <strong>Chapters</strong>
       {chapters.map((chapter) => (
-        <a className={activeId === chapter.id ? "active" : ""} href={`#${chapter.id}`} key={chapter.id}>
+        <a href={`#${chapter.id}`} key={chapter.id}>
           {chapter.label}
         </a>
       ))}
     </nav>
   );
-}
-
-function useScrollSpy(sectionIds: string[]) {
-  const [activeId, setActiveId] = useState(sectionIds[0] ?? "");
-
-  useEffect(() => {
-    const visibleSections = new Map<string, number>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            visibleSections.set(entry.target.id, entry.intersectionRatio);
-          } else {
-            visibleSections.delete(entry.target.id);
-          }
-        }
-        const nextActive = [...visibleSections.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-        if (nextActive) setActiveId(nextActive);
-      },
-      {
-        rootMargin: "-18% 0px -58% 0px",
-        threshold: [0.08, 0.24, 0.48, 0.72],
-      },
-    );
-
-    for (const id of sectionIds) {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    }
-
-    return () => observer.disconnect();
-  }, [sectionIds.join("|")]);
-
-  return activeId;
 }
 
 type LabOriginLocation = {
@@ -1023,11 +888,12 @@ type ModelOriginMarker = {
 
 const ORIGIN_MAP = {
   width: 1320,
-  height: 640,
+  height: 600,
   mapX: 160,
   mapY: 70,
   mapW: 1000,
   mapH: 500,
+  mapVisibleH: 395,
 };
 
 const LAB_ORIGIN_LOCATIONS: LabOriginLocation[] = [
@@ -1039,7 +905,6 @@ const LAB_ORIGIN_LOCATIONS: LabOriginLocation[] = [
   { id: "liquid", label: "Liquid AI", city: "Cambridge, MA", country: "United States", lat: 42.3736, lon: -71.1097, labelX: 136, labelY: 382, side: "left" },
   { id: "ibm", label: "IBM", city: "Armonk", country: "United States", lat: 41.1265, lon: -73.714, labelX: 136, labelY: 442, side: "left" },
   { id: "huggingface", label: "Hugging Face", city: "New York City", country: "United States", lat: 40.7128, lon: -74.006, labelX: 136, labelY: 502, side: "left" },
-  { id: "openai", label: "OpenAI", city: "San Francisco", country: "United States", lat: 37.7749, lon: -122.4194, labelX: 136, labelY: 558, side: "left" },
   { id: "mistral", label: "Mistral AI", city: "Paris", country: "France", lat: 48.8566, lon: 2.3522, labelX: 1188, labelY: 176, side: "right" },
   { id: "tii", label: "TII", city: "Abu Dhabi", country: "United Arab Emirates", lat: 24.4539, lon: 54.3773, labelX: 1188, labelY: 298, side: "right" },
   { id: "alibaba", label: "Alibaba", city: "Hangzhou", country: "China", lat: 30.2741, lon: 120.1551, labelX: 1188, labelY: 408, side: "right" },
@@ -1054,10 +919,9 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
     <section className="chapter-section model-origin-section" id="leaderboard-origins">
       <div className="section-heading compact">
         <div>
-          <p className="eyebrow">Model Origins</p>
-          <h2>Model lab HQ map</h2>
+          <h2>Model origins</h2>
         </div>
-        <p>Dots mark headquarters cities; logos identify each lab callout.</p>
+        <p>Dots mark lab headquarters cities for the models in the public comparison.</p>
       </div>
 
       <div className="origin-map-scroll">
@@ -1067,9 +931,14 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
           role="img"
           aria-label="World map showing model lab headquarters cities as dots"
         >
-          <rect className="origin-map-background" x={ORIGIN_MAP.mapX} y={ORIGIN_MAP.mapY} width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapH} rx="22" />
-          <g className="origin-countries" transform={`translate(${ORIGIN_MAP.mapX} ${ORIGIN_MAP.mapY})`}>
-            <path d={WORLD_COUNTRY_PATH} />
+          <defs>
+            <clipPath id="origin-map-land-clip">
+              <rect x="0" y="0" width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapVisibleH} />
+            </clipPath>
+          </defs>
+          <rect className="origin-map-background" x={ORIGIN_MAP.mapX} y={ORIGIN_MAP.mapY} width={ORIGIN_MAP.mapW} height={ORIGIN_MAP.mapVisibleH} rx="22" />
+          <g className="origin-countries" transform={`translate(${ORIGIN_MAP.mapX} ${ORIGIN_MAP.mapY})`} clipPath="url(#origin-map-land-clip)">
+            <path d={WORLD_COUNTRY_PATH_WITHOUT_ANTARCTICA} />
           </g>
 
           {markers.map((marker) => {
@@ -1175,7 +1044,6 @@ function originLocationForRow(row: LeaderboardRow) {
   if (source.includes("phi") || source.includes("microsoft")) return originLocation("microsoft");
   if (source.includes("smollm") || source.includes("hugging face")) return originLocation("huggingface");
   if (source.includes("falcon") || source.includes("tii")) return originLocation("tii");
-  if (source.includes("openai") || /\bgpt-[\w.-]+/.test(source)) return originLocation("openai");
   return null;
 }
 
@@ -1257,14 +1125,12 @@ function LandscapeSection({ rows }: { rows: LeaderboardRow[] }) {
     <section className="landscape-section chapter-section" id="leaderboard-landscape">
       <div className="section-heading compact">
         <div>
-          <p className="eyebrow">Model Landscape</p>
-          <h2>Score versus footprint</h2>
+          <h2>Pareto frontier</h2>
         </div>
-        <p>Higher and further left is better: stronger LAIA Index with less local memory.</p>
+        <p>A point is on the frontier when no tested row is both smaller and higher scoring.</p>
       </div>
       <div className="landscape-grid">
         <SizeIntelligencePlot rows={rows} />
-        <CompactEfficiencyRanking rows={rows} />
       </div>
     </section>
   );
@@ -1275,25 +1141,40 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
   const points = rows
     .map((row) => ({ row, x: modelSizeGb(row), y: numeric(row.model_intelligence_score) }))
     .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point.x !== null && point.y !== null);
-  const width = 620;
-  const height = 330;
-  const pad = { top: 24, right: 34, bottom: 46, left: 66 };
+  const width = 720;
+  const height = 460;
+  const pad = { top: 28, right: 28, bottom: 42, left: 58 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
   const maxX = Math.max(1, Math.ceil(Math.max(...points.map((p) => p.x)) * 1.08));
-  const maxY = Math.max(0.12, Math.ceil(Math.max(...points.map((p) => p.y)) * 120) / 100);
+  const maxY = 1;
   const xFor = (x: number) => pad.left + (x / maxX) * plotW;
   const yFor = (y: number) => pad.top + plotH - (y / maxY) * plotH;
-  const labeled = new Set([...points].sort((a, b) => b.y - a.y).slice(0, 7).map((p) => p.row.variant_id));
+  const frontier = efficiencyFrontierRows(rows);
+  const frontierIds = new Set(frontier.map((item) => item.row.variant_id));
+  const paretoList = frontier.slice().sort((a, b) => a.size - b.size);
+  const frontierPolyline = frontier
+    .slice()
+    .sort((a, b) => a.size - b.size)
+    .map((point) => `${xFor(point.size)},${yFor(point.score)}`)
+    .join(" ");
   const hoveredPoint = points.find((point) => point.row.variant_id === hoveredId) ?? null;
+  const hoveredCallout = hoveredPoint
+    ? {
+        left: (xFor(hoveredPoint.x) / width) * 100,
+        top: (yFor(hoveredPoint.y) / height) * 100,
+        anchor: hoveredPoint.x > maxX * 0.58 ? "-100%" : "0px",
+        offset: hoveredPoint.x > maxX * 0.58 ? { x: -8, y: -10 } : { x: 8, y: -10 },
+      }
+    : null;
 
   return (
     <article className="landscape-panel">
       <div className="panel-heading">
         <span className="metric-icon"><Gauge size={16} /></span>
         <div>
-          <h3>Intelligence vs GB</h3>
-          <p>Model footprint from exported file size when available.</p>
+          <h3>Score vs size</h3>
+          <p>The outlined path marks models no smaller, higher-scoring row beats.</p>
         </div>
       </div>
       <div className="landscape-scatter">
@@ -1314,12 +1195,9 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
               </text>
             </g>
           ))}
-          <text className="axis-title" x={pad.left + plotW / 2} y={height - 2} textAnchor="middle">Model size in GB</text>
-          <text className="axis-title" x={12} y={pad.top + plotH / 2} textAnchor="middle" transform={`rotate(-90 12 ${pad.top + plotH / 2})`}>
-            LAIA Index
-          </text>
+          {frontierPolyline && <polyline className="frontier-line" points={frontierPolyline} />}
           {points.map((point) => {
-            const isLabeled = labeled.has(point.row.variant_id);
+            const isFrontier = frontierIds.has(point.row.variant_id);
             return (
               <g
                 key={`landscape-${point.row.variant_id}`}
@@ -1336,412 +1214,297 @@ function SizeIntelligencePlot({ rows }: { rows: LeaderboardRow[] }) {
                   cy={yFor(point.y)}
                   r={16}
                 />
+                {isFrontier && (
+                  <circle
+                    className="scatter-point-halo"
+                    cx={xFor(point.x)}
+                    cy={yFor(point.y)}
+                    r={10}
+                  />
+                )}
                 <circle
-                  className={`scatter-point quant-${quantizationTone(point.row)}`}
+                  className={`scatter-point quant-${quantizationTone(point.row)}${isFrontier ? " frontier" : ""}`}
                   cx={xFor(point.x)}
                   cy={yFor(point.y)}
-                  r={isLabeled ? 6 : 4.5}
+                  r={isFrontier ? 6 : 4.5}
                   style={{ fill: providerColor(point.row) }}
                 >
                   <title>{displayModelName(point.row)} · {formatPoints(point.y)} · {formatModelSize(point.row)}</title>
                 </circle>
-                {isLabeled && (
-                  <text className="point-label" x={xFor(point.x) + 9} y={yFor(point.y) - 8}>
-                    {shortModelLabel(point.row)}
-                  </text>
-                )}
               </g>
             );
           })}
         </svg>
-        {hoveredPoint && (
-          <div
-            className="scatter-tooltip"
-            style={{
-              left: `${(xFor(hoveredPoint.x) / width) * 100}%`,
-              top: `${(yFor(hoveredPoint.y) / height) * 100}%`,
-            }}
-          >
-            <strong>{displayModelName(hoveredPoint.row)}</strong>
-            <span>{formatPoints(hoveredPoint.y)} · {formatModelSize(hoveredPoint.row)}</span>
-            <small>{providerLabel(hoveredPoint.row)} · {quantizationLabel(hoveredPoint.row)}</small>
-          </div>
-        )}
+        <div className="frontier-callouts" aria-hidden="true">
+          {hoveredPoint && hoveredCallout && (
+            <div
+              className="frontier-callout hover-callout"
+              style={{
+                left: `${hoveredCallout.left}%`,
+                top: `${hoveredCallout.top}%`,
+                "--callout-anchor-x": hoveredCallout.anchor,
+                "--callout-x": `${hoveredCallout.offset.x}px`,
+                "--callout-y": `${hoveredCallout.offset.y}px`,
+                "--provider-color": providerColor(hoveredPoint.row),
+              } as CSSProperties}
+            >
+              <LabIcon row={hoveredPoint.row} />
+              <span>{shortModelLabel(hoveredPoint.row)}</span>
+            </div>
+          )}
+        </div>
       </div>
+      <aside className="pareto-list" aria-label="Pareto frontier models">
+        <h4>Pareto models</h4>
+        <div>
+          {paretoList.map((point) => (
+            <button
+              className="pareto-row"
+              key={`pareto-row-${point.row.variant_id}`}
+              type="button"
+              onMouseEnter={() => setHoveredId(point.row.variant_id)}
+              onMouseLeave={() => setHoveredId(null)}
+              onFocus={() => setHoveredId(point.row.variant_id)}
+              onBlur={() => setHoveredId(null)}
+              style={{ "--provider-color": providerColor(point.row) } as CSSProperties}
+            >
+              <LabIcon row={point.row} />
+              <span>
+                <b>{shortModelLabel(point.row)}</b>
+                <small>{formatPoints(point.score)} · {formatModelSize(point.row)}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </aside>
     </article>
   );
 }
 
-function CompactEfficiencyRanking({ rows }: { rows: LeaderboardRow[] }) {
-  const items = rows
+function efficiencyFrontierRows(rows: LeaderboardRow[]) {
+  const candidates = rows
     .map((row) => {
       const size = modelSizeGb(row);
       const score = numeric(row.model_intelligence_score);
-      return size && score ? { row, value: (score * 100) / size } : null;
+      return size !== null && score !== null ? { row, size, score } : null;
     })
-    .filter((item): item is { row: LeaderboardRow; value: number } => item !== null)
-    .sort((a, b) => b.value - a.value)
+    .filter((item): item is { row: LeaderboardRow; size: number; score: number } => item !== null);
+  return candidates
+    .filter((candidate) => !candidates.some((other) =>
+      other.row.variant_id !== candidate.row.variant_id
+      && other.size <= candidate.size
+      && other.score >= candidate.score
+      && (other.size < candidate.size || other.score > candidate.score)
+    ))
+    .sort((a, b) => a.size - b.size || b.score - a.score);
+}
+
+function ReleaseDateSection({ rows }: { rows: LeaderboardRow[] }) {
+  const points = releaseDatePoints(rows);
+  if (points.length < 2) return null;
+
+  return (
+    <section className="landscape-section chapter-section" id="leaderboard-release">
+      <div className="section-heading compact">
+        <div>
+          <h2>Score by release date</h2>
+        </div>
+        <p>Newer is not automatically better; this shows score against model release timing.</p>
+      </div>
+      <div className="landscape-grid">
+        <ReleaseDatePlot rows={rows} />
+      </div>
+    </section>
+  );
+}
+
+function ReleaseDatePlot({ rows }: { rows: LeaderboardRow[] }) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const points = releaseDatePoints(rows);
+  const width = 720;
+  const height = 460;
+  const pad = { top: 28, right: 28, bottom: 42, left: 58 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const minTime = Math.min(...points.map((point) => point.x));
+  const maxTime = Math.max(...points.map((point) => point.x));
+  const span = Math.max(1, maxTime - minTime);
+  const xMin = minTime - span * 0.04;
+  const xMax = maxTime + span * 0.04;
+  const maxY = 1;
+  const xFor = (x: number) => pad.left + ((x - xMin) / (xMax - xMin)) * plotW;
+  const yFor = (y: number) => pad.top + plotH - (y / maxY) * plotH;
+  const latestRows = points
+    .slice()
+    .sort((a, b) => b.x - a.x || b.y - a.y)
     .slice(0, 8);
-  const max = Math.max(...items.map((item) => item.value), 0.01);
+  const hoveredPoint = points.find((point) => point.row.variant_id === hoveredId) ?? null;
+  const hoveredCallout = hoveredPoint
+    ? {
+        left: (xFor(hoveredPoint.x) / width) * 100,
+        top: (yFor(hoveredPoint.y) / height) * 100,
+        anchor: hoveredPoint.x > xMin + (xMax - xMin) * 0.58 ? "-100%" : "0px",
+        offset: hoveredPoint.x > xMin + (xMax - xMin) * 0.58 ? { x: -8, y: -10 } : { x: 8, y: -10 },
+      }
+    : null;
+  const xTicks = dateTicks(xMin, xMax);
 
   return (
     <article className="landscape-panel">
       <div className="panel-heading">
-        <span className="metric-icon"><BarChart3 size={16} /></span>
+        <span className="metric-icon"><Gauge size={16} /></span>
         <div>
-          <h3>Best points per GB</h3>
-          <p>Compact models that preserve benchmark value.</p>
+          <h3>Score vs release date</h3>
+          <p>Each dot uses the model release date recorded in the public model registry.</p>
         </div>
       </div>
-      <div className="compact-efficiency-list">
-        {items.map(({ row, value }, index) => (
-          <div className="compact-efficiency-row" key={`compact-eff-${row.variant_id}`}>
-            <span className="bar-rank">{String(index + 1).padStart(2, "0")}</span>
-            <LabIcon row={row} />
-            <div>
-              <strong>{displayModelName(row)}</strong>
-              <small>{quantizationLabel(row)} · {formatModelSize(row)}</small>
-            </div>
-            <div className="efficiency-bar"><span style={{ width: `${(value / max) * 100}%` }} /></div>
-            <b>{value.toFixed(1)}</b>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-type RunAggregate = {
-  totalTokens: number;
-  promptTokens: number;
-  completionTokens: number;
-  reasoningTokens: number;
-  runtimeSeconds: number;
-  samples: number;
-  truncatedCount: number;
-  outputCapHitCount: number;
-  outputCapHitSamples: number;
-  p95LatencySeconds: number | null;
-  outputTokensPerSecond: number | null;
-  latestStartedAt: string | null;
-  runCount: number;
-};
-
-type InsightItem = {
-  row: LeaderboardRow;
-  value: number;
-  detail?: string;
-};
-
-function isInsightItem(item: InsightItem | null): item is InsightItem {
-  return item !== null;
-}
-
-function LeaderboardInsights({
-  rows,
-  onOpenModel,
-}: {
-  rows: LeaderboardRow[];
-  onOpenModel: (row: LeaderboardRow) => void;
-}) {
-  const statsByKey = useMemo(() => runAggregates(rows), [rows]);
-  const scoredRows = rows.filter((row) => numeric(row.model_intelligence_score) !== null);
-  const coverageRows = [...scoredRows].sort((a, b) => scoreForRank(b) - scoreForRank(a)).slice(0, 12);
-  const tokenItems: InsightItem[] = scoredRows
-    .flatMap((row) => {
-      const stats = runStatsForRow(row, statsByKey);
-      return stats.totalTokens > 0
-        ? [{ row, value: stats.totalTokens, detail: `${formatCount(stats.samples)} samples · ${stats.runCount} run${stats.runCount === 1 ? "" : "s"}` }]
-        : [];
-    })
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
-  const latencyItems: InsightItem[] = scoredRows
-    .flatMap((row) => {
-      const stats = runStatsForRow(row, statsByKey);
-      return stats.p95LatencySeconds !== null
-        ? [{ row, value: stats.p95LatencySeconds, detail: `${formatCompactNumber(stats.totalTokens)} tokens observed` }]
-        : [];
-    })
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
-  const capHitItems: InsightItem[] = scoredRows
-    .flatMap((row) => {
-      const stats = runStatsForRow(row, statsByKey);
-      return stats.outputCapHitCount > 0
-        ? [{
-            row,
-            value: stats.outputCapHitCount,
-            detail: `${formatCapHitRatio(stats.outputCapHitCount, stats.outputCapHitSamples)} · ${formatOutputCapSources(row)}`,
-          }]
-        : [];
-    })
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
-
-  return (
-    <>
-      <section className="chapter-section insights-section" id="leaderboard-insights">
-        <div className="section-heading compact">
-          <div>
-            <p className="eyebrow">Benchmark Insight</p>
-            <h2>What the suite is actually measuring</h2>
-          </div>
-          <p>Coverage, run dates, token budget, and cap-hit diagnostics make the headline score easier to trust.</p>
-        </div>
-        <div className="insight-grid two-column">
-          <CoverageHeatmap rows={coverageRows} onOpenModel={onOpenModel} />
-          <RunTimelineChart rows={scoredRows} statsByKey={statsByKey} onOpenModel={onOpenModel} />
-        </div>
-      </section>
-
-      <section className="chapter-section insights-section" id="leaderboard-operations">
-        <div className="section-heading compact">
-          <div>
-            <p className="eyebrow">Run Signals</p>
-            <h2>Cost of producing the leaderboard</h2>
-          </div>
-          <p>These charts expose practical benchmarking friction: tokens, slow runs, and outputs that hit fixed caps.</p>
-        </div>
-        <div className="insight-grid three-column">
-          <InsightBarChart
-            title="Token budget"
-            subtitle="Total prompt + completion tokens seen in published runs."
-            items={tokenItems}
-            formatter={formatCompactNumber}
-            onOpenModel={onOpenModel}
-          />
-          <InsightBarChart
-            title="P95 latency"
-            subtitle="Slow-tail request latency. Lower is easier to run overnight."
-            items={latencyItems}
-            formatter={(value) => `${value.toFixed(value < 10 ? 1 : 0)}s`}
-            tone="latency"
-            onOpenModel={onOpenModel}
-          />
-          <InsightBarChart
-            title="Output cap hits"
-            subtitle={`Fixed per-benchmark caps: ${OUTPUT_CAP_SUMMARY}.`}
-            items={capHitItems}
-            formatter={(value) => `${Math.round(value)}`}
-            tone="truncation"
-            emptyLabel="No visible model hit the fixed output caps."
-            onOpenModel={onOpenModel}
-          />
-        </div>
-      </section>
-    </>
-  );
-}
-
-function CoverageHeatmap({
-  rows,
-  onOpenModel,
-}: {
-  rows: LeaderboardRow[];
-  onOpenModel: (row: LeaderboardRow) => void;
-}) {
-  return (
-    <article className="insight-card coverage-card">
-      <div className="insight-card-heading">
-        <span className="metric-icon"><Table2 size={16} /></span>
-        <div>
-          <h3>Benchmark coverage</h3>
-          <p>Five LAIA components. Filled cells mean the selected metric exists for that model row.</p>
-        </div>
-      </div>
-      <div className="coverage-table" role="table" aria-label="LAIA benchmark coverage">
-        <div className="coverage-header" role="row">
-          <span>Model</span>
-          {TEXT_CAPABILITIES.map((capability) => <span key={`coverage-head-${capability.id}`}>{capability.label}</span>)}
-        </div>
-        {rows.map((row) => (
-          <button
-            className="coverage-model-row"
-            key={`coverage-row-${row.variant_id}`}
-            type="button"
-            style={{ "--provider-color": providerColor(row) } as CSSProperties}
-            onClick={() => onOpenModel(row)}
-          >
-            <span className="coverage-model-name">
-              <LabIcon row={row} />
-              <b>{shortModelLabel(row)}</b>
-            </span>
-            {TEXT_CAPABILITIES.map((capability) => {
-              const value = capability.value(row);
-              const filled = value !== null;
-              return (
-                <span
-                  className={`coverage-cell ${filled ? "complete" : "missing"}`}
-                  title={`${capability.label}: ${filled ? formatPercent(value) : "missing"}`}
-                  key={`coverage-${row.variant_id}-${capability.id}`}
-                >
-                  {filled ? formatIndexNumber(value) : "n/a"}
-                </span>
-              );
-            })}
-          </button>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function RunTimelineChart({
-  rows,
-  statsByKey,
-  onOpenModel,
-}: {
-  rows: LeaderboardRow[];
-  statsByKey: Map<string, RunAggregate>;
-  onOpenModel: (row: LeaderboardRow) => void;
-}) {
-  const points = rows
-    .map((row) => {
-      const stats = runStatsForRow(row, statsByKey);
-      const date = parseRunDate(stats.latestStartedAt ?? row.started_at ?? null);
-      const score = numeric(row.model_intelligence_score);
-      return date && score !== null ? { row, date, score } : null;
-    })
-    .filter((item): item is { row: LeaderboardRow; date: Date; score: number } => item !== null)
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-  const width = 620;
-  const height = 300;
-  const pad = { top: 24, right: 44, bottom: 44, left: 62 };
-  const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
-  const times = points.map((point) => point.date.getTime());
-  const minTime = Math.min(...times);
-  const maxTime = Math.max(...times);
-  const maxScore = Math.max(...points.map((point) => point.score), 0.1);
-  const xFor = (time: number) => pad.left + (maxTime === minTime ? plotW / 2 : ((time - minTime) / (maxTime - minTime)) * plotW);
-  const yFor = (score: number) => pad.top + plotH - (score / maxScore) * plotH;
-  const labeled = new Set([...points].sort((a, b) => b.score - a.score).slice(0, 4).map((point) => point.row.variant_id));
-
-  return (
-    <article className="insight-card timeline-card">
-      <div className="insight-card-heading">
-        <span className="metric-icon"><BarChart3 size={16} /></span>
-        <div>
-          <h3>LAIA by run date</h3>
-          <p>Latest published run timestamp for each visible row. This is not a model release-date claim.</p>
-        </div>
-      </div>
-      {points.length < 2 ? (
-        <p className="empty-note">Not enough dated runs to draw a timeline.</p>
-      ) : (
-        <svg className="timeline-plot" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index by run date">
-          {[0, maxScore / 2, maxScore].map((tick) => (
-            <g key={`timeline-y-${tick}`}>
-              <line className="grid-line" x1={pad.left} x2={pad.left + plotW} y1={yFor(tick)} y2={yFor(tick)} />
-              <text className="axis-label" x={pad.left - 8} y={yFor(tick) + 4} textAnchor="end">
-                {formatIndexNumber(tick)}
+      <div className="landscape-scatter">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index versus model release date">
+          {xTicks.map((tick) => (
+            <g key={`release-x-${tick}`}>
+              <line className="grid-line" x1={xFor(tick)} x2={xFor(tick)} y1={pad.top} y2={pad.top + plotH} />
+              <text className="axis-label" x={xFor(tick)} y={height - 16} textAnchor="middle">
+                {formatYearTick(tick)}
               </text>
             </g>
           ))}
-          {[minTime, (minTime + maxTime) / 2, maxTime].map((tick) => (
-            <text className="axis-label" x={xFor(tick)} y={height - 14} textAnchor="middle" key={`timeline-x-${tick}`}>
-              {formatShortDate(new Date(tick))}
-            </text>
+          {[0, maxY / 2, maxY].map((tick) => (
+            <g key={`release-y-${tick}`}>
+              <line className="grid-line" x1={pad.left} x2={pad.left + plotW} y1={yFor(tick)} y2={yFor(tick)} />
+              <text className="axis-label" x={pad.left - 9} y={yFor(tick) + 4} textAnchor="end">
+                {formatPoints(tick)}
+              </text>
+            </g>
           ))}
-          <polyline
-            className="timeline-line"
-            points={points.map((point) => `${xFor(point.date.getTime())},${yFor(point.score)}`).join(" ")}
-          />
           {points.map((point) => (
-            <g key={`timeline-point-${point.row.variant_id}`}>
+            <g
+              key={`release-${point.row.variant_id}`}
+              className={`scatter-node${hoveredId === point.row.variant_id ? " active" : ""}`}
+              tabIndex={0}
+              onMouseEnter={() => setHoveredId(point.row.variant_id)}
+              onMouseLeave={() => setHoveredId(null)}
+              onFocus={() => setHoveredId(point.row.variant_id)}
+              onBlur={() => setHoveredId(null)}
+            >
+              <circle className="scatter-hit-area" cx={xFor(point.x)} cy={yFor(point.y)} r={16} />
               <circle
-                className="timeline-hit"
-                cx={xFor(point.date.getTime())}
-                cy={yFor(point.score)}
-                r={12}
-                onClick={() => onOpenModel(point.row)}
-              >
-                <title>{displayModelName(point.row)} · {formatPoints(point.score)} · {formatShortDate(point.date)}</title>
-              </circle>
-              <circle
-                className="timeline-point"
-                cx={xFor(point.date.getTime())}
-                cy={yFor(point.score)}
-                r={labeled.has(point.row.variant_id) ? 6 : 4.5}
+                className="scatter-point"
+                cx={xFor(point.x)}
+                cy={yFor(point.y)}
+                r={5}
                 style={{ fill: providerColor(point.row) }}
-              />
-              {labeled.has(point.row.variant_id) && (
-                <text className="point-label" x={xFor(point.date.getTime()) + 8} y={yFor(point.score) - 8}>
-                  {shortModelLabel(point.row)}
-                </text>
-              )}
+              >
+                <title>{displayModelName(point.row)} · {formatPoints(point.y)} · {formatReleaseDate(point.row)}</title>
+              </circle>
             </g>
           ))}
         </svg>
-      )}
-    </article>
-  );
-}
-
-function InsightBarChart({
-  title,
-  subtitle,
-  items,
-  formatter,
-  tone = "tokens",
-  emptyLabel = "No visible data.",
-  onOpenModel,
-}: {
-  title: string;
-  subtitle: string;
-  items: InsightItem[];
-  formatter: (value: number) => string;
-  tone?: string;
-  emptyLabel?: string;
-  onOpenModel: (row: LeaderboardRow) => void;
-}) {
-  const max = Math.max(...items.map((item) => item.value), 0.01);
-  return (
-    <article className={`insight-card insight-${tone}`}>
-      <div className="insight-card-heading">
-        <span className="metric-icon"><Gauge size={16} /></span>
-        <div>
-          <h3>{title}</h3>
-          <p>{subtitle}</p>
+        <div className="frontier-callouts" aria-hidden="true">
+          {hoveredPoint && hoveredCallout && (
+            <div
+              className="frontier-callout hover-callout"
+              style={{
+                left: `${hoveredCallout.left}%`,
+                top: `${hoveredCallout.top}%`,
+                "--callout-anchor-x": hoveredCallout.anchor,
+                "--callout-x": `${hoveredCallout.offset.x}px`,
+                "--callout-y": `${hoveredCallout.offset.y}px`,
+                "--provider-color": providerColor(hoveredPoint.row),
+              } as CSSProperties}
+            >
+              <LabIcon row={hoveredPoint.row} />
+              <span>{shortModelLabel(hoveredPoint.row)}</span>
+            </div>
+          )}
         </div>
       </div>
-      <div className="insight-bar-list">
-        {items.length === 0 && <p className="empty-note">{emptyLabel}</p>}
-        {items.map((item, index) => (
-          <button
-            className="insight-bar-row"
-            type="button"
-            key={`${title}-${item.row.variant_id}`}
-            onClick={() => onOpenModel(item.row)}
-          >
-            <span className="bar-rank">{String(index + 1).padStart(2, "0")}</span>
-            <LabIcon row={item.row} />
-            <span className="insight-row-label">
-              <b>{shortModelLabel(item.row)}</b>
-              <small>{item.detail ?? `${quantizationLabel(item.row)} · ${formatModelSize(item.row)}`}</small>
-            </span>
-            <span className="insight-track"><i style={{ width: `${(item.value / max) * 100}%`, background: providerColor(item.row) }} /></span>
-            <strong>{formatter(item.value)}</strong>
-          </button>
-        ))}
-      </div>
+      <aside className="pareto-list release-list" aria-label="Latest model releases">
+        <h4>Latest releases</h4>
+        <div>
+          {latestRows.map((point) => (
+            <button
+              className="pareto-row"
+              key={`release-row-${point.row.variant_id}`}
+              type="button"
+              onMouseEnter={() => setHoveredId(point.row.variant_id)}
+              onMouseLeave={() => setHoveredId(null)}
+              onFocus={() => setHoveredId(point.row.variant_id)}
+              onBlur={() => setHoveredId(null)}
+              style={{ "--provider-color": providerColor(point.row) } as CSSProperties}
+            >
+              <LabIcon row={point.row} />
+              <span>
+                <b>{shortModelLabel(point.row)}</b>
+                <small>{formatPoints(point.y)} · {formatReleaseDate(point.row)}</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </aside>
     </article>
   );
 }
 
-function ProviderLegend({ rows }: { rows: LeaderboardRow[] }) {
-  const providers = unique(rows.map(providerLabel)).slice(0, 12);
+function releaseDatePoints(rows: LeaderboardRow[]) {
+  return rows
+    .map((row) => {
+      const releaseTime = parseReleaseDate(row)?.getTime();
+      const score = numeric(row.model_intelligence_score);
+      return releaseTime !== undefined && score !== null ? { row, x: releaseTime, y: score } : null;
+    })
+    .filter((point): point is { row: LeaderboardRow; x: number; y: number } => point !== null);
+}
+
+function parseReleaseDate(row: LeaderboardRow) {
+  if (!row.model_release_date) return null;
+  const date = new Date(`${row.model_release_date}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateTicks(minTime: number, maxTime: number) {
+  const minYear = new Date(minTime).getUTCFullYear();
+  const maxYear = new Date(maxTime).getUTCFullYear();
+  const ticks: number[] = [];
+  for (let year = minYear; year <= maxYear; year += 1) {
+    const tick = Date.UTC(year, 0, 1);
+    if (tick >= minTime && tick <= maxTime) ticks.push(tick);
+  }
+  if (ticks.length < 2) return [minTime, maxTime];
+  return ticks;
+}
+
+function formatYearTick(time: number) {
+  return String(new Date(time).getUTCFullYear());
+}
+
+function HowToReadSection() {
   return (
-    <div className="provider-legend" aria-label="Provider colors">
-      {providers.map((provider) => (
-        <span key={provider}>
-          <i style={{ background: providerColorName(provider) }} aria-hidden="true" />
-          {provider}
-          {provider === "OpenAI" && <b>closed</b>}
-        </span>
-      ))}
-    </div>
+    <section className="chapter-section read-guide-section" id="leaderboard-read-guide">
+      <div className="section-heading compact">
+        <div>
+          <h2>How to read this</h2>
+        </div>
+        <p>Use score first, then size and coverage to choose a model that fits your machine.</p>
+      </div>
+      <div className="read-guide-grid">
+        <article>
+          <strong>Score</strong>
+          <p>LAIA combines five text benchmarks. Higher is better.</p>
+        </article>
+        <article>
+          <strong>Size</strong>
+          <p>Estimated local memory footprint in GB. Lower is easier to run.</p>
+        </article>
+        <article>
+          <strong>Released</strong>
+          <p>Model release month when available, not the benchmark run date.</p>
+        </article>
+        <article>
+          <strong>Coverage</strong>
+          <p>How many LAIA components have current data for that row.</p>
+        </article>
+      </div>
+    </section>
   );
 }
 
@@ -1769,7 +1532,6 @@ function IndexPlotCard({
     <section className="index-plot-card intelligence-card">
       <div className="index-plot-heading">
         <div>
-          <p className="eyebrow">All models</p>
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
@@ -1783,7 +1545,7 @@ function IndexPlotCard({
             </select>
           </label>
           <label>
-            <span>Footprint</span>
+            <span>Size</span>
             <select value={gbLimit} onChange={(event) => onGbLimitChange(event.target.value)}>
               {INDEX_GB_LIMITS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -1872,7 +1634,7 @@ function ModelIdentity({ row }: { row: LeaderboardRow }) {
           </span>
           {openai && <span className="model-badge closed-source">Closed source</span>}
         </div>
-        <span>{providerLabel(row)} · {displayParameter(row)}</span>
+        <span>{providerLabel(row)} · {displayParameter(row)} · {formatReleaseDate(row)}</span>
       </div>
     </div>
   );
@@ -2028,7 +1790,6 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
         </div>
         <p>Each tab isolates one consumer-facing capability and the diagnostics that explain outliers.</p>
       </div>
-      <BenchmarkReadinessStrip benchmarks={visibleBenchmarks} rows={rows} />
       <div className="benchmark-tabs" aria-label="Benchmark pages">
         {visibleBenchmarks.map((benchmark) => (
           <button
@@ -2048,37 +1809,6 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
         onMetricChange={setActiveMetricId}
         rows={rows}
       />
-    </section>
-  );
-}
-
-function BenchmarkReadinessStrip({
-  benchmarks,
-  rows,
-}: {
-  benchmarks: BenchmarkPageConfig[];
-  rows: LeaderboardRow[];
-}) {
-  const scoredModels = rows.filter((row) => numeric(row.model_intelligence_score) !== null).length;
-  const coverage = benchmarks.map((benchmark) => ({
-    benchmark,
-    completeRows: rows.filter((row) => benchmark.metrics.some((metric) => numeric(row[metric.metric]) !== null)).length,
-  }));
-
-  return (
-    <section className="benchmark-readiness-strip" aria-label="Benchmark readiness summary">
-      <article>
-        <span>Compared models</span>
-        <strong>{scoredModels}</strong>
-        <small>Rows with a current LAIA Index.</small>
-      </article>
-      {coverage.slice(0, 5).map(({ benchmark, completeRows }) => (
-        <article key={`readiness-${benchmark.id}`}>
-          <span>{benchmark.title}</span>
-          <strong>{completeRows}</strong>
-          <small>{benchmark.subtitle}</small>
-        </article>
-      ))}
     </section>
   );
 }
@@ -2616,18 +2346,77 @@ function ModelsPage({
   allRows,
   selectedModelId,
   onSelectedModelIdChange,
+  filters,
+  onClearFilters,
 }: {
   rows: LeaderboardRow[];
   allRows: LeaderboardRow[];
   selectedModelId: string | null;
   onSelectedModelIdChange: (value: string | null) => void;
+  filters: Filters;
+  onClearFilters: () => void;
 }) {
-  const tableRows = rows.length ? rows : allRows;
+  const hasActiveFilters = filters.query !== "" || filters.family !== "all" || filters.parameterSize !== "all";
+  const tableRows = hasActiveFilters ? rows : allRows;
   const rankedRows = [...tableRows].sort((a, b) => scoreForRank(b) - scoreForRank(a));
-  const maxModelSize = Math.max(...rankedRows.map(modelSizeGb).filter((size): size is number => size !== null), 0.01);
+  const maxModelSize = rankedRows.length
+    ? Math.max(...rankedRows.map(modelSizeGb).filter((size): size is number => size !== null), 0.01)
+    : 0.01;
   const selectedRow = selectedModelId
     ? tableRows.find((row) => row.variant_id === selectedModelId) ?? null
     : null;
+
+  const handleExportJSON = (data: LeaderboardRow[]) => {
+    const cleanRows = data.map((row) => {
+      const clean: Record<string, unknown> = {};
+      for (const key of Object.keys(row)) {
+        if (typeof row[key] !== "function" && typeof row[key] !== "object") {
+          clean[key] = row[key];
+        } else if (row[key] === null) {
+          clean[key] = null;
+        }
+      }
+      return clean;
+    });
+
+    const blob = new Blob([JSON.stringify(cleanRows, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "local_ai_leaderboard_data.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = (data: LeaderboardRow[]) => {
+    if (data.length === 0) return;
+
+    const headers = RAW_TABLE_COLUMNS;
+    const csvRows = [
+      headers.join(","),
+      ...data.map((row) =>
+        headers
+          .map((fieldName) => {
+            const val = row[fieldName];
+            const stringVal = val === null || val === undefined ? "" : String(val);
+            const escaped = stringVal.replace(/"/g, '""');
+            return escaped.includes(",") || escaped.includes('"') || escaped.includes("\n")
+              ? `"${escaped}"`
+              : escaped;
+          })
+          .join(","),
+      ),
+    ];
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "local_ai_leaderboard_data.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <section className="page-grid models-page">
       <div className="section-heading">
@@ -2637,86 +2426,144 @@ function ModelsPage({
         </div>
         <p>Consumer rows stay compact first, then expand into sources, coverage, runtime, and raw metric details.</p>
       </div>
-      <ModelPageSummary rows={rankedRows} />
 
-      <div className="ranking-list models-ranking-list">
-        {rankedRows.map((row, index) => (
-          <LeaderboardRowCard
-            row={row}
-            rank={index + 1}
-            maxModelSizeGb={maxModelSize}
-            key={`models-rank-${row.normalized_result_id ?? row.variant_id}`}
-          />
-        ))}
-      </div>
-
-      <div className="section-heading compact">
-        <div>
-          <p className="eyebrow">Model Registry</p>
-          <h2>Coverage and source details</h2>
+      {tableRows.length === 0 ? (
+        <div className="empty-state-card">
+          <Info size={40} className="empty-state-icon" aria-hidden="true" />
+          <h3>No models match your criteria</h3>
+          <p>
+            No models were found matching your current filters:
+            {filters.query !== "" && (
+              <span>
+                {" "}
+                Search: <strong>"{filters.query}"</strong>
+              </span>
+            )}
+            {filters.family !== "all" && (
+              <span>
+                {" "}
+                Family: <strong>{filters.family}</strong>
+              </span>
+            )}
+            {filters.parameterSize !== "all" && (
+              <span>
+                {" "}
+                Size: <strong>{filters.parameterSize}</strong>
+              </span>
+            )}
+            .
+          </p>
+          <button className="clear-filters-btn" type="button" onClick={onClearFilters}>
+            Clear Filters
+          </button>
         </div>
-        <p>Open the details panel for links, benchmark status, token counts, runtime, and output cap metadata.</p>
-      </div>
+      ) : (
+        <>
+          <ModelPageSummary rows={rankedRows} />
 
-      <div className="model-registry">
-        {tableRows.map((row) => (
-          <article
-            className={`model-registry-row ${rowToneClass(row)}`}
-            key={`registry-${row.normalized_result_id ?? row.variant_id}`}
-            style={{ "--provider-color": providerColor(row) } as CSSProperties}
-          >
-            <ModelIdentity row={row} />
-            <div className="registry-metrics">
-              <MetricPill label="Size" value={formatModelSize(row)} />
-              <MetricPill label="LAIA" value={formatPoints(numeric(row.model_intelligence_score))} />
-              <MetricPill label="Coverage" value={coverageLabel(row)} />
-              <MetricPill label="Cap hits" value={formatOutputCapHits(row).replace("cap hits ", "")} />
-            </div>
-            <BenchmarkCoverage row={row} />
-            <div className="registry-actions">
-              <ModelSourceLink row={row} />
-              <button className="details-button" type="button" onClick={() => onSelectedModelIdChange(row.variant_id)}>
-                <Info size={14} aria-hidden="true" />
-                Details
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-
-      {selectedRow && <ModelDetailsDrawer row={selectedRow} onClose={() => onSelectedModelIdChange(null)} />}
-
-      <div className="section-heading compact">
-        <div>
-          <p className="eyebrow">Score Table</p>
-          <h2>Latest successful metrics</h2>
-        </div>
-        <p>Column-level view after merging only the newest saved benchmark metric for each model version.</p>
-      </div>
-      <div className="full-table-shell">
-        <table>
-          <thead>
-            <tr>
-              {RAW_TABLE_COLUMNS.map((column) => <th key={column}>{humanizeColumn(column)}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {tableRows.map((row) => (
-              <tr className={rowToneClass(row)} key={row.normalized_result_id ?? row.variant_id}>
-                {RAW_TABLE_COLUMNS.map((column) => (
-                  <td
-                    className={rawCellClass(column as keyof LeaderboardRow, row[column])}
-                    key={column}
-                    style={rawCellStyle(column as keyof LeaderboardRow, row[column])}
-                  >
-                    {formatCell(row[column])}
-                  </td>
-                ))}
-              </tr>
+          <div className="ranking-list models-ranking-list">
+            {rankedRows.map((row, index) => (
+              <LeaderboardRowCard
+                row={row}
+                rank={index + 1}
+                maxModelSizeGb={maxModelSize}
+                key={`models-rank-${row.normalized_result_id ?? row.variant_id}`}
+              />
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          <div className="section-heading compact">
+            <div>
+              <p className="eyebrow">Model Registry</p>
+              <h2>Coverage and source details</h2>
+            </div>
+            <p>Open the details panel for links, benchmark status, token counts, runtime, and output cap metadata.</p>
+          </div>
+
+          <div className="model-registry">
+            {tableRows.map((row) => (
+              <article
+                className={`model-registry-row ${rowToneClass(row)}`}
+                key={`registry-${row.normalized_result_id ?? row.variant_id}`}
+                style={{ "--provider-color": providerColor(row) } as CSSProperties}
+              >
+                <ModelIdentity row={row} />
+                <div className="registry-metrics">
+                  <MetricPill label="Size" value={formatModelSize(row)} />
+                  <MetricPill label="Released" value={formatReleaseDate(row)} />
+                  <MetricPill label="LAIA" value={formatPoints(numeric(row.model_intelligence_score))} />
+                  <MetricPill label="Coverage" value={coverageLabel(row)} />
+                  <MetricPill label="Cap hits" value={formatOutputCapHits(row).replace("cap hits ", "")} />
+                </div>
+                <BenchmarkCoverage row={row} />
+                <div className="registry-actions">
+                  <ModelSourceLink row={row} />
+                  <button className="details-button" type="button" onClick={() => onSelectedModelIdChange(row.variant_id)}>
+                    <Info size={14} aria-hidden="true" />
+                    Details
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {selectedRow && <ModelDetailsDrawer row={selectedRow} onClose={() => onSelectedModelIdChange(null)} />}
+
+          <div className="section-heading compact">
+            <div>
+              <p className="eyebrow">Score Table</p>
+              <h2>Latest successful metrics</h2>
+            </div>
+            <div className="section-heading-actions">
+              <p>Column-level view after merging only the newest saved benchmark metric for each model version.</p>
+              <div className="export-buttons">
+                <button
+                  className="text-button export-button"
+                  type="button"
+                  onClick={() => handleExportJSON(tableRows)}
+                  title="Export filtered data as JSON"
+                >
+                  <Download size={12} aria-hidden="true" />
+                  JSON
+                </button>
+                <button
+                  className="text-button export-button"
+                  type="button"
+                  onClick={() => handleExportCSV(tableRows)}
+                  title="Export filtered data as CSV"
+                >
+                  <Download size={12} aria-hidden="true" />
+                  CSV
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="full-table-shell">
+            <table>
+              <thead>
+                <tr>
+                  {RAW_TABLE_COLUMNS.map((column) => <th key={column}>{humanizeColumn(column)}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((row) => (
+                  <tr className={rowToneClass(row)} key={row.normalized_result_id ?? row.variant_id}>
+                    {RAW_TABLE_COLUMNS.map((column) => (
+                      <td
+                        className={rawCellClass(column as keyof LeaderboardRow, row[column])}
+                        key={column}
+                        style={rawCellStyle(column as keyof LeaderboardRow, row[column])}
+                      >
+                        {formatCell(row[column])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -2803,6 +2650,8 @@ function ModelDetailsDrawer({ row, onClose }: { row: LeaderboardRow; onClose: ()
           <dl>
             <DetailItem label="Provider" value={providerLabel(row)} />
             <DetailItem label="Parameters" value={displayParameter(row)} />
+            <DetailItem label="Released" value={formatReleaseDate(row)} />
+            <DetailItem label="Release source" value={row.model_release_source ?? "n/a"} />
             <DetailItem label="Quantization" value={quantizationLabel(row)} />
             <DetailItem label="File size" value={formatModelSize(row)} />
             <DetailItem label="Backend" value={String(row.backend_name ?? "n/a")} />
@@ -3223,84 +3072,6 @@ function comparableRowKey(row: LeaderboardRow) {
   return `${quantizationGroupKey(row)}|${quantizationKey(row)}`;
 }
 
-function emptyRunAggregate(): RunAggregate {
-  return {
-    totalTokens: 0,
-    promptTokens: 0,
-    completionTokens: 0,
-    reasoningTokens: 0,
-    runtimeSeconds: 0,
-    samples: 0,
-    truncatedCount: 0,
-    outputCapHitCount: 0,
-    outputCapHitSamples: 0,
-    p95LatencySeconds: null,
-    outputTokensPerSecond: null,
-    latestStartedAt: null,
-    runCount: 0,
-  };
-}
-
-function runAggregates(rows: LeaderboardRow[]) {
-  const aggregates = new Map<string, RunAggregate>();
-  for (const row of rows) {
-    const key = comparableRowKey(row);
-    const aggregate = aggregates.get(key) ?? emptyRunAggregate();
-    aggregate.totalTokens += numeric(row.benchmark_total_tokens) ?? 0;
-    aggregate.promptTokens += numeric(row.benchmark_prompt_tokens) ?? 0;
-    aggregate.completionTokens += numeric(row.benchmark_completion_tokens) ?? 0;
-    aggregate.reasoningTokens += numeric(row.benchmark_reasoning_tokens) ?? 0;
-    aggregate.runtimeSeconds += numeric(row.benchmark_runtime_seconds) ?? 0;
-    aggregate.samples += numeric(row.benchmark_samples) ?? 0;
-    aggregate.truncatedCount += numeric(row.benchmark_truncated_count) ?? 0;
-    aggregate.outputCapHitCount += numeric(row.benchmark_output_cap_hit_count) ?? numeric(row.benchmark_truncated_count) ?? 0;
-    aggregate.outputCapHitSamples += numeric(row.benchmark_output_cap_hit_samples) ?? numeric(row.benchmark_samples) ?? 0;
-
-    const p95 = numeric(row.benchmark_p95_latency_seconds);
-    if (p95 !== null) {
-      aggregate.p95LatencySeconds = aggregate.p95LatencySeconds === null ? p95 : Math.max(aggregate.p95LatencySeconds, p95);
-    }
-
-    const outputTokensPerSecond = numeric(row.benchmark_output_tokens_per_second);
-    if (outputTokensPerSecond !== null) {
-      aggregate.outputTokensPerSecond = aggregate.outputTokensPerSecond === null
-        ? outputTokensPerSecond
-        : Math.max(aggregate.outputTokensPerSecond, outputTokensPerSecond);
-    }
-
-    const currentDate = parseRunDate(aggregate.latestStartedAt);
-    const nextDate = parseRunDate(row.started_at);
-    if (nextDate && (!currentDate || nextDate.getTime() > currentDate.getTime())) {
-      aggregate.latestStartedAt = row.started_at ?? null;
-    }
-
-    aggregate.runCount += 1;
-    aggregates.set(key, aggregate);
-  }
-  return aggregates;
-}
-
-function runStatsForRow(row: LeaderboardRow, aggregates: Map<string, RunAggregate>) {
-  const aggregate = aggregates.get(comparableRowKey(row));
-  if (aggregate && aggregate.runCount > 0) return aggregate;
-  return {
-    ...emptyRunAggregate(),
-    totalTokens: numeric(row.benchmark_total_tokens) ?? 0,
-    promptTokens: numeric(row.benchmark_prompt_tokens) ?? 0,
-    completionTokens: numeric(row.benchmark_completion_tokens) ?? 0,
-    reasoningTokens: numeric(row.benchmark_reasoning_tokens) ?? 0,
-    runtimeSeconds: numeric(row.benchmark_runtime_seconds) ?? 0,
-    samples: numeric(row.benchmark_samples) ?? 0,
-    truncatedCount: numeric(row.benchmark_truncated_count) ?? 0,
-    outputCapHitCount: numeric(row.benchmark_output_cap_hit_count) ?? numeric(row.benchmark_truncated_count) ?? 0,
-    outputCapHitSamples: numeric(row.benchmark_output_cap_hit_samples) ?? numeric(row.benchmark_samples) ?? 0,
-    p95LatencySeconds: numeric(row.benchmark_p95_latency_seconds),
-    outputTokensPerSecond: numeric(row.benchmark_output_tokens_per_second),
-    latestStartedAt: row.started_at ?? null,
-    runCount: 1,
-  };
-}
-
 function optionSets(rows: LeaderboardRow[]) {
   return {
     families: unique(rows.flatMap((row) => [row.family, providerLabel(row)])),
@@ -3600,6 +3371,13 @@ function formatModelSize(row: LeaderboardRow) {
   return `${prefix}${size.toFixed(size < 10 ? 1 : 0)} GB`;
 }
 
+function formatReleaseDate(row: LeaderboardRow) {
+  if (!row.model_release_date) return "release n/a";
+  const date = new Date(`${row.model_release_date}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return row.model_release_date;
+  return date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
 function formatSamples(row: LeaderboardRow) {
   const value = numeric(row.benchmark_samples);
   if (value === null) return "samples n/a";
@@ -3614,20 +3392,6 @@ function formatOutputCapHits(row: LeaderboardRow) {
   );
   if (rate === null) return "cap hits n/a";
   return count === null ? `${(rate * 100).toFixed(1)}% cap hits` : `${(rate * 100).toFixed(1)}% cap hits · ${count}`;
-}
-
-function formatCapHitRatio(hits: number, samples: number) {
-  if (samples <= 0) return `${formatCount(hits)} hits`;
-  return `${formatCount(hits)}/${formatCount(samples)} samples`;
-}
-
-function formatOutputCapSources(row: LeaderboardRow) {
-  const sources = outputCapBreakdown(row)
-    .filter((item) => item.hits > 0)
-    .sort((a, b) => b.hits - a.hits)
-    .slice(0, 3)
-    .map((item) => `${OUTPUT_CAP_LABELS[item.benchmark] ?? humanizeColumn(item.benchmark)} ${formatCount(item.hits)}`);
-  return sources.length ? sources.join(" · ") : "Fixed caps";
 }
 
 function coverageLabel(row: LeaderboardRow) {
