@@ -25,6 +25,8 @@ const WORLD_COUNTRY_PATH_WITHOUT_ANTARCTICA = WORLD_COUNTRY_PATH
   .replace(/M1000,485\.3[\s\S]*?L1000,485\.3Z/, "")
   .replace(/M0,485\.3[\s\S]*?L0,485\.3Z/, "");
 
+const LAIA_LOGO_SRC = "/laia_primary_logo_transparent.png";
+
 type LeaderboardRow = {
   [key: string]: unknown;
   normalized_result_id?: string;
@@ -1086,6 +1088,14 @@ function StateShell({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+function LaiaLogo({ className }: { className: string }) {
+  return <img className={className} src={LAIA_LOGO_SRC} alt="" aria-hidden="true" />;
+}
+
+function PlotBrandStamp({ className = "" }: { className?: string }) {
+  return <LaiaLogo className={`plot-brand-stamp${className ? ` ${className}` : ""}`} />;
+}
+
 function SiteHeader({
   page,
   onNavigate,
@@ -1098,7 +1108,7 @@ function SiteHeader({
     <header className="site-header">
       <div className="site-header-left">
         <button className="site-mark" type="button" onClick={() => onNavigate("leaderboard")}>
-          <span>NC</span>
+          <LaiaLogo className="site-mark-logo" />
           <strong>Local AI Analysis</strong>
         </button>
       </div>
@@ -1377,8 +1387,13 @@ const LAB_ORIGIN_LOCATIONS: LabOriginLocation[] = [
 
 function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const viewportWidth = useViewportWidth();
   const markers = useMemo(() => modelOriginMarkers(rows), [rows]);
   if (!markers.length) return null;
+  const mapScale = Math.min(
+    ORIGIN_MAP_DISPLAY_SCALE,
+    Math.max(0.26, (viewportWidth - 44) / ORIGIN_MAP.width),
+  );
 
   return (
     <section className="chapter-section model-origin-section" id="leaderboard-origins">
@@ -1393,14 +1408,14 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
         <div
           className="origin-map-stage-shell"
           style={{
-            width: `${ORIGIN_MAP.width * ORIGIN_MAP_DISPLAY_SCALE}px`,
-            height: `${ORIGIN_MAP.height * ORIGIN_MAP_DISPLAY_SCALE}px`,
+            width: `${ORIGIN_MAP.width * mapScale}px`,
+            height: `${ORIGIN_MAP.height * mapScale}px`,
           }}
         >
           <div
             className="origin-map-stage"
             style={{
-              transform: `scale(${ORIGIN_MAP_DISPLAY_SCALE})`,
+              transform: `scale(${mapScale})`,
               transformOrigin: "top left",
             }}
           >
@@ -1480,6 +1495,23 @@ function ModelOriginsSection({ rows }: { rows: LeaderboardRow[] }) {
           </div>
         </div>
       </div>
+      <div className="origin-mobile-list" aria-label="Model lab headquarters">
+        {markers.map((marker) => (
+          <div
+            className="pareto-row origin-map-card"
+            key={`origin-mobile-card-${marker.location.id}`}
+            style={{ "--provider-color": originAccentColor(marker.location.id) } as CSSProperties}
+          >
+            <span className="lab-icon" aria-hidden="true">
+              <img src={originLogoSrc(marker.location.id)} alt="" />
+            </span>
+            <span>
+              <b>{marker.location.label}</b>
+              <small>{marker.location.city}</small>
+            </span>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -1549,7 +1581,7 @@ function originCalloutPoint(location: LabOriginLocation) {
 function originLabelBox(location: LabOriginLocation) {
   const width = 194;
   const height = 62;
-  const x = location.side === "left" ? location.labelX - width : location.labelX;
+  const x = location.side === "left" ? 20 : ORIGIN_MAP.width - width - 20;
   const y = location.labelY - height / 2;
   return {
     x,
@@ -1557,6 +1589,19 @@ function originLabelBox(location: LabOriginLocation) {
     width,
     height,
   };
+}
+
+function useViewportWidth() {
+  const [width, setWidth] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
+
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return width;
 }
 
 function originLogoSrc(id: string) {
@@ -1708,6 +1753,7 @@ function SizeIntelligencePlot({
   return (
     <article className="landscape-panel">
       <div className="landscape-scatter">
+        <PlotBrandStamp className="floating" />
         <svg
           viewBox={`0 0 ${width} ${height}`}
           role="img"
@@ -1958,6 +2004,7 @@ function ReleaseDatePlot({ rows }: { rows: LeaderboardRow[] }) {
   return (
     <article className="landscape-panel">
       <div className="landscape-scatter">
+        <PlotBrandStamp className="floating" />
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="LAIA Index versus model release date">
           {xTicks.map((tick) => (
             <g key={`release-x-${tick}`}>
@@ -2095,6 +2142,7 @@ function IndexPlotCard({
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
+        <PlotBrandStamp />
       </div>
       <div className="index-plot-list" aria-label={title}>
         {rows.length === 0 && <p className="empty-note">No rows available for the chart.</p>}
@@ -2562,6 +2610,7 @@ function GlobalMMLUColumnPlot({
           <h5>{title}</h5>
           {subtitle && <p>{subtitle}</p>}
         </div>
+        <PlotBrandStamp />
       </div>
       <div className="language-column-plot">
         {items.length ? items.map(({ row, score, value }) => (
@@ -2710,7 +2759,10 @@ function BenchmarkTopPlot({
           </div>
           <p>{benchmark.subtitle}</p>
         </div>
-        <span>{metric.kind === "error" ? "Lower is better" : "Higher is better"}</span>
+        <div className="benchmark-plot-meta">
+          <PlotBrandStamp />
+          <span>{metric.kind === "error" ? "Lower is better" : "Higher is better"}</span>
+        </div>
       </div>
       <div className="benchmark-column-plot">
         {items.length ? items.map(({ row, value }) => (
@@ -2753,8 +2805,13 @@ function BenchmarkMiniPlot({
   const max = Math.max(...items.map((item) => item.value), 0.01);
   return (
     <article className="benchmark-mini-card">
-      <h4>{metric.label}</h4>
-      <p>{benchmark.subtitle}</p>
+      <div className="benchmark-mini-heading">
+        <div>
+          <h4>{metric.label}</h4>
+          <p>{benchmark.subtitle}</p>
+        </div>
+        <PlotBrandStamp />
+      </div>
       <div className="mini-column-plot">
         {items.length ? items.map(({ row, value }) => (
           <span
@@ -2823,7 +2880,10 @@ function BenchmarkBarChart({ capability, rows }: { capability: Capability; rows:
           <h3>{capability.label}</h3>
           <p>{capability.benchmark} · {capability.metricLabel}</p>
         </div>
-        {capability.weight ? <b>{capability.weight} LAIA pts</b> : <b>Separate</b>}
+        <div className="chart-card-meta">
+          <PlotBrandStamp />
+          {capability.weight ? <b>{capability.weight} LAIA pts</b> : <b>Separate</b>}
+        </div>
       </div>
       <p className="chart-description">{capability.description}</p>
       <div className="bar-list">

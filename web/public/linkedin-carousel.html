@@ -3,19 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LAIA LinkedIn Carousel</title>
+  <title>Local AI Analysis LinkedIn Carousel</title>
   <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800;900&display=swap");
+
     :root {
-      --ink: #10100f;
-      --muted: #6b6d68;
-      --paper: #f7f8f3;
-      --card: #ffffff;
-      --line: #d9ddd1;
-      --lime: #ccff65;
-      --blue: #dff0ff;
-      --orange: #f58e3b;
-      --shadow: 18px 22px 0 #10100f;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: light;
+      --paper: #f5f5f0;
+      --surface: #fffefa;
+      --surface-soft: #f7f7f2;
+      --ink: #151713;
+      --muted: #666b61;
+      --quiet: #969b91;
+      --line: #dedfd7;
+      --line-strong: #b9c0b2;
+      --accent: #c6ff5f;
+      --accent-soft: #efffd2;
+      --blue-soft: #e8f4ff;
+      --blue-line: #b8d9ff;
+      --shadow: 0 26px 70px rgba(23, 27, 18, 0.09);
+      --shadow-soft: 0 12px 36px rgba(23, 27, 18, 0.07);
+      --radius-xl: 28px;
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
     }
 
     * {
@@ -24,11 +40,16 @@
 
     body {
       margin: 0;
+      min-width: 320px;
       background:
-        radial-gradient(circle at 24px 24px, rgba(16, 16, 15, 0.12) 2px, transparent 2.5px),
+        radial-gradient(rgba(17, 17, 17, 0.07) 1.25px, transparent 1.25px),
         var(--paper);
-      background-size: 28px 28px;
-      color: var(--ink);
+      background-size: 32px 32px;
+    }
+
+    img,
+    svg {
+      display: block;
     }
 
     .deck {
@@ -42,132 +63,316 @@
       position: relative;
       display: grid;
       width: 1080px;
-      height: 1080px;
+      height: 1350px;
       overflow: hidden;
-      border: 3px solid var(--ink);
+      border: 1px solid var(--line);
       border-radius: 34px;
-      background: rgba(255, 255, 255, 0.94);
+      background:
+        radial-gradient(rgba(17, 17, 17, 0.055) 1.2px, transparent 1.2px),
+        linear-gradient(180deg, rgba(255, 254, 250, 0.96), rgba(245, 245, 240, 0.92));
+      background-size: 32px 32px, auto;
       box-shadow: var(--shadow);
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 190px;
+      background: radial-gradient(ellipse at center, rgba(198, 255, 95, 0.22), transparent 64%);
+      pointer-events: none;
     }
 
     .slide-inner {
       position: relative;
-      z-index: 2;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 34px;
+      padding: 70px 68px 58px;
+      min-height: 100%;
+    }
+
+    .slide-main {
       display: grid;
       gap: 28px;
-      padding: 64px;
+      align-content: center;
+      min-width: 0;
     }
 
     .split {
-      grid-template-columns: 0.92fr 1.08fr;
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 36px;
       align-items: center;
     }
 
-    .topline {
+    .brand-row,
+    .slide-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      min-width: 0;
+    }
+
+    .brand-lockup {
       display: inline-flex;
-      width: fit-content;
       align-items: center;
-      gap: 12px;
-      padding: 10px 16px;
-      border: 2px solid #b7df5c;
-      border-radius: 999px;
-      background: #efffcb;
-      color: #4a5f14;
-      font-size: 17px;
-      font-weight: 950;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    h1,
-    h2 {
-      margin: 0;
-      font-weight: 1000;
-      letter-spacing: -0.04em;
-      line-height: 0.92;
-    }
-
-    h1 {
-      font-size: 92px;
-    }
-
-    h2 {
-      font-size: 76px;
-    }
-
-    p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 30px;
-      line-height: 1.24;
-      font-weight: 650;
+      gap: 14px;
+      min-width: 0;
     }
 
     .mark {
       display: inline-grid;
-      width: 72px;
-      height: 72px;
+      width: 54px;
+      height: 54px;
+      flex: 0 0 auto;
       place-items: center;
-      border-radius: 18px;
+      border-radius: 14px;
       background: var(--ink);
-      color: white;
-      font-size: 26px;
-      font-weight: 1000;
-    }
-
-    .brand-row {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-      font-size: 28px;
+      color: #fff;
+      font-size: 20px;
       font-weight: 950;
+      letter-spacing: 0;
     }
 
-    .bar-card,
-    .panel {
-      border: 2px solid var(--line);
-      border-radius: 28px;
-      background: var(--card);
-      box-shadow: 0 18px 55px rgba(16, 16, 15, 0.08);
+    .brand-logo {
+      width: 104px;
+      height: auto;
+      flex: 0 0 auto;
+      object-fit: contain;
     }
 
-    .bar-card {
-      padding: 34px;
+    .brand-name {
+      overflow: hidden;
+      font-size: 23px;
+      font-weight: 900;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .mini-bars {
+    .slide-kicker,
+    .slide-number,
+    .mono-label,
+    .micro {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .slide-kicker {
+      width: fit-content;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .slide-number {
+      color: var(--quiet);
+      font-size: 15px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1,
+    h2 {
+      color: var(--ink);
+      font-weight: 950;
+      letter-spacing: 0;
+      line-height: 0.94;
+      text-wrap: balance;
+    }
+
+    h1 {
+      max-width: 9.8em;
+      font-size: 88px;
+    }
+
+    #slide-1 h1 {
+      max-width: 7.4em;
+      font-size: 56px;
+    }
+
+    #slide-1 .lead {
+      max-width: 430px;
+    }
+
+    #slide-7 h2 {
+      font-size: 68px;
+    }
+
+    #slide-7 .origin-map {
+      gap: 14px;
+      padding: 20px;
+    }
+
+    #slide-7 .origin-map-frame {
+      height: 430px;
+    }
+
+    h2 {
+      max-width: 10.8em;
+      font-size: 78px;
+    }
+
+    h3 {
+      color: var(--ink);
+      font-size: 36px;
+      font-weight: 950;
+      line-height: 1.02;
+    }
+
+    p {
+      color: var(--muted);
+      font-size: 30px;
+      font-weight: 600;
+      line-height: 1.32;
+      text-wrap: balance;
+    }
+
+    .lead {
+      max-width: 760px;
+      font-size: 34px;
+      line-height: 1.24;
+    }
+
+    .section-rule {
+      height: 1px;
+      background: var(--line);
+    }
+
+    .panel,
+    .chart-panel,
+    .model-row,
+    .info-card,
+    .origin-card,
+    .app-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: rgba(255, 254, 250, 0.9);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .chart-panel {
+      position: relative;
       display: grid;
-      height: 470px;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 20px;
+      padding: 28px;
+      min-width: 0;
+    }
+
+    .chart-panel::after,
+    .scatter-panel::after,
+    .origin-map-frame::after {
+      content: "";
+      position: absolute;
+      right: 22px;
+      bottom: 18px;
+      width: 74px;
+      aspect-ratio: 166 / 49;
+      background: url("/laia_primary_logo_transparent.png") center / contain no-repeat;
+      opacity: 0.18;
+      pointer-events: none;
+    }
+
+    .chart-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .chart-head strong {
+      display: block;
+      color: var(--ink);
+      font-size: 33px;
+      font-weight: 950;
+      line-height: 1;
+    }
+
+    .chart-head span {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 19px;
+      font-weight: 750;
+      line-height: 1.25;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      padding: 0 14px;
+      font-family: "JetBrains Mono", ui-monospace, monospace;
+      font-size: 14px;
+      font-weight: 900;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .hero-bars,
+    .big-bars {
+      display: flex;
       align-items: end;
-      gap: 18px;
-      padding-top: 36px;
-      border-top: 2px solid var(--line);
+      gap: 14px;
+      min-width: 0;
+      overflow: hidden;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+    }
+
+    .hero-bars {
+      height: 380px;
+    }
+
+    .big-bars {
+      height: 590px;
+      gap: 12px;
+      padding-inline: 4px;
     }
 
     .bar-item {
       display: grid;
+      flex: 1 1 0;
       min-width: 0;
+      gap: 9px;
       align-items: end;
-      gap: 10px;
       text-align: center;
     }
 
     .bar {
       position: relative;
-      min-height: 34px;
-      border-radius: 10px 10px 2px 2px;
-      background: var(--provider, var(--lime));
-      box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.1);
+      min-height: 38px;
+      border-radius: 14px 14px 6px 6px;
+      background: var(--provider-color, var(--accent));
+      box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.08);
     }
 
-    .bar strong {
+    .bar.hosted {
+      background: var(--ink);
+    }
+
+    .bar b {
       position: absolute;
       right: 10px;
       bottom: 10px;
-      color: white;
-      font-size: 25px;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      color: #fff;
+      font-size: 24px;
+      font-weight: 950;
+      line-height: 1;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     }
 
     .bar-meta {
@@ -175,184 +380,401 @@
       justify-items: center;
       gap: 6px;
       min-width: 0;
+      color: var(--ink);
+      font-size: 15px;
       font-weight: 950;
-      font-size: 16px;
       line-height: 1.05;
     }
 
+    .big-bars .bar-meta {
+      font-size: 14px;
+    }
+
     .bar-meta img,
-    .logo-box img,
-    .floating-logo img {
-      width: 34px;
-      height: 34px;
+    .lab-icon img {
+      width: 28px;
+      height: 28px;
       object-fit: contain;
     }
 
-    .bar-meta span {
-      max-width: 116px;
+    .bar-meta span,
+    .bar-meta small {
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .command-strip {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 22px 28px;
-      border: 3px solid var(--ink);
-      border-radius: 24px;
-      background: var(--ink);
-      color: var(--lime);
-      font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 28px;
+    .bar-meta small {
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
       font-weight: 900;
-      box-shadow: 10px 12px 0 var(--lime);
+      text-transform: uppercase;
     }
 
-    .command-strip img {
-      width: 38px;
-      height: 38px;
-      object-fit: contain;
-      border-radius: 8px;
-      background: white;
-      padding: 4px;
-    }
-
-    .floating-logo {
-      position: absolute;
+    .leaderboard-table,
+    .pareto-grid,
+    .latest-grid {
       display: grid;
-      width: 66px;
-      height: 66px;
-      place-items: center;
-      border: 2px solid var(--line);
-      border-radius: 18px;
-      background: white;
-      box-shadow: 0 12px 30px rgba(16, 16, 15, 0.12);
-    }
-
-    .floating-logo.one { right: 86px; top: 96px; transform: rotate(7deg); }
-    .floating-logo.two { right: 190px; bottom: 116px; transform: rotate(-9deg); }
-    .floating-logo.three { left: 92px; bottom: 118px; transform: rotate(5deg); }
-
-    .big-stat-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 22px;
-    }
-
-    .stat-card {
-      display: grid;
-      min-height: 210px;
-      align-content: space-between;
-      padding: 30px;
-      border: 2px solid var(--line);
-      border-radius: 28px;
-      background: white;
-    }
-
-    .stat-card b {
-      font-size: 54px;
-      line-height: 0.95;
-    }
-
-    .stat-card span {
-      color: var(--muted);
-      font-size: 22px;
-      font-weight: 750;
-      line-height: 1.22;
-    }
-
-    .formula-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .formula-tile {
-      display: grid;
-      gap: 18px;
-      padding: 24px;
-      border: 2px solid var(--line);
-      border-radius: 24px;
-      background: #fbfcf8;
-      min-height: 235px;
-    }
-
-    .formula-tile strong {
-      font-size: 22px;
-      line-height: 1.05;
-    }
-
-    .formula-tile b {
-      width: fit-content;
-      padding: 10px 12px;
-      border-radius: 999px;
-      background: var(--lime);
-      font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 18px;
-    }
-
-    .compare-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 28px;
-    }
-
-    .model-compare {
-      display: grid;
-      gap: 20px;
-      padding: 32px;
-      border: 2px solid var(--line);
-      border-radius: 30px;
-      background: #fff;
-    }
-
-    .model-compare.closed {
-      background: linear-gradient(135deg, #e8f4ff, #fff);
-      border-color: #b7d9ff;
-    }
-
-    .model-head {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .logo-box {
-      display: grid;
-      width: 58px;
-      height: 58px;
-      place-items: center;
-      border: 2px solid var(--ink);
-      border-radius: 14px;
-      background: white;
-    }
-
-    .model-head strong {
-      display: block;
-      font-size: 30px;
-      line-height: 1.04;
-    }
-
-    .model-head small {
-      color: var(--muted);
-      font-size: 18px;
-      font-weight: 800;
-    }
-
-    .cap-line {
-      display: grid;
-      grid-template-columns: 112px 1fr 54px;
-      align-items: center;
       gap: 10px;
-      font-size: 17px;
+    }
+
+    .model-row {
+      display: grid;
+      grid-template-columns: 38px 42px minmax(0, 1fr) 88px 88px 96px;
+      gap: 12px;
+      align-items: center;
+      min-height: 74px;
+      border-left: 6px solid var(--provider-color, var(--ink));
+      border-radius: 14px;
+      padding: 11px 13px 11px 10px;
+      box-shadow: none;
+    }
+
+    .model-row.hosted {
+      background: linear-gradient(90deg, rgba(232, 244, 255, 0.95), rgba(255, 254, 250, 0.95));
+      border-color: var(--blue-line);
+    }
+
+    .rank {
+      color: var(--quiet);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 19px;
       font-weight: 950;
     }
 
+    .lab-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: transparent;
+    }
+
+    .model-name {
+      min-width: 0;
+    }
+
+    .model-name b {
+      display: block;
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 21px;
+      font-weight: 950;
+      line-height: 1.05;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .model-name small {
+      display: block;
+      margin-top: 4px;
+      overflow: hidden;
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .metric-cell {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      text-align: right;
+    }
+
+    .metric-cell b {
+      color: var(--ink);
+      font-size: 22px;
+      font-weight: 950;
+      line-height: 1;
+    }
+
+    .metric-cell span {
+      color: var(--quiet);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 10px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .trust-grid,
+    .advantage-grid,
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .trust-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .info-card,
+    .app-card {
+      display: grid;
+      gap: 13px;
+      align-content: start;
+      min-height: 190px;
+      border-radius: 18px;
+      box-shadow: none;
+      padding: 22px;
+    }
+
+    .trust-grid .info-card {
+      min-height: 240px;
+      padding: 18px;
+    }
+
+    .info-card .icon,
+    .app-card .icon {
+      display: inline-grid;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 23px;
+    }
+
+    .info-card b,
+    .app-card b {
+      color: var(--ink);
+      font-size: 28px;
+      font-weight: 950;
+      line-height: 1.02;
+    }
+
+    .trust-grid .info-card b {
+      font-size: 21px;
+    }
+
+    .info-card span,
+    .app-card span {
+      color: var(--muted);
+      font-size: 20px;
+      font-weight: 650;
+      line-height: 1.24;
+    }
+
+    .trust-grid .info-card span {
+      font-size: 15px;
+    }
+
+    .scatter-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .scatter-panel {
+      position: relative;
+      min-height: 560px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255, 254, 250, 0.88);
+      padding: 14px;
+    }
+
+    .scatter-panel svg,
+    .origin-map svg,
+    .release-panel svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .axis {
+      stroke: rgba(17, 17, 17, 0.1);
+      stroke-width: 1;
+    }
+
+    .axis-label {
+      fill: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .scatter-dot {
+      fill: var(--provider-color, var(--accent));
+      stroke: rgba(255, 254, 250, 0.86);
+      stroke-width: 4;
+      filter: drop-shadow(0 5px 10px rgba(18, 20, 17, 0.12));
+    }
+
+    .frontier-line {
+      fill: none;
+      stroke: rgba(18, 20, 17, 0.42);
+      stroke-width: 2;
+      stroke-dasharray: 6 7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .pareto-card,
+    .origin-card,
+    .liquid-card {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      border: 1px solid rgba(18, 20, 17, 0.1);
+      border-left: 6px solid var(--provider-color, var(--ink));
+      border-radius: 14px;
+      background: rgba(255, 254, 250, 0.9);
+      padding: 11px 12px 11px 8px;
+      box-shadow: none;
+    }
+
+    .pareto-card b,
+    .origin-card b,
+    .liquid-card b {
+      display: block;
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 19px;
+      font-weight: 950;
+      line-height: 1.05;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pareto-card small,
+    .origin-card small,
+    .liquid-card small {
+      display: block;
+      margin-top: 4px;
+      overflow: hidden;
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .release-panel {
+      min-height: 620px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(255, 254, 250, 0.86);
+      padding: 18px;
+    }
+
+    .origin-map {
+      display: grid;
+      gap: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: rgba(255, 254, 250, 0.9);
+      padding: 22px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .origin-map-frame {
+      position: relative;
+      height: 520px;
+      border: 1px solid #111;
+      border-radius: 18px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .origin-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .map-land {
+      fill: #fff;
+      stroke: #111;
+      stroke-linejoin: round;
+      stroke-width: 0.58;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .origin-dot-halo {
+      fill: var(--accent);
+      opacity: 0.88;
+      stroke: #111;
+      stroke-width: 1.2;
+    }
+
+    .origin-dot {
+      fill: #111;
+      stroke: #fff;
+      stroke-width: 1.4;
+    }
+
+    .liquid-focus {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .liquid-hero {
+      display: grid;
+      gap: 20px;
+      align-content: space-between;
+      border: 1px solid rgba(18, 20, 17, 0.1);
+      border-left: 10px solid var(--provider-color);
+      border-radius: var(--radius-xl);
+      background: rgba(255, 254, 250, 0.94);
+      padding: 30px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .liquid-hero img {
+      width: 74px;
+      height: 74px;
+      object-fit: contain;
+    }
+
+    .liquid-hero .score {
+      color: var(--ink);
+      font-size: 96px;
+      font-weight: 950;
+      line-height: 0.9;
+    }
+
+    .liquid-hero .score small {
+      color: var(--muted);
+      font-size: 24px;
+      font-weight: 900;
+    }
+
+    .capability-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .capability-row {
+      display: grid;
+      grid-template-columns: 118px minmax(0, 1fr) 54px;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 14px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
     .track {
-      height: 20px;
-      border: 2px solid var(--ink);
+      height: 16px;
       border-radius: 999px;
       background: #eceee8;
       overflow: hidden;
@@ -361,329 +783,850 @@
     .track i {
       display: block;
       height: 100%;
-      background: var(--lime);
+      border-radius: inherit;
+      background: var(--provider-color, var(--accent));
     }
 
-    .price-row {
+    .do-dont {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 18px;
-      margin-top: 8px;
+      gap: 16px;
     }
 
-    .price {
-      padding: 20px;
-      border-radius: 22px;
-      background: #f4f6ef;
-      font-size: 36px;
-      font-weight: 1000;
-    }
-
-    .price small {
-      display: block;
-      color: var(--muted);
-      font-size: 16px;
-      font-weight: 850;
-      text-transform: uppercase;
-    }
-
-    .flow-list {
+    .note-card {
       display: grid;
-      gap: 18px;
-    }
-
-    .flow-item {
-      display: grid;
-      grid-template-columns: 76px 1fr;
-      gap: 18px;
-      align-items: center;
-      padding: 24px;
-      border: 2px solid var(--line);
-      border-radius: 26px;
-      background: white;
-    }
-
-    .flow-item b {
-      display: grid;
-      width: 62px;
-      height: 62px;
-      place-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
       border-radius: 18px;
-      background: var(--ink);
-      color: var(--lime);
-      font-size: 24px;
+      background: rgba(255, 254, 250, 0.84);
+      padding: 22px;
     }
 
-    .flow-item strong {
-      display: block;
+    .note-card b {
+      color: var(--ink);
       font-size: 25px;
-      margin-bottom: 4px;
+      font-weight: 950;
     }
 
-    .flow-item span {
+    .note-card span {
       color: var(--muted);
-      font-size: 20px;
-      font-weight: 700;
+      font-size: 18px;
+      font-weight: 650;
+      line-height: 1.28;
     }
 
-    .slide-number {
-      position: absolute;
-      right: 44px;
-      bottom: 34px;
-      color: #9da196;
-      font-family: "SFMono-Regular", Consolas, monospace;
+    .cta-panel {
+      display: grid;
+      gap: 28px;
+      align-content: center;
+      min-height: 720px;
+      border: 1px solid var(--line);
+      border-radius: 34px;
+      background:
+        linear-gradient(180deg, rgba(255, 254, 250, 0.96), rgba(248, 250, 241, 0.94));
+      padding: 48px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .cta-url {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      min-height: 58px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      padding: 0 24px;
+      color: var(--ink);
+      font-family: "JetBrains Mono", monospace;
       font-size: 18px;
       font-weight: 900;
     }
 
+    .loading {
+      color: var(--muted);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 16px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
     @media print {
-      body { background: white; }
-      .deck { padding: 0; gap: 0; }
-      .slide { box-shadow: none; page-break-after: always; border-radius: 0; }
+      body {
+        background: #fff;
+      }
+
+      .deck {
+        gap: 0;
+        padding: 0;
+      }
+
+      .slide {
+        border-radius: 0;
+        box-shadow: none;
+        page-break-after: always;
+      }
     }
   </style>
 </head>
 <body>
   <main class="deck">
-    <section class="slide">
-      <div class="slide-inner split">
-        <div>
-          <div class="brand-row"><span class="mark">NC</span><span>Local AI Analysis</span></div>
-          <div style="height: 54px"></div>
-          <span class="topline">LAIA</span>
-          <h1 style="margin-top: 20px">Local AI leaderboards for your machine.</h1>
-          <p style="margin-top: 26px">Benchmark Ollama, LM Studio, and oMLX models with one local command.</p>
-          <div style="height: 40px"></div>
-          <div class="command-strip">
-            <img src="/labs/ollama.png" alt="" />
-            <img src="/labs/lmstudio.png" alt="" />
-            <img src="/labs/omlx.svg" alt="" />
-            <span>laia ollama|lmstudio|omlx MODEL</span>
-          </div>
-        </div>
-        <div class="bar-card">
-          <span class="topline">Top local rows</span>
-          <div id="top-bars" class="mini-bars"></div>
-        </div>
-      </div>
-      <span class="floating-logo one"><img src="/labs/qwen.png" alt="" /></span>
-      <span class="floating-logo two"><img src="/labs/google.png" alt="" /></span>
-      <span class="floating-logo three"><img src="/labs/huggingface.svg" alt="" /></span>
-      <span class="slide-number">01 / 05</span>
-    </section>
-
-    <section class="slide">
+    <section class="slide" id="slide-1">
       <div class="slide-inner">
-        <div class="brand-row"><span class="mark">NC</span><span>Why local benchmarking?</span></div>
-        <span class="topline">Motivation</span>
-        <h2>Most local AI decisions happen under real hardware limits.</h2>
-        <p>LAIA is built around laptop-class constraints, not only frontier cloud APIs.</p>
-        <div class="big-stat-grid">
-          <div class="stat-card">
-            <b>16 GB-class</b>
-            <span>Useful for people choosing models that actually fit on everyday machines.</span>
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Local AI Analysis</span></div>
+          <span class="slide-kicker">SML / TML</span>
+        </header>
+        <div class="slide-main split">
+          <div>
+            <h1>Independently benchmarked SML and TML.</h1>
+            <p class="lead" style="margin-top: 28px">Small and tiny language models compared with the same text-only LAIA score.</p>
           </div>
-          <div class="stat-card">
-            <b>100% local</b>
-            <span>No uploaded prompts, no external model calls for the LAIA Index.</span>
-          </div>
-          <div class="stat-card">
-            <b>$0 marginal API cost</b>
-            <span>Run repeated experiments after the model is downloaded.</span>
-          </div>
-          <div class="stat-card">
-            <b>No network dependency</b>
-            <span>Benchmark offline workflows and reduce unnecessary request traffic.</span>
+          <div class="chart-panel">
+            <div class="chart-head">
+              <div>
+                <strong>LAIA score</strong>
+                <span>Current public rows, higher is better.</span>
+              </div>
+              <span class="pill">live data</span>
+            </div>
+            <div class="hero-bars" id="hero-bars"><span class="loading">Loading results...</span></div>
           </div>
         </div>
+        <footer class="slide-footer">
+          <span class="micro">Score · Size · Released · Coverage</span>
+          <span class="slide-number">01 / 10</span>
+        </footer>
       </div>
-      <span class="floating-logo one"><img src="/labs/huggingface.svg" alt="" /></span>
-      <span class="slide-number">02 / 05</span>
     </section>
 
-    <section class="slide">
+    <section class="slide" id="slide-2">
       <div class="slide-inner">
-        <div class="brand-row"><span class="mark">NC</span><span>Local vs OpenAI reference</span></div>
-        <span class="topline">Comparison</span>
-        <h2>Best local rows can be compared against OpenAI references.</h2>
-        <div id="compare-grid" class="compare-grid"></div>
-        <div class="price-row">
-          <div class="price"><small>GPT 5.4 Mini benchmark API cost</small>$3.24</div>
-          <div class="price"><small>Local marginal API cost</small>$0</div>
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Current leaderboard</span></div>
+          <span class="slide-kicker">May 2026</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>The ranking today.</h2>
+            <p class="lead" style="margin-top: 22px">Hosted references stay visible, but local 4-bit rows are the decision surface.</p>
+          </div>
+          <div class="leaderboard-table" id="leaderboard-table"><span class="loading">Loading leaderboard...</span></div>
         </div>
+        <footer class="slide-footer">
+          <span class="micro">OpenAI rows are references, not local downloads.</span>
+          <span class="slide-number">02 / 10</span>
+        </footer>
       </div>
-      <span class="slide-number">03 / 05</span>
     </section>
 
-    <section class="slide">
+    <section class="slide" id="slide-3">
       <div class="slide-inner">
-        <div class="brand-row"><span class="mark">NC</span><span>LAIA composition</span></div>
-        <span class="topline">Five text capabilities</span>
-        <h2>One index, equal-weighted across the text suite.</h2>
-        <p>Judge-based and vision benchmarks stay visible, but they are excluded from the public LAIA Index.</p>
-        <div class="formula-grid">
-          <div class="formula-tile"><b>20 pts</b><strong>Knowledge</strong><span>Global MMLU Lite</span></div>
-          <div class="formula-tile"><b>20 pts</b><strong>Instructions</strong><span>IFBench</span></div>
-          <div class="formula-tile"><b>20 pts</b><strong>Tools</strong><span>BFCL v4</span></div>
-          <div class="formula-tile"><b>20 pts</b><strong>Coding</strong><span>MBPP</span></div>
-          <div class="formula-tile"><b>20 pts</b><strong>Grounding</strong><span>RGB</span></div>
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Benchmarked, not vibes</span></div>
+          <span class="slide-kicker">LAIA score</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>One text score, five capabilities.</h2>
+            <p class="lead" style="margin-top: 22px">LAIA compares models on the same practical mix: knowledge, instructions, tools, coding, and grounding.</p>
+          </div>
+          <div class="trust-grid">
+            <article class="info-card"><span class="icon">K</span><b>Knowledge</b><span>Global MMLU Lite for factual breadth.</span></article>
+            <article class="info-card"><span class="icon">I</span><b>Instructions</b><span>IFBench for following constraints.</span></article>
+            <article class="info-card"><span class="icon">{ }</span><b>Tools</b><span>BFCL v4 for function calling.</span></article>
+            <article class="info-card"><span class="icon">&lt;/&gt;</span><b>Coding</b><span>MBPP for executable Python tasks.</span></article>
+            <article class="info-card"><span class="icon">G</span><b>Grounding</b><span>RGB for evidence-aware answers.</span></article>
+          </div>
         </div>
+        <footer class="slide-footer">
+          <span class="micro">Coverage remains visible when a row is incomplete.</span>
+          <span class="slide-number">03 / 10</span>
+        </footer>
       </div>
-      <span class="slide-number">04 / 05</span>
     </section>
 
-    <section class="slide">
-      <div class="slide-inner split">
-        <div>
-          <div class="brand-row"><span class="mark">NC</span><span>Engineering details</span></div>
-          <span class="topline">Reproducible runs</span>
-          <h2>Built for overnight local experiments.</h2>
-          <p>LAIA tracks the signals that matter when a benchmark is run on your own hardware.</p>
+    <section class="slide" id="slide-4">
+      <div class="slide-inner">
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Why local AI matters</span></div>
+          <span class="slide-kicker">Consumer value</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>Local models solve different problems.</h2>
+            <p class="lead" style="margin-top: 22px">They are not just cheaper cloud models. They change where AI can run and what data has to leave your machine.</p>
+          </div>
+          <div class="advantage-grid">
+            <article class="info-card"><span class="icon">∎</span><b>Private by default</b><span>Keep sensitive prompts and files on the device.</span></article>
+            <article class="info-card"><span class="icon">↯</span><b>Fast loops</b><span>Great for repeated short tasks and interactive tools.</span></article>
+            <article class="info-card"><span class="icon">$</span><b>No marginal API cost</b><span>Once downloaded, repeated runs do not meter every token.</span></article>
+            <article class="info-card"><span class="icon">⌁</span><b>Works offline</b><span>Useful for travel, field work, and constrained networks.</span></article>
+          </div>
         </div>
-        <div class="flow-list">
-          <div class="flow-item"><b>1</b><div><strong>Native backends</strong><span>Ollama, LM Studio, and oMLX shortcuts.</span></div></div>
-          <div class="flow-item"><b>2</b><div><strong>Restart controls</strong><span>Refresh model runtimes between long batches.</span></div></div>
-          <div class="flow-item"><b>3</b><div><strong>Run signals</strong><span>Tokens, cost, latency, truncation, and coverage.</span></div></div>
-          <div class="flow-item"><b>4</b><div><strong>Website export</strong><span>Every completed benchmark can update the public leaderboard.</span></div></div>
-        </div>
+        <footer class="slide-footer">
+          <span class="micro">The right local model is a product choice.</span>
+          <span class="slide-number">04 / 10</span>
+        </footer>
       </div>
-      <span class="slide-number">05 / 05</span>
+    </section>
+
+    <section class="slide" id="slide-5">
+      <div class="slide-inner">
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Fit beats hype</span></div>
+          <span class="slide-kicker">Score vs size</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>The best model is the one that fits.</h2>
+            <p class="lead" style="margin-top: 22px">A model can be smarter and still be the wrong choice if it misses your memory budget.</p>
+          </div>
+          <div class="chart-panel">
+            <div class="chart-head">
+              <div>
+                <strong>LAIA score vs local size</strong>
+                <span>Higher and further left is better.</span>
+              </div>
+              <span class="pill">4-bit local</span>
+            </div>
+            <div class="scatter-panel" id="fit-scatter"></div>
+          </div>
+        </div>
+        <footer class="slide-footer">
+          <span class="micro">Size is estimated from exported model footprint.</span>
+          <span class="slide-number">05 / 10</span>
+        </footer>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-6">
+      <div class="slide-inner">
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Pareto models</span></div>
+          <span class="slide-kicker">Not dominated</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>No smaller, higher-scoring row exists.</h2>
+            <p class="lead" style="margin-top: 22px">This is cleaner than points per GB: keep only the models that are not beaten on both size and score.</p>
+          </div>
+          <div class="scatter-layout">
+            <div class="scatter-panel" id="pareto-scatter"></div>
+            <div class="pareto-grid" id="pareto-list"><span class="loading">Loading Pareto models...</span></div>
+          </div>
+        </div>
+        <footer class="slide-footer">
+          <span class="micro">Frontier changes as new benchmark rows arrive.</span>
+          <span class="slide-number">06 / 10</span>
+        </footer>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-7">
+      <div class="slide-inner">
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Model origins</span></div>
+          <span class="slide-kicker">Lab HQs</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>Local-model progress is global.</h2>
+            <p class="lead" style="margin-top: 22px">Dots show lab headquarters cities for the compared local models.</p>
+          </div>
+          <div class="origin-map">
+            <div class="origin-map-frame" id="origin-map"></div>
+            <div class="origin-cards" id="origin-cards"></div>
+          </div>
+        </div>
+        <footer class="slide-footer">
+          <span class="micro">OpenAI reference rows are excluded from this map.</span>
+          <span class="slide-number">07 / 10</span>
+        </footer>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-8">
+      <div class="slide-inner">
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Specialist models</span></div>
+          <span class="slide-kicker">Liquid AI example</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>Not every job needs a generalist.</h2>
+            <p class="lead" style="margin-top: 22px">Small models can be useful when the task is narrow, repeated, and constrained by device memory.</p>
+          </div>
+          <div class="liquid-focus">
+            <article class="liquid-hero" id="liquid-hero" style="--provider-color:#f2c94c">
+              <span class="loading">Loading Liquid AI row...</span>
+            </article>
+            <div class="chart-panel">
+              <div class="chart-head">
+                <div>
+                  <strong>Task profile</strong>
+                  <span>Use the benchmark slices as a shortlist, then test your exact workflow.</span>
+                </div>
+              </div>
+              <div class="capability-list" id="liquid-caps"></div>
+              <div class="note-card">
+                <b>Good fit</b>
+                <span>Extraction, routing, structured drafting, offline app features, and repeated private workflows.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="slide-footer">
+          <span class="micro">Tiny does not mean universal. It means deployable.</span>
+          <span class="slide-number">08 / 10</span>
+        </footer>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-9">
+      <div class="slide-inner">
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Where to use them</span></div>
+          <span class="slide-kicker">Applications</span>
+        </header>
+        <div class="slide-main">
+          <div>
+            <h2>Use local models where constraints are the feature.</h2>
+            <p class="lead" style="margin-top: 22px">The best use cases are private, repetitive, bounded, and easy to verify.</p>
+          </div>
+          <div class="app-grid">
+            <article class="app-card"><span class="icon">01</span><b>Private summarization</b><span>Notes, PDFs, transcripts, logs, and personal knowledge bases.</span></article>
+            <article class="app-card"><span class="icon">02</span><b>Classification & routing</b><span>Tag emails, tickets, snippets, files, or records before a human review.</span></article>
+            <article class="app-card"><span class="icon">03</span><b>Extraction</b><span>Turn repeated document patterns into structured fields.</span></article>
+            <article class="app-card"><span class="icon">04</span><b>Coding helpers</b><span>Local autocomplete, refactor hints, tests, and small scripts.</span></article>
+            <article class="app-card"><span class="icon">05</span><b>Offline agents</b><span>Run simple tool workflows without a constant network dependency.</span></article>
+            <article class="app-card"><span class="icon">06</span><b>Embedded apps</b><span>Put language features closer to the user and device.</span></article>
+          </div>
+          <div class="do-dont">
+            <article class="note-card"><b>Use local when</b><span>Data sensitivity, latency, cost, or offline access matters.</span></article>
+            <article class="note-card"><b>Use cloud when</b><span>The task needs frontier reasoning, high stakes, or broad generality.</span></article>
+          </div>
+        </div>
+        <footer class="slide-footer">
+          <span class="micro">Choose by task, not by hype cycle.</span>
+          <span class="slide-number">09 / 10</span>
+        </footer>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-10">
+      <div class="slide-inner">
+        <header class="brand-row">
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Local AI Analysis</span></div>
+          <span class="slide-kicker">Leaderboard</span>
+        </header>
+        <div class="slide-main">
+          <div class="cta-panel">
+            <h2>Shortlist before you download.</h2>
+            <p class="lead">Compare local models by score, size, release date, and coverage before committing your machine memory.</p>
+            <div class="latest-grid" id="cta-models"></div>
+            <span class="cta-url">laia-six.vercel.app</span>
+          </div>
+        </div>
+        <footer class="slide-footer">
+          <span class="micro">Visit the leaderboard</span>
+          <span class="slide-number">10 / 10</span>
+        </footer>
+      </div>
     </section>
   </main>
 
   <script>
-    const providers = {
-      openai: { color: "#10100f", icon: "/labs/openai.png" },
-      google: { color: "#72b866", icon: "/labs/google.png" },
-      ibm: { color: "#7e91ad", icon: "/labs/ibm.png" },
-      mistral: { color: "#f58e3b", icon: "/labs/mistral.png" },
-      qwen: { color: "#6447f2", icon: "/labs/qwen.png" },
-      alibaba: { color: "#6447f2", icon: "/labs/qwen.png" },
-      liquid: { color: "#edcf5b", icon: "/labs/liquidAI.jpeg" },
-      meta: { color: "#5b8def", icon: "/labs/meta.png" },
-      nvidia: { color: "#86bd35", icon: "/labs/nvidia.webp" },
-      tii: { color: "#d57358", icon: "/labs/TechnologyInnovationINstitute.PNG" },
-      hugging: { color: "#b78c24", icon: "/labs/huggingface.svg" },
-      microsoft: { color: "#4d82e8", icon: "/labs/microsoft.png" },
-      ai2: { color: "#9b63f5", icon: "/labs/ai2.png" },
+    const LAIA_KEYS = [
+      ["Knowledge", "global_mmlu_lite_pass_at_1"],
+      ["Instructions", "ifbench_prompt_level_loose"],
+      ["Tools", "bfcl_v4_selected_accuracy"],
+      ["Coding", "mbpp_pass_at_1"],
+      ["Grounding", "rgb_all_rate"],
+    ];
+
+    const KNOWN_MODEL_FILE_SIZES = {
+      "lfm2.5-350m@bf16": 711_500_000,
+      "lfm2.5-350m@q8_0": 379_200_000,
+      "lfm2.5-350m@q4_k_m": 229_300_000,
+      "nemotron-3-nano:4b": 3_006_477_107,
+      "qwen3.5-0.8b@bf16": 1_700_000_000,
+      "qwen3.5-0.8b@q8_0": 1_200_000_000,
+      "qwen3.5-0.8b@q4_k_m": 934_900_000,
     };
 
-    function provider(row) {
-      const text = `${row.family || ""} ${row.base_model_name || ""} ${row.variant_name || ""} ${row.model_repo || ""}`.toLowerCase();
-      if (text.includes("openai") || text.includes("gpt")) return providers.openai;
-      if (text.includes("google") || text.includes("gemma")) return providers.google;
-      if (text.includes("ibm") || text.includes("granite")) return providers.ibm;
-      if (text.includes("mistral") || text.includes("ministral")) return providers.mistral;
-      if (text.includes("qwen") || text.includes("alibaba")) return providers.qwen;
-      if (text.includes("liquid") || text.includes("lfm")) return providers.liquid;
-      if (text.includes("meta") || text.includes("llama")) return providers.meta;
-      if (text.includes("nvidia") || text.includes("nemotron")) return providers.nvidia;
-      if (text.includes("falcon") || text.includes("tii")) return providers.tii;
-      if (text.includes("smol") || text.includes("hugging")) return providers.hugging;
-      if (text.includes("phi") || text.includes("microsoft")) return providers.microsoft;
-      if (text.includes("olmo") || text.includes("allen")) return providers.ai2;
-      return { color: "#111", icon: "/labs/huggingface.svg" };
+    const PROVIDERS = {
+      openai: { label: "OpenAI", color: "#111111", icon: "/labs/openai.png" },
+      alibaba: { label: "Alibaba", color: "#6d4cff", icon: "/labs/qwen.png" },
+      google: { label: "Google", color: "#63b35d", icon: "/labs/google.png" },
+      mistral: { label: "Mistral AI", color: "#ff8a2a", icon: "/labs/mistral.png" },
+      meta: { label: "Meta", color: "#4f8dff", icon: "/labs/meta.png" },
+      nvidia: { label: "NVIDIA", color: "#76b900", icon: "/labs/nvidia.webp" },
+      liquid: { label: "Liquid AI", color: "#f2c94c", icon: "/labs/liquidAI.jpeg" },
+      ibm: { label: "IBM", color: "#6f84a3", icon: "/labs/ibm.png" },
+      ai2: { label: "AI2", color: "#b06df5", icon: "/labs/ai2.png" },
+      tii: { label: "TII", color: "#e56f52", icon: "/labs/TechnologyInnovationINstitute.PNG" },
+      microsoft: { label: "Microsoft", color: "#2f80ed", icon: "/labs/microsoft.png" },
+      huggingface: { label: "Hugging Face", color: "#b88700", icon: "/labs/huggingface.svg" },
+      local: { label: "Local", color: "#7a7a74", icon: "/labs/huggingface.svg" },
+    };
+
+    const ORIGINS = [
+      { id: "ai2", city: "Seattle", country: "United States", lat: 47.6062, lon: -122.3321 },
+      { id: "microsoft", city: "Redmond", country: "United States", lat: 47.674, lon: -122.1215 },
+      { id: "nvidia", city: "Santa Clara", country: "United States", lat: 37.3541, lon: -121.9552 },
+      { id: "meta", city: "Menlo Park", country: "United States", lat: 37.453, lon: -122.1817 },
+      { id: "google", city: "Mountain View", country: "United States", lat: 37.3861, lon: -122.0839 },
+      { id: "liquid", city: "Cambridge, MA", country: "United States", lat: 42.3736, lon: -71.1097 },
+      { id: "ibm", city: "Armonk", country: "United States", lat: 41.1265, lon: -73.714 },
+      { id: "huggingface", city: "New York City", country: "United States", lat: 40.7128, lon: -74.006 },
+      { id: "mistral", city: "Paris", country: "France", lat: 48.8566, lon: 2.3522 },
+      { id: "tii", city: "Abu Dhabi", country: "United Arab Emirates", lat: 24.4539, lon: 54.3773 },
+      { id: "alibaba", city: "Hangzhou", country: "China", lat: 30.2741, lon: 120.1551 },
+    ];
+
+    const SIMPLE_WORLD_PATH = "M83 151c32-48 103-61 157-37 27 13 35 38 18 58-17 20-59 24-91 14-34-11-71-8-84-35ZM281 98c38-15 83-10 105 12 21 20 5 45-36 49-40 4-82-17-91-43-3-8 6-14 22-18ZM470 113c43-17 103-9 131 17 27 25 7 61-42 71-47 9-96-10-118-39-17-22-4-39 29-49ZM624 210c22-13 59-11 83 4 27 18 26 44-2 58-28 14-68 7-90-15-18-18-14-35 9-47ZM722 137c45-18 112-6 143 25 30 30 10 68-45 78-53 10-111-13-134-49-17-27-4-44 36-54ZM818 340c34-13 73-5 87 18 13 22-6 48-43 58-37 10-76-2-88-27-10-21 8-39 44-49Z";
+
+    function numeric(value) {
+      if (value === null || value === undefined || value === "") return null;
+      const number = typeof value === "number" ? value : Number(value);
+      return Number.isFinite(number) ? number : null;
     }
 
-    function modelName(row) {
-      const raw = String(row.variant_name || row.base_model_name || "Model");
-      return raw
-        .replace(/LM Studio|Ollama|Reasoning none|All Languages|Text Suite|Smoke/gi, "")
-        .replace(/Q4_K_M|Q8_0|BF16|F16|4 bit|8 bit|16 bit/gi, "")
+    function metadata(row) {
+      if (!row.metadata_json) return {};
+      try {
+        return JSON.parse(row.metadata_json);
+      } catch {
+        return {};
+      }
+    }
+
+    function apiModel(row) {
+      const meta = metadata(row);
+      return row.api_model || meta?.variant_config?.api_model || meta?.api_model || null;
+    }
+
+    function titleCase(value) {
+      return String(value || "")
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => (/^\d+(?:\.\d+)?b$/i.test(part) ? part.toUpperCase() : part.charAt(0).toUpperCase() + part.slice(1)))
+        .join(" ");
+    }
+
+    function formatBillion(value) {
+      if (!Number.isFinite(value)) return "";
+      if (value < 1) return value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+      if (value < 10) return value.toFixed(1).replace(/\.0$/, "");
+      return value.toFixed(0);
+    }
+
+    function formatModelName(value) {
+      const last = String(value || "Model").split("/").pop() || String(value || "Model");
+      const noQuant = last.split("@")[0];
+      if (/nemotron[-_\s]*3[-_\s]*nano/i.test(last)) return "Nemotron 3 Nano 4B";
+      const lfm = noQuant.match(/\blfm\s*(\d+(?:\.\d+)?)\s*[-_\s]*(\d+(?:\.\d+)?)([bm])\b/i);
+      if (lfm) return `LFM ${lfm[1]} ${formatBillion(Number(lfm[2]) / (lfm[3].toLowerCase() === "m" ? 1000 : 1))}B`;
+      const clean = last
+        .replace(/@(?:q\d+(?:[_-][a-z0-9]+)*|bf16|fp16|fp32|f16|f32|4bit|8bit|16bit)\b/gi, " ")
+        .replace(/\b(?:ollama|lm studio|omlx|all languages|smoke|reasoning|none|server|mlx|gguf|bf16|fp16|q\d+(?:[_-][a-z0-9]+)*|it|instruct|chat)\b/gi, " ")
+        .replace(/[:_-]+/g, " ")
         .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 28);
+        .trim();
+      const qwen = clean.match(/\bqwen\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)\s*b\b/i);
+      if (qwen) return `Qwen ${qwen[1]} ${qwen[2]}B`;
+      const gemmaEdge = clean.match(/\bgemma\s*(\d+(?:\.\d+)?)\s*e\s*(\d+(?:\.\d+)?)\s*b\b/i);
+      if (gemmaEdge) return `Gemma ${gemmaEdge[1]} E${gemmaEdge[2]}B`;
+      const falconH = clean.match(/\bfalcon\s*h\s*(\d+(?:\.\d+)?)\s*(\d+(?:\.\d+)?)([bm])\b/i);
+      if (falconH) {
+        const size = falconH[3].toLowerCase() === "m" ? Number(falconH[2]) / 1000 : Number(falconH[2]);
+        return `Falcon H${falconH[1]} ${formatBillion(size)}B`;
+      }
+      const generic = clean.match(/\b([a-z]+(?:\s+h)?)(?:\s+)?(\d+(?:\.\d+)?)?(?:\s+)?(\d+(?:\.\d+)?)([bm])\b/i);
+      if (generic) {
+        const family = titleCase(generic[1].trim());
+        const version = generic[2] ? ` ${generic[2]}` : "";
+        const size = generic[4].toLowerCase() === "m" ? Number(generic[3]) / 1000 : Number(generic[3]);
+        return `${family}${version} ${formatBillion(size)}B`;
+      }
+      return titleCase(clean || value);
     }
 
-    function quant(row) {
-      const q = String(row.quantization || row.precision || row.variant_name || "").toLowerCase();
-      if (q.includes("q4") || q.includes("4 bit")) return "4 bit";
-      if (q.includes("q8") || q.includes("8 bit")) return "8 bit";
-      if (q.includes("bf16") || q.includes("f16") || q.includes("16")) return "16 bit";
-      return "closed source";
+    function displayModelName(row) {
+      return formatModelName(apiModel(row) || row.base_model_name || row.variant_name);
+    }
+
+    function shortModelName(row) {
+      return displayModelName(row).replace(/\s+Instruct\b/i, "").replace(/\s+Reasoning\b/i, "");
+    }
+
+    function providerKey(row) {
+      const source = `${row.family || ""} ${row.base_model_name || ""} ${apiModel(row) || ""} ${row.model_repo || ""} ${row.variant_name || ""}`.toLowerCase();
+      if (source.includes("openai") || /\bgpt-[\w.-]+/.test(source)) return "openai";
+      if (source.includes("nemotron") || source.includes("nvidia")) return "nvidia";
+      if (source.includes("liquid") || source.includes("lfm")) return "liquid";
+      if (source.includes("qwen") || source.includes("alibaba")) return "alibaba";
+      if (source.includes("gemma") || source.includes("google")) return "google";
+      if (source.includes("llama") || source.includes("meta")) return "meta";
+      if (source.includes("mistral") || source.includes("ministral")) return "mistral";
+      if (source.includes("granite") || source.includes("ibm")) return "ibm";
+      if (source.includes("olmo") || source.includes("allenai")) return "ai2";
+      if (source.includes("falcon") || source.includes("tii")) return "tii";
+      if (source.includes("smollm") || source.includes("hugging")) return "huggingface";
+      if (source.includes("phi") || source.includes("microsoft")) return "microsoft";
+      return "local";
+    }
+
+    function provider(row) {
+      return PROVIDERS[providerKey(row)] || PROVIDERS.local;
+    }
+
+    function quantizationLabel(row) {
+      const source = `${row.quantization || ""} ${row.variant_name || ""} ${apiModel(row) || ""} ${row.file_name || ""}`.toLowerCase();
+      if (/\b(?:fp32|f32|32\s*bit|32b)\b/.test(source)) return "32 bit";
+      if (/\b(?:bf16|fp16|f16|16\s*bit|16b)\b/.test(source)) return "16 bit";
+      if (/\b(?:q8|q8_0|int8|8\s*bit|8bit)\b/.test(source)) return "8 bit";
+      if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return "6 bit";
+      if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return "5 bit";
+      if (/\b(?:q4|q4_k_m|4\s*bit|4bit)\b/.test(source)) return "4 bit";
+      if (row.quantization && String(row.quantization).toUpperCase() !== "SERVER") return titleCase(String(row.quantization).replace(/_/g, " "));
+      return "Closed source";
+    }
+
+    function displayParameter(row) {
+      const parameter = numeric(row.parameter_size_b);
+      if (parameter && parameter > 0) return `${formatBillion(parameter)}B`;
+      const match = displayModelName(row).match(/(\d+(?:\.\d+)?)B$/i);
+      return match ? `${match[1]}B` : "n/a";
+    }
+
+    function fileSizeBytes(row) {
+      const top = numeric(row.file_size_bytes);
+      if (top !== null) return top;
+      const meta = metadata(row);
+      const modelFileSize = numeric(meta?.model_file?.size_bytes);
+      if (modelFileSize !== null) return modelFileSize;
+      const api = apiModel(row);
+      return api && KNOWN_MODEL_FILE_SIZES[api] ? KNOWN_MODEL_FILE_SIZES[api] : null;
+    }
+
+    function estimatedBytesPerParameter(row) {
+      const source = `${row.quantization || ""} ${row.precision || ""} ${row.variant_name || ""} ${apiModel(row) || ""}`.toLowerCase();
+      if (/\b(?:bf16|fp16|f16|16\s*bit|16b)\b/.test(source)) return 2;
+      if (/\b(?:q8|int8|8\s*bit|8bit)\b/.test(source)) return 1;
+      if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return 0.75;
+      if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return 0.625;
+      if (/\b(?:q4|4\s*bit|4bit)\b/.test(source)) return 0.5;
+      return null;
+    }
+
+    function modelSizeGb(row) {
+      const bytes = fileSizeBytes(row);
+      if (bytes !== null) return bytes / 1024 ** 3;
+      const parameterSize = numeric(row.parameter_size_b);
+      const bytesPerParameter = estimatedBytesPerParameter(row);
+      if (parameterSize === null || bytesPerParameter === null) return null;
+      return (parameterSize * 1_000_000_000 * bytesPerParameter) / 1024 ** 3;
+    }
+
+    function formatModelSize(row) {
+      const size = modelSizeGb(row);
+      if (size === null) return "n/a";
+      const prefix = fileSizeBytes(row) === null ? "~" : "";
+      return `${prefix}${size.toFixed(size < 10 ? 1 : 0)} GB`;
+    }
+
+    function formatReleaseDate(row) {
+      if (!row.model_release_date) return "n/a";
+      const date = new Date(`${row.model_release_date}T00:00:00Z`);
+      if (Number.isNaN(date.getTime())) return row.model_release_date;
+      return date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+    }
+
+    function rowTime(row) {
+      const candidates = [row.run_started_at, row.created_at, row.generated_at, row.updated_at, row.model_release_date];
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        const time = new Date(candidate).getTime();
+        if (Number.isFinite(time)) return time;
+      }
+      return 0;
     }
 
     function score(row) {
-      return Number(row.model_intelligence_score || 0) * 100;
+      return numeric(row.model_intelligence_score) || 0;
     }
 
-    function topRows(rows) {
-      const seen = new Set();
+    function formatScore(value) {
+      return `${(value * 100).toFixed(1)} pts`;
+    }
+
+    function coverage(row) {
+      const explicit = numeric(row.model_intelligence_coverage);
+      if (explicit !== null) return explicit;
+      return LAIA_KEYS.reduce((total, [, key]) => total + (numeric(row[key]) !== null ? 0.2 : 0), 0);
+    }
+
+    function comparableRows(rows) {
+      const groups = new Map();
+      for (const row of rows) {
+        const key = `${displayModelName(row).toLowerCase()}|${providerKey(row)}|${displayParameter(row).toLowerCase()}|${quantizationLabel(row).toLowerCase()}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(row);
+      }
+      return Array.from(groups.values()).map((group) => {
+        const sorted = [...group].sort((a, b) => rowTime(b) - rowTime(a) || score(b) - score(a));
+        const merged = { ...sorted[0] };
+        for (const [, key] of LAIA_KEYS) {
+          const source = sorted.find((row) => numeric(row[key]) !== null);
+          merged[key] = source ? numeric(source[key]) : null;
+        }
+        const weighted = LAIA_KEYS.reduce((total, [, key]) => total + Math.max(0, Math.min(1, numeric(merged[key]) || 0)) * 0.2, 0);
+        const covered = LAIA_KEYS.reduce((total, [, key]) => total + (numeric(merged[key]) !== null ? 0.2 : 0), 0);
+        merged.model_intelligence_score = weighted;
+        merged.model_intelligence_coverage = covered;
+        return merged;
+      });
+    }
+
+    function isSyntheticRow(row) {
+      return Boolean(row.metadata_json && String(row.metadata_json).includes('"synthetic": true'));
+    }
+
+    function isSmokeRow(row) {
+      const samples = numeric(row.benchmark_samples);
+      return /\bsmoke\b/i.test(String(row.variant_name || "")) || (samples !== null && samples <= 5);
+    }
+
+    function isSmolLM2Row(row) {
+      const source = `${row.variant_name || ""} ${row.base_model_name || ""} ${apiModel(row) || ""} ${row.model_repo || ""}`.toLowerCase();
+      return source.includes("smollm2") || source.includes("smol lm2") || source.includes("smol lm 2");
+    }
+
+    function isHosted(row) {
+      return providerKey(row) === "openai";
+    }
+
+    function isFourBit(row) {
+      return quantizationLabel(row).toLowerCase() === "4 bit";
+    }
+
+    function publicRows(rows) {
       return rows
-        .filter((row) => score(row) > 0 && !String(row.variant_name || "").toLowerCase().includes("smoke"))
-        .sort((a, b) => score(b) - score(a))
-        .filter((row) => {
-          const key = `${modelName(row)}-${quant(row)}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
+        .filter((row) => score(row) > 0 && (isHosted(row) || isFourBit(row)))
+        .sort((a, b) => score(b) - score(a));
     }
 
-    function capability(row, key) {
-      return Math.round(Number(row[key] || 0) * 100);
+    function localRows(rows) {
+      return rows.filter((row) => !isHosted(row) && isFourBit(row) && score(row) > 0);
     }
 
-    function renderBars(rows) {
-      const container = document.getElementById("top-bars");
-      const items = topRows(rows).filter((row) => !String(row.family || "").toLowerCase().includes("openai")).slice(0, 6);
-      const max = Math.max(...items.map(score), 1);
+    function rowCard(row, rank) {
+      const p = provider(row);
+      return `
+        <article class="model-row ${isHosted(row) ? "hosted" : ""}" style="--provider-color:${p.color}">
+          <span class="rank">${String(rank).padStart(2, "0")}</span>
+          <span class="lab-icon"><img src="${p.icon}" alt="" /></span>
+          <span class="model-name"><b>${shortModelName(row)}</b><small>${isHosted(row) ? "Hosted reference" : `${quantizationLabel(row)} · ${p.label}`}</small></span>
+          <span class="metric-cell"><b>${(score(row) * 100).toFixed(1)}</b><span>Score</span></span>
+          <span class="metric-cell"><b>${isHosted(row) ? "API" : formatModelSize(row).replace(" GB", "")}</b><span>Size</span></span>
+          <span class="metric-cell"><b>${formatReleaseDate(row).replace(" ", " '")}</b><span>Released</span></span>
+        </article>`;
+    }
+
+    function renderBars(container, rows, limit = 6, includeHosted = false) {
+      const items = rows.filter((row) => includeHosted || !isHosted(row)).slice(0, limit);
+      const max = Math.max(...items.map(score), 0.01);
       container.innerHTML = items.map((row) => {
         const p = provider(row);
+        const height = Math.max(42, score(row) / max * (container.classList.contains("big-bars") ? 460 : 286));
         return `
-          <div class="bar-item" style="--provider:${p.color}">
-            <div class="bar" style="height:${Math.max(36, score(row) / max * 390)}px"><strong>${Math.round(score(row))}</strong></div>
+          <div class="bar-item" style="--provider-color:${p.color}">
+            <div class="bar ${isHosted(row) ? "hosted" : ""}" style="height:${height}px"><b>${Math.round(score(row) * 100)}</b></div>
             <div class="bar-meta">
               <img src="${p.icon}" alt="" />
-              <span>${modelName(row)}</span>
-              <small>${quant(row)}</small>
+              <span>${shortModelName(row)}</span>
+              <small>${isHosted(row) ? "Reference" : formatModelSize(row)}</small>
             </div>
           </div>`;
       }).join("");
     }
 
-    function renderCompare(rows) {
-      const container = document.getElementById("compare-grid");
-      const sorted = topRows(rows);
-      const local = sorted.find((row) => !String(row.family || "").toLowerCase().includes("openai"));
-      const hosted = sorted.find((row) => modelName(row).toLowerCase().includes("gpt 5.4 mini")) || sorted.find((row) => String(row.family || "").toLowerCase().includes("openai"));
-      const selected = [local, hosted].filter(Boolean);
-      container.innerHTML = selected.map((row) => {
-        const p = provider(row);
-        const closed = String(row.family || "").toLowerCase().includes("openai");
-        const caps = [
-          ["Know.", capability(row, "global_mmlu_lite_pass_at_1")],
-          ["Instr.", capability(row, "ifbench_prompt_level_loose")],
-          ["Tools", capability(row, "bfcl_v4_selected_accuracy")],
-          ["Code", capability(row, "mbpp_pass_at_1")],
-          ["Ground.", capability(row, "rgb_all_rate")],
-        ];
+    function scatterSvg(rows, options = {}) {
+      const width = 760;
+      const height = 520;
+      const pad = { top: 34, right: 34, bottom: 48, left: 62 };
+      const plotW = width - pad.left - pad.right;
+      const plotH = height - pad.top - pad.bottom;
+      const points = rows
+        .map((row) => ({ row, x: modelSizeGb(row), y: score(row) }))
+        .filter((point) => point.x !== null && point.y > 0);
+      const maxX = Math.max(1, Math.ceil(Math.max(...points.map((point) => point.x)) * 1.08));
+      const maxY = 1;
+      const xFor = (x) => pad.left + (x / maxX) * plotW;
+      const yFor = (y) => pad.top + plotH - (y / maxY) * plotH;
+      const frontier = options.frontier ? efficiencyFrontier(rows) : [];
+      const frontierIds = new Set(frontier.map((point) => point.row.variant_id || `${shortModelName(point.row)}-${point.size}`));
+      const line = frontier.map((point) => `${xFor(point.size)},${yFor(point.score)}`).join(" ");
+      return `
+        <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="LAIA score versus model size">
+          ${[0, maxX / 2, maxX].map((tick) => `
+            <line class="axis" x1="${xFor(tick)}" x2="${xFor(tick)}" y1="${pad.top}" y2="${pad.top + plotH}" />
+            <text class="axis-label" x="${xFor(tick)}" y="${height - 14}" text-anchor="middle">${tick === 0 ? "0" : `${tick.toFixed(1)} GB`}</text>
+          `).join("")}
+          ${[0, 0.5, 1].map((tick) => `
+            <line class="axis" x1="${pad.left}" x2="${pad.left + plotW}" y1="${yFor(tick)}" y2="${yFor(tick)}" />
+            <text class="axis-label" x="${pad.left - 10}" y="${yFor(tick) + 4}" text-anchor="end">${(tick * 100).toFixed(1)} pts</text>
+          `).join("")}
+          ${line ? `<polyline class="frontier-line" points="${line}" />` : ""}
+          ${points.map((point) => {
+            const p = provider(point.row);
+            const id = point.row.variant_id || `${shortModelName(point.row)}-${point.x}`;
+            const isFrontier = frontierIds.has(id);
+            return `<circle class="scatter-dot" style="--provider-color:${p.color}" cx="${xFor(point.x)}" cy="${yFor(point.y)}" r="${isFrontier ? 8 : 5.5}"><title>${shortModelName(point.row)} · ${formatScore(point.y)} · ${formatModelSize(point.row)}</title></circle>`;
+          }).join("")}
+        </svg>`;
+    }
+
+    function efficiencyFrontier(rows) {
+      const points = rows
+        .map((row) => ({ row, size: modelSizeGb(row), score: score(row) }))
+        .filter((point) => point.size !== null && point.score > 0);
+      return points
+        .filter((candidate) => !points.some((other) =>
+          other.row !== candidate.row
+          && other.size <= candidate.size
+          && other.score >= candidate.score
+          && (other.size < candidate.size || other.score > candidate.score)
+        ))
+        .sort((a, b) => a.size - b.size || b.score - a.score);
+    }
+
+    function paretoCard(item) {
+      const p = provider(item.row);
+      return `
+        <article class="pareto-card" style="--provider-color:${p.color}">
+          <span class="lab-icon"><img src="${p.icon}" alt="" /></span>
+          <span><b>${shortModelName(item.row)}</b><small>${formatScore(item.score)} · ${formatModelSize(item.row)}</small></span>
+        </article>`;
+    }
+
+    function capabilityRows(row, color) {
+      return LAIA_KEYS.map(([label, key]) => {
+        const value = numeric(row[key]);
+        const pct = value === null ? 0 : Math.round(value * 100);
         return `
-          <article class="model-compare ${closed ? "closed" : ""}">
-            <div class="model-head">
-              <span class="logo-box"><img src="${p.icon}" alt="" /></span>
-              <div><strong>${modelName(row)}</strong><small>${closed ? "Closed-source API" : quant(row)}</small></div>
-            </div>
-            <div style="font-size:58px;font-weight:1000">${Math.round(score(row))}<span style="font-size:24px;color:var(--muted)"> pts</span></div>
-            ${caps.map(([label, value]) => `
-              <div class="cap-line">
-                <span>${label}</span>
-                <span class="track"><i style="width:${Math.max(2, value)}%"></i></span>
-                <b>${value || "n/a"}</b>
-              </div>`).join("")}
+          <div class="capability-row" style="--provider-color:${color}">
+            <span>${label}</span>
+            <span class="track"><i style="width:${Math.max(2, pct)}%"></i></span>
+            <b>${value === null ? "n/a" : pct}</b>
+          </div>`;
+      }).join("");
+    }
+
+    async function worldPath() {
+      try {
+        const response = await fetch("/src/worldMapPaths.ts");
+        const text = await response.text();
+        const match = text.match(/WORLD_COUNTRY_PATH\s*=\s*"([\s\S]*?)";/);
+        if (!match) return SIMPLE_WORLD_PATH;
+        return match[1]
+          .replace(/M1000,485\.3[\s\S]*?L1000,485\.3Z/, "")
+          .replace(/M0,485\.3[\s\S]*?L0,485\.3Z/, "");
+      } catch {
+        return SIMPLE_WORLD_PATH;
+      }
+    }
+
+    function originForRow(row) {
+      const key = providerKey(row);
+      return key === "openai" ? null : ORIGINS.find((origin) => origin.id === key) || null;
+    }
+
+    function project(origin) {
+      return {
+        x: ((origin.lon + 180) / 360) * 1000,
+        y: ((90 - origin.lat) / 180) * 500,
+      };
+    }
+
+    async function renderOrigins(rows) {
+      const mapPath = await worldPath();
+      const groups = new Map();
+      for (const row of localRows(rows)) {
+        const origin = originForRow(row);
+        if (!origin) continue;
+        groups.set(origin.id, origin);
+      }
+      const origins = ORIGINS.filter((origin) => groups.has(origin.id));
+      document.getElementById("origin-map").innerHTML = `
+        <svg viewBox="0 0 1000 455" role="img" aria-label="World map with lab headquarters city dots">
+          <path class="map-land" d="${mapPath}" />
+          ${origins.map((origin) => {
+            const point = project(origin);
+            const p = PROVIDERS[origin.id];
+            return `
+              <circle class="origin-dot-halo" style="fill:${p.color}" cx="${point.x}" cy="${point.y}" r="13" />
+              <circle class="origin-dot" cx="${point.x}" cy="${point.y}" r="4.8">
+                <title>${p.label}: ${origin.city}, ${origin.country}</title>
+              </circle>`;
+          }).join("")}
+        </svg>`;
+      document.getElementById("origin-cards").innerHTML = origins.map((origin) => {
+        const p = PROVIDERS[origin.id];
+        return `
+          <article class="origin-card" style="--provider-color:${p.color}">
+            <span class="lab-icon"><img src="${p.icon}" alt="" /></span>
+            <span><b>${p.label}</b><small>${origin.city}</small></span>
           </article>`;
       }).join("");
     }
 
+    function renderLiquid(rows) {
+      const liquidRows = localRows(rows).filter((row) => providerKey(row) === "liquid").sort((a, b) => score(b) - score(a));
+      const row = liquidRows[0] || localRows(rows)[0];
+      const p = provider(row);
+      document.getElementById("liquid-hero").style.setProperty("--provider-color", p.color);
+      document.getElementById("liquid-hero").innerHTML = `
+        <div>
+          <img src="${p.icon}" alt="" />
+          <h3 style="margin-top:22px">${shortModelName(row)}</h3>
+          <p style="margin-top:12px;font-size:23px">${p.label} · ${quantizationLabel(row)} · ${formatModelSize(row)}</p>
+        </div>
+        <div class="score">${(score(row) * 100).toFixed(1)}<small> pts</small></div>
+        <p style="font-size:22px">Small enough for constrained local workflows. Strong enough to deserve a task-specific test.</p>`;
+      document.getElementById("liquid-caps").innerHTML = capabilityRows(row, p.color);
+    }
+
+    function renderCta(rows) {
+      const items = publicRows(rows).slice(0, 3);
+      document.getElementById("cta-models").innerHTML = items.map((row, index) => rowCard(row, index + 1)).join("");
+    }
+
+    function render(payload) {
+      const rows = comparableRows((payload.leaderboard || []).filter((row) => !isSyntheticRow(row) && !isSmokeRow(row) && !isSmolLM2Row(row)));
+      const publicRanked = publicRows(rows);
+      const locals = localRows(rows);
+      renderBars(document.getElementById("hero-bars"), publicRanked, 5, true);
+      document.getElementById("leaderboard-table").innerHTML = publicRanked.slice(0, 9).map((row, index) => rowCard(row, index + 1)).join("");
+      document.getElementById("fit-scatter").innerHTML = scatterSvg(locals, { frontier: false });
+      document.getElementById("pareto-scatter").innerHTML = scatterSvg(locals, { frontier: true });
+      const frontier = efficiencyFrontier(locals);
+      document.getElementById("pareto-list").innerHTML = frontier.map(paretoCard).join("");
+      renderOrigins(rows);
+      renderLiquid(rows);
+      renderCta(rows);
+    }
+
     fetch("/results.json")
       .then((response) => response.json())
-      .then((payload) => {
-        const rows = payload.leaderboard || [];
-        renderBars(rows);
-        renderCompare(rows);
-      })
-      .catch(() => {
-        document.getElementById("top-bars").innerHTML = "<p>Run the local website to load results.json.</p>";
+      .then(render)
+      .catch((error) => {
+        document.querySelectorAll(".loading").forEach((node) => {
+          node.textContent = "Run the local website to load results.json.";
+        });
+        console.error(error);
       });
   </script>
 </body>
