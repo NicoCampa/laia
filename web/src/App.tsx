@@ -153,6 +153,21 @@ type Capability = {
   includedInLaia: boolean;
 };
 
+type WeightedMetric = {
+  metric: keyof LeaderboardRow;
+  label: string;
+  weight: number;
+};
+
+type UseCaseLeaderboard = {
+  id: string;
+  label: string;
+  summary: string;
+  minCoverage: number;
+  icon: ReactNode;
+  weights: WeightedMetric[];
+};
+
 const PAGE_LABELS: Record<Page, string> = {
   leaderboard: "Leaderboard",
   benchmarks: "Benchmarks",
@@ -194,6 +209,7 @@ const emptyFilters: Filters = {
 };
 
 const LEADERBOARD_CHAPTERS = [
+  { id: "leaderboard-use-cases", label: "Use cases" },
   { id: "leaderboard-landscape", label: "Pareto" },
   { id: "leaderboard-release", label: "Release" },
   { id: "leaderboard-top-benchmarks", label: "Top 5 by category" },
@@ -531,6 +547,92 @@ const LAIA_INDEX_WEIGHTS = {
   rgb_all_rate: 0.2,
 } satisfies Partial<Record<keyof LeaderboardRow, number>>;
 
+const USE_CASE_LEADERBOARDS: UseCaseLeaderboard[] = [
+  {
+    id: "assistant",
+    label: "Local Assistant",
+    summary: "Everyday assistant quality with instruction following, knowledge, grounding, tools, and coding.",
+    minCoverage: 0.5,
+    icon: <Bot size={16} />,
+    weights: [
+      { metric: "ifbench_prompt_level_loose", label: "IFBench", weight: 0.30 },
+      { metric: "global_mmlu_lite_pass_at_1", label: "Global MMLU", weight: 0.225 },
+      { metric: "rgb_all_rate", label: "RGB", weight: 0.225 },
+      { metric: "bfcl_v4_selected_accuracy", label: "BFCL", weight: 0.15 },
+      { metric: "mbpp_pass_at_1", label: "MBPP", weight: 0.10 },
+    ],
+  },
+  {
+    id: "coding-assistant",
+    label: "Coding Assistant",
+    summary: "Short Python program synthesis with enough instruction and tool reliability to be useful.",
+    minCoverage: 0.5,
+    icon: <Code2 size={16} />,
+    weights: [
+      { metric: "mbpp_pass_at_1", label: "MBPP", weight: 0.60 },
+      { metric: "ifbench_prompt_level_loose", label: "IFBench", weight: 0.15 },
+      { metric: "bfcl_v4_selected_accuracy", label: "BFCL", weight: 0.15 },
+      { metric: "global_mmlu_lite_pass_at_1", label: "Global MMLU", weight: 0.075 },
+      { metric: "rgb_all_rate", label: "RGB", weight: 0.025 },
+    ],
+  },
+  {
+    id: "tool-agent",
+    label: "Tool Agent",
+    summary: "Function selection and argument generation, supported by instruction and grounding signals.",
+    minCoverage: 0.5,
+    icon: <Braces size={16} />,
+    weights: [
+      { metric: "bfcl_v4_selected_accuracy", label: "BFCL", weight: 0.55 },
+      { metric: "ifbench_prompt_level_loose", label: "IFBench", weight: 0.20 },
+      { metric: "rgb_all_rate", label: "RGB", weight: 0.15 },
+      { metric: "mbpp_pass_at_1", label: "MBPP", weight: 0.075 },
+      { metric: "global_mmlu_lite_pass_at_1", label: "Global MMLU", weight: 0.025 },
+    ],
+  },
+  {
+    id: "rag-assistant",
+    label: "RAG Assistant",
+    summary: "Evidence use, noise rejection, and grounded answers with supporting knowledge and instructions.",
+    minCoverage: 0.5,
+    icon: <Database size={16} />,
+    weights: [
+      { metric: "rgb_all_rate", label: "RGB", weight: 0.50 },
+      { metric: "global_mmlu_lite_pass_at_1", label: "Global MMLU", weight: 0.25 },
+      { metric: "ifbench_prompt_level_loose", label: "IFBench", weight: 0.15 },
+      { metric: "bfcl_v4_selected_accuracy", label: "BFCL", weight: 0.075 },
+      { metric: "mbpp_pass_at_1", label: "MBPP", weight: 0.025 },
+    ],
+  },
+  {
+    id: "knowledge-slm",
+    label: "Knowledge SLM",
+    summary: "Text knowledge breadth with smaller supporting weights for following and grounding.",
+    minCoverage: 0.5,
+    icon: <BookOpen size={16} />,
+    weights: [
+      { metric: "global_mmlu_lite_pass_at_1", label: "Global MMLU", weight: 0.70 },
+      { metric: "ifbench_prompt_level_loose", label: "IFBench", weight: 0.15 },
+      { metric: "rgb_all_rate", label: "RGB", weight: 0.10 },
+      { metric: "bfcl_v4_selected_accuracy", label: "BFCL", weight: 0.025 },
+      { metric: "mbpp_pass_at_1", label: "MBPP", weight: 0.025 },
+    ],
+  },
+  {
+    id: "classifier-proxy",
+    label: "Classifier Proxy",
+    summary: "A proxy for labeling and routing tasks until a dedicated classification suite is added.",
+    minCoverage: 0.55,
+    icon: <Flag size={16} />,
+    weights: [
+      { metric: "global_mmlu_lite_pass_at_1", label: "Global MMLU", weight: 0.40 },
+      { metric: "ifbench_prompt_level_loose", label: "IFBench", weight: 0.30 },
+      { metric: "rgb_fact_check_rate", label: "RGB fact-check", weight: 0.15 },
+      { metric: "rgb_rejection_rate", label: "RGB rejection", weight: 0.15 },
+    ],
+  },
+];
+
 const MERGED_BENCHMARK_METRICS = [
   "global_mmlu_lite_pass_at_1",
   "global_mmlu_lite_micro_pass_at_1",
@@ -701,11 +803,11 @@ const METHODOLOGY_LAIA_FIELDS: MethodologyDefinition[] = [
 ];
 
 const METHODOLOGY_PUBLISHED_WEIGHTS: MethodologyNamedItem[] = [
-  { label: "Global MMLU Lite", detail: "25%" },
+  { label: "Global MMLU Lite", detail: "20%" },
   { label: "IFBench", detail: "20%" },
   { label: "BFCL v4", detail: "20%" },
   { label: "MBPP", detail: "20%" },
-  { label: "RGB", detail: "15%" },
+  { label: "RGB", detail: "20%" },
 ];
 
 const METHODOLOGY_INDEX_BENCHMARKS: MethodologyBenchmark[] = [
@@ -1274,6 +1376,7 @@ function LeaderboardPage({
       <section className="leaderboard-shell">
         <ChapterNav chapters={LEADERBOARD_CHAPTERS} />
         <div className="page-grid leaderboard-view">
+          <UseCaseLeaderboardsSection rows={rows} onOpenModel={onOpenModel} />
           <LandscapeSection rows={rows} />
           <ReleaseDateSection rows={rows} />
           <TopBenchmarkSection rows={rows} onOpenModel={onOpenModel} />
@@ -1959,6 +2062,73 @@ function TopBenchmarkSection({
                   <span>
                     <b>{shortModelLabel(row)}</b>
                     <small>{formatPercent(value)}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function UseCaseLeaderboardsSection({
+  rows,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  const groups = useMemo(
+    () => USE_CASE_LEADERBOARDS.map((leaderboard) => ({
+      leaderboard,
+      rows: topRowsByUseCase(rows, leaderboard),
+    })).filter((group) => group.rows.length),
+    [rows],
+  );
+  if (!groups.length) return null;
+
+  return (
+    <section className="chapter-section use-case-section" id="leaderboard-use-cases">
+      <div className="section-heading compact">
+        <div>
+          <h2>Use-case leaderboards</h2>
+        </div>
+        <p>Local SLM rankings by benchmark outcomes only. Runtime, latency, throughput, and hardware cost are excluded.</p>
+      </div>
+      <div className="use-case-grid">
+        {groups.map(({ leaderboard, rows: topRows }) => (
+          <article className="use-case-card" key={`use-case-${leaderboard.id}`}>
+            <div className="benchmark-top-card-head">
+              <span className="metric-icon">{leaderboard.icon}</span>
+              <div>
+                <h3>{leaderboard.label}</h3>
+                <p>{leaderboard.summary}</p>
+              </div>
+            </div>
+            <div className="use-case-weight-list" aria-label={`${leaderboard.label} weights`}>
+              {leaderboard.weights.map((weight) => (
+                <span key={`${leaderboard.id}-${weight.metric}`}>
+                  <b>{formatWeightPercent(weight.weight)}</b>
+                  {weight.label}
+                </span>
+              ))}
+            </div>
+            <div className="benchmark-top-list">
+              {topRows.map(({ row, score, coverage }, index) => (
+                <button
+                  className={`benchmark-top-row use-case-row ${rowToneClass(row)}`}
+                  key={`use-case-${leaderboard.id}-${row.variant_id}`}
+                  type="button"
+                  style={{ "--provider-color": providerColor(row) } as CSSProperties}
+                  onClick={() => onOpenModel(row)}
+                >
+                  <span className="benchmark-top-rank">{index + 1}</span>
+                  <LabIcon row={row} />
+                  <span>
+                    <b>{shortModelLabel(row)}</b>
+                    <small>{formatPoints(score)}</small>
                   </span>
                 </button>
               ))}
@@ -3793,6 +3963,43 @@ function topRowsByCapability(rows: LeaderboardRow[], limit = 5) {
   }));
 }
 
+function topRowsByUseCase(rows: LeaderboardRow[], leaderboard: UseCaseLeaderboard, limit = 5) {
+  return rows
+    .filter((row) => !isHostedOpenAIRow(row))
+    .map((row) => ({ row, ...useCaseLeaderboardScore(row, leaderboard) }))
+    .filter((item): item is { row: LeaderboardRow; score: number; coverage: number } =>
+      item.score !== null && item.coverage >= leaderboard.minCoverage
+    )
+    .sort((a, b) => b.score - a.score || scoreForRank(b.row) - scoreForRank(a.row))
+    .slice(0, limit);
+}
+
+function useCaseLeaderboardScore(row: LeaderboardRow, leaderboard: UseCaseLeaderboard) {
+  let weightedSum = 0;
+  let coveredWeight = 0;
+  for (const weight of leaderboard.weights) {
+    const value = numeric(row[weight.metric]);
+    if (value === null) continue;
+    weightedSum += Math.max(0, Math.min(1, value)) * weight.weight;
+    coveredWeight += weight.weight;
+  }
+  if (coveredWeight <= 0) return { score: null, coverage: 0 };
+  return { score: weightedSum / coveredWeight, coverage: coveredWeight };
+}
+
+function useCaseSortValue(row: LeaderboardRow, sortBy: string) {
+  const leaderboard = useCaseLeaderboardForSort(sortBy);
+  if (!leaderboard) return null;
+  if (isHostedOpenAIRow(row)) return null;
+  const score = useCaseLeaderboardScore(row, leaderboard);
+  return score.coverage >= leaderboard.minCoverage ? score.score : null;
+}
+
+function useCaseLeaderboardForSort(sortBy: string) {
+  const id = sortBy.startsWith("use-case:") ? sortBy.slice("use-case:".length) : "";
+  return USE_CASE_LEADERBOARDS.find((leaderboard) => leaderboard.id === id) ?? null;
+}
+
 function comparableRowKey(row: LeaderboardRow) {
   return `${quantizationGroupKey(row)}|${quantizationKey(row)}`;
 }
@@ -3828,7 +4035,13 @@ function optionSets(rows: LeaderboardRow[]) {
     families: familyOptions,
     parameterSizes: parameterSizeOptions,
     memoryFootprints: memoryFootprintOptions,
-    sortOptions: MODEL_SORT_OPTIONS,
+    sortOptions: [
+      ...MODEL_SORT_OPTIONS,
+      ...USE_CASE_LEADERBOARDS.map((leaderboard) => ({
+        value: `use-case:${leaderboard.id}`,
+        label: leaderboard.label,
+      })),
+    ],
   };
 }
 
@@ -3847,6 +4060,7 @@ function scoreForRank(row: LeaderboardRow) {
 
 function sortModelRows(rows: LeaderboardRow[], sortBy: string) {
   const capability = TEXT_CAPABILITIES.find((item) => item.id === sortBy) ?? null;
+  const useCaseLeaderboard = useCaseLeaderboardForSort(sortBy);
   return [...rows].sort((a, b) => {
     if (sortBy === "parameter-size") {
       const delta = compareNullableNumbers(numeric(a.parameter_size_b), numeric(b.parameter_size_b), "asc");
@@ -3856,6 +4070,9 @@ function sortModelRows(rows: LeaderboardRow[], sortBy: string) {
       if (delta !== 0) return delta;
     } else if (capability) {
       const delta = compareNullableNumbers(capability.value(a), capability.value(b), "desc");
+      if (delta !== 0) return delta;
+    } else if (useCaseLeaderboard) {
+      const delta = compareNullableNumbers(useCaseSortValue(a, sortBy), useCaseSortValue(b, sortBy), "desc");
       if (delta !== 0) return delta;
     } else {
       const delta = compareNullableNumbers(numeric(a.model_intelligence_score), numeric(b.model_intelligence_score), "desc");
@@ -4264,6 +4481,11 @@ function humanizeColumn(value: string) {
 
 function formatPercent(value?: number | null) {
   return value === null || value === undefined || Number.isNaN(value) ? "n/a" : `${(value * 100).toFixed(1)}%`;
+}
+
+function formatWeightPercent(value: number) {
+  const percent = Math.round(value * 1000) / 10;
+  return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
 }
 
 function languageLabel(language: string) {

@@ -70,14 +70,33 @@ Related fields:
 
 Default LAIA Index weights:
 
-- Global MMLU Lite: 25%
+- Global MMLU Lite: 20%
 - IFBench: 20%
 - BFCL v4: 20%
 - MBPP: 20%
-- RGB: 15%
+- RGB: 20%
 
 OCRBench v2 and MMMU stay outside the index as vision metrics. SimpleQA and
 HarmBench stay outside the index because they require a judge.
+
+## Use-case Leaderboards
+
+The website also renders local-only use-case leaderboards from the same benchmark
+outcome metrics. These profiles exclude runtime, latency, token throughput, and
+hardware-cost signals because those depend on the machine that served the model.
+
+- **Best Local Assistant:** IFBench 30%, Global MMLU Lite 22.5%, RGB 22.5%,
+  BFCL v4 15%, MBPP 10%.
+- **Best Coding Assistant:** MBPP 60%, IFBench 15%, BFCL v4 15%,
+  Global MMLU Lite 7.5%, RGB 2.5%.
+- **Best Tool Agent:** BFCL v4 55%, IFBench 20%, RGB 15%, MBPP 7.5%,
+  Global MMLU Lite 2.5%.
+- **Best RAG Assistant:** RGB 50%, Global MMLU Lite 25%, IFBench 15%,
+  BFCL v4 7.5%, MBPP 2.5%.
+- **Best Knowledge SLM:** Global MMLU Lite 70%, IFBench 15%, RGB 10%,
+  BFCL v4 2.5%, MBPP 2.5%.
+- **Classifier Proxy:** Global MMLU Lite 40%, IFBench 30%,
+  RGB fact-check 15%, RGB rejection 15%.
 
 ## Benchmark Families
 
