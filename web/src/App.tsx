@@ -4167,6 +4167,8 @@ function shortModelLabel(row: LeaderboardRow) {
 
 function formatModelName(value: string) {
   const lastSegment = value.split("/").pop() ?? value;
+  if (/gemma[-_\s]*4[-_\s]*12b[-_\s]*it[-_\s]*qat/i.test(lastSegment)) return "Gemma 4 12B QAT";
+  if (/gemma\s+4\s+12b\b/i.test(lastSegment) && /\bqat\b/i.test(lastSegment)) return "Gemma 4 12B QAT";
   const withoutQuantSuffix = lastSegment.split("@")[0];
   if (/nemotron[-_\s]*3[-_\s]*nano/i.test(lastSegment)) return "Nemotron 3 Nano 4B";
   const lfm = withoutQuantSuffix.match(/\blfm\s*(\d+(?:\.\d+)?)\s*[-_\s]*(\d+(?:\.\d+)?)([bm])\b/i);

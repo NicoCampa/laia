@@ -160,6 +160,10 @@ def format_billion(value: float) -> str:
 
 def format_model_name(value: str | None) -> str:
     last = str(value or "Model").split("/")[-1]
+    if re.search(r"gemma[-_\s]*4[-_\s]*12b[-_\s]*it[-_\s]*qat", last, re.I):
+        return "Gemma 4 12B QAT"
+    if re.search(r"gemma\s+4\s+12b\b", last, re.I) and re.search(r"\bqat\b", last, re.I):
+        return "Gemma 4 12B QAT"
     no_quant = last.split("@")[0]
     if re.search(r"nemotron[-_\s]*3[-_\s]*nano", last, re.I):
         return "Nemotron 3 Nano 4B"

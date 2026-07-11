@@ -48,7 +48,7 @@
       "SERVER"
     ]
   },
-  "generated_at": "2026-07-11T03:48:33.022072+00:00",
+  "generated_at": "2026-07-11T08:11:01.605349+00:00",
   "leaderboard": [
     {
       "backend_commit": null,
@@ -2219,7 +2219,7 @@
       "backend_name": "LM Studio",
       "backend_version": null,
       "base_model_id": "46da7823-3e7b-4b22-9925-62aecf99bf0a",
-      "base_model_name": "Gemma 4 12B Instruct QAT UD",
+      "base_model_name": "Gemma 4 12B QAT",
       "benchmark_avg_latency_seconds": 4.7142768034505735,
       "benchmark_completion_tokens": 424663.0,
       "benchmark_correct_count": 5962.0,
@@ -2526,14 +2526,14 @@
       "simpleqa_not_attempted_rate": null,
       "started_at": "2026-07-11 01:21:27.062649",
       "variant_id": "c3d3cddd-db3b-4747-984f-1ff976e2adb7",
-      "variant_name": "Gemma 4 12B Instruct QAT UD Q4_K_XL LM Studio Text Suite Reasoning none"
+      "variant_name": "Gemma 4 12B QAT Q4_K_XL LM Studio Text Suite Reasoning none"
     },
     {
       "backend_commit": null,
       "backend_name": "LM Studio",
       "backend_version": null,
       "base_model_id": "46da7823-3e7b-4b22-9925-62aecf99bf0a",
-      "base_model_name": "Gemma 4 12B Instruct QAT UD",
+      "base_model_name": "Gemma 4 12B QAT",
       "benchmark_avg_latency_seconds": 3.306931912492961,
       "benchmark_completion_tokens": 160175.0,
       "benchmark_correct_count": 5013.0,
@@ -2790,7 +2790,7 @@
       "simpleqa_not_attempted_rate": null,
       "started_at": "2026-07-10 09:37:14.499752",
       "variant_id": "c3d3cddd-db3b-4747-984f-1ff976e2adb7",
-      "variant_name": "Gemma 4 12B Instruct QAT UD Q4_K_XL LM Studio Text Suite Reasoning none"
+      "variant_name": "Gemma 4 12B QAT Q4_K_XL LM Studio Text Suite Reasoning none"
     },
     {
       "backend_commit": null,

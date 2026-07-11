@@ -2682,7 +2682,14 @@ def _infer_base_model_name(
 ) -> str:
     if model.lower() == "auto":
         return f"{provider} Served Model"
+    if re.search(r"gemma[-_\s]*4[-_\s]*12b[-_\s]*it[-_\s]*qat", model, flags=re.IGNORECASE):
+        return "Gemma 4 12B QAT"
     if metadata and metadata.get("display_name"):
+        display_name = str(metadata["display_name"])
+        if re.search(r"gemma\s+4\s+12b\b", display_name, flags=re.IGNORECASE) and re.search(
+            r"\bqat\b", display_name, flags=re.IGNORECASE
+        ):
+            return "Gemma 4 12B QAT"
         return str(metadata["display_name"])
     size_match = re.search(r"(\d+(?:\.\d+)?)b\b", model, flags=re.IGNORECASE)
     if not size_match:
