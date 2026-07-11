@@ -4294,7 +4294,7 @@ function quantizationLabel(row: LeaderboardRow) {
   if (/\b(?:q8|q8_0|int8|8\s*bit|8bit)\b/.test(source)) return "8 bit";
   if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return "6 bit";
   if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return "5 bit";
-  if (/\b(?:q4|q4_k_m|4\s*bit|4bit)\b/.test(source)) return "4 bit";
+  if (/\b(?:q4(?:[_-][a-z0-9]+)*|4\s*bit|4bit)\b/.test(source)) return "4 bit";
   if (row.quantization && row.quantization.toUpperCase() !== "SERVER") return titleCaseModelName(row.quantization.replace(/_/g, " "));
   return "Closed source";
 }
