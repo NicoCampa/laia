@@ -53,6 +53,7 @@ class GlobalMMLULiteSettings(BaseModel):
     restart_between_languages: bool = False
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     parser_version: str = "global_mmlu_lite_regex_v1"
     prompt_template: str = (
@@ -92,6 +93,7 @@ class IFBenchSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     evaluator: str = "allenai_ifbench_loose_v1"
 
@@ -122,6 +124,7 @@ class BFCLV4Settings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     include_input_log: bool = False
     exclude_state_log: bool = True
@@ -156,6 +159,7 @@ class OCRBenchV2Settings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     image_format: str = "PNG"
     evaluator: str = "ocrbench_v2_local_vqa_anls_iou_v1"
@@ -188,6 +192,7 @@ class MMMUSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     image_format: str = "PNG"
     evaluator: str = "mmmu_official_parse_local_v1"
@@ -226,6 +231,7 @@ class MBPPSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     include_tests_in_prompt: bool = True
     include_challenge_tests: bool = False
@@ -265,6 +271,7 @@ class RGBSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     noise_rate: float = 0.8
     passage_num: int = 5
@@ -323,6 +330,7 @@ class SimpleQASettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     grader: str = "llm"
     grader_model: str | None = "same"
@@ -377,6 +385,7 @@ class HarmBenchSettings(BaseModel):
     strip_thinking: bool = True
     restart_every_calls: int | None = None
     restart_cooldown_seconds: float = 0.0
+    restart_cooldown_every_calls: int | None = None
     resume_samples: bool = False
     judge: str = "llm"
     judge_model: str | None = "same"

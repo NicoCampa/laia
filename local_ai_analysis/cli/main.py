@@ -432,6 +432,7 @@ def run_ollama_shortcut(
         restart_between_languages=False,
         restart_every_calls=None,
         restart_cooldown_seconds=0.0,
+        restart_cooldown_every_calls=None,
     )
     console.print(f"🧾 Generated config: {config}")
     _execute_run(
@@ -656,6 +657,18 @@ def run_lmstudio_shortcut(
             ),
         ),
     ] = 0.0,
+    restart_cooldown_every_calls: Annotated[
+        int | None,
+        typer.Option(
+            "--restart-cooldown-every-calls",
+            min=1,
+            help=(
+                "For LM Studio runs, only apply --restart-cooldown-seconds after "
+                "every N completed sample calls. Without this, every restart uses "
+                "the cooldown."
+            ),
+        ),
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Create the generated config and print planned work only."),
@@ -711,6 +724,7 @@ def run_lmstudio_shortcut(
         restart_between_languages=restart_between_languages,
         restart_every_calls=restart_every_calls,
         restart_cooldown_seconds=restart_cooldown_seconds,
+        restart_cooldown_every_calls=restart_cooldown_every_calls,
         resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
@@ -965,6 +979,7 @@ def run_omlx_shortcut(
         restart_between_languages=False,
         restart_every_calls=None,
         restart_cooldown_seconds=0.0,
+        restart_cooldown_every_calls=None,
         resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
@@ -1203,6 +1218,7 @@ def run_openai_shortcut(
         restart_between_languages=False,
         restart_every_calls=None,
         restart_cooldown_seconds=0.0,
+        restart_cooldown_every_calls=None,
         resume_samples=resume_samples,
     )
     console.print(f"🧾 Generated config: {config}")
@@ -1741,6 +1757,7 @@ def _write_api_benchmark_config(
     restart_between_languages: bool,
     restart_every_calls: int | None,
     restart_cooldown_seconds: float,
+    restart_cooldown_every_calls: int | None,
     resume_samples: bool = False,
 ) -> Path:
     selected_benchmarks = _parse_benchmarks(benchmark)
@@ -1850,6 +1867,9 @@ def _write_api_benchmark_config(
         "restart_cooldown_seconds": (
             restart_cooldown_seconds if provider_key == "lmstudio" else 0.0
         ),
+        "restart_cooldown_every_calls": (
+            restart_cooldown_every_calls if provider_key == "lmstudio" else None
+        ),
         "resume_samples": resume_samples,
         "request_extra": _copy_config_dict(request_extra),
         "parser_version": "global_mmlu_lite_regex_v1",
@@ -1863,6 +1883,9 @@ def _write_api_benchmark_config(
         ),
         "restart_cooldown_seconds": (
             restart_cooldown_seconds if provider_key == "lmstudio" else 0.0
+        ),
+        "restart_cooldown_every_calls": (
+            restart_cooldown_every_calls if provider_key == "lmstudio" else None
         ),
         "resume_samples": resume_samples,
     }

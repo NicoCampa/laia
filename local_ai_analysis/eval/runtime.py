@@ -54,7 +54,10 @@ def reset_runtime(
     reason: str,
 ) -> None:
     reset_error = None
-    cooldown_seconds = max(0.0, float(getattr(settings, "restart_cooldown_seconds", 0.0) or 0.0))
+    cooldown_seconds = restart_cooldown_seconds_for_sample(
+        settings=settings,
+        completed_samples=completed_samples,
+    )
     try:
         instance_id = client.reset_model_runtime(
             model,
@@ -81,3 +84,13 @@ def reset_runtime(
                 "error": reset_error,
             },
         )
+
+
+def restart_cooldown_seconds_for_sample(*, settings: Any, completed_samples: int) -> float:
+    cooldown_seconds = max(0.0, float(getattr(settings, "restart_cooldown_seconds", 0.0) or 0.0))
+    cooldown_every_calls = getattr(settings, "restart_cooldown_every_calls", None)
+    if cooldown_seconds <= 0.0 or cooldown_every_calls is None:
+        return cooldown_seconds
+    if cooldown_every_calls <= 0:
+        return cooldown_seconds
+    return cooldown_seconds if completed_samples % cooldown_every_calls == 0 else 0.0

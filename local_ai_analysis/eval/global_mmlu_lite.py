@@ -12,6 +12,7 @@ from typing import Any, Callable
 from local_ai_analysis.adapters.native import create_native_client
 from local_ai_analysis.config import GlobalMMLULiteSettings, VariantConfig
 from local_ai_analysis.eval.efficiency import efficiency_metrics_from_summary
+from local_ai_analysis.eval.runtime import restart_cooldown_seconds_for_sample
 from local_ai_analysis.metrics import MetricResult
 
 
@@ -445,7 +446,10 @@ class GlobalMMLULiteRunner:
         reason: str,
     ) -> None:
         reset_error = None
-        cooldown_seconds = max(0.0, float(self.settings.restart_cooldown_seconds or 0.0))
+        cooldown_seconds = restart_cooldown_seconds_for_sample(
+            settings=self.settings,
+            completed_samples=completed_samples,
+        )
         try:
             instance_id = self.client.reset_model_runtime(
                 model,
