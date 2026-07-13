@@ -250,7 +250,7 @@
 
     .panel,
     .chart-panel,
-    .model-row,
+    .model-card,
     .info-card,
     .origin-card,
     .app-card {
@@ -323,10 +323,10 @@
     }
 
     .hero-bars,
-    .big-bars {
-      display: flex;
-      align-items: end;
-      gap: 14px;
+    .score-plot {
+      display: grid;
+      align-content: center;
+      gap: 10px;
       min-width: 0;
       overflow: hidden;
       padding-top: 20px;
@@ -334,78 +334,87 @@
     }
 
     .hero-bars {
-      height: 380px;
+      min-height: 380px;
     }
 
-    .big-bars {
-      height: 590px;
-      gap: 12px;
-      padding-inline: 4px;
+    .score-plot {
+      gap: 8px;
+      padding-top: 18px;
     }
 
-    .bar-item {
+    .score-bar-axis,
+    .score-bar-row {
       display: grid;
-      flex: 1 1 0;
+      grid-template-columns: 226px minmax(0, 1fr) 74px;
+      gap: 16px;
+      align-items: center;
       min-width: 0;
-      gap: 9px;
-      align-items: end;
-      text-align: center;
     }
 
-    .bar {
-      position: relative;
-      min-height: 38px;
-      border-radius: 14px 14px 6px 6px;
-      background: var(--provider-color, var(--accent));
-      box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.08);
+    .score-bar-axis {
+      min-height: 28px;
+      color: var(--quiet);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      font-weight: 900;
     }
 
-    .bar.hosted {
-      background: var(--ink);
+    .score-axis-labels {
+      display: flex;
+      justify-content: space-between;
+      min-width: 0;
     }
 
-    .bar b {
-      position: absolute;
-      right: 10px;
-      bottom: 10px;
-      color: #fff;
-      font-size: 24px;
-      font-weight: 950;
-      line-height: 1;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    .score-axis-labels i {
+      font-style: normal;
     }
 
-    .bar-meta {
+    .score-bar-row {
+      min-height: 68px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .score-bar-row:last-child {
+      border-bottom: 0;
+    }
+
+    .score-bar-model {
       display: grid;
-      justify-items: center;
-      gap: 6px;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
       min-width: 0;
-      color: var(--ink);
-      font-size: 15px;
-      font-weight: 950;
-      line-height: 1.05;
     }
 
-    .big-bars .bar-meta {
-      font-size: 14px;
+    .score-bar-model > span {
+      min-width: 0;
     }
 
-    .bar-meta img,
+    .score-bar-model img,
     .lab-icon img {
       width: 28px;
       height: 28px;
       object-fit: contain;
     }
 
-    .bar-meta span,
-    .bar-meta small {
+    .score-bar-model b,
+    .score-bar-model small {
+      display: block;
       max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .bar-meta small {
+    .score-bar-model b {
+      color: var(--ink);
+      font-size: 17px;
+      font-weight: 950;
+      line-height: 1.05;
+    }
+
+    .score-bar-model small {
+      margin-top: 4px;
       color: var(--muted);
       font-family: "JetBrains Mono", monospace;
       font-size: 11px;
@@ -413,16 +422,77 @@
       text-transform: uppercase;
     }
 
-    .leaderboard-table,
+    .score-bar-track {
+      position: relative;
+      display: block;
+      height: 16px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg, transparent calc(25% - 0.5px), rgba(21, 23, 19, 0.12) 25%, transparent calc(25% + 0.5px)),
+        linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(21, 23, 19, 0.12) 50%, transparent calc(50% + 0.5px)),
+        linear-gradient(90deg, transparent calc(75% - 0.5px), rgba(21, 23, 19, 0.12) 75%, transparent calc(75% + 0.5px)),
+        var(--surface-soft);
+    }
+
+    .score-bar-track i {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--provider-color, var(--accent));
+    }
+
+    .score-bar-value {
+      color: var(--ink);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 17px;
+      font-weight: 950;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .hero-bars .score-bar-axis,
+    .hero-bars .score-bar-row {
+      grid-template-columns: minmax(104px, 132px) minmax(104px, 1fr) 44px;
+      gap: 9px;
+    }
+
+    .hero-bars .score-bar-row {
+      min-height: 62px;
+    }
+
+    .hero-bars .score-bar-model {
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 7px;
+    }
+
+    .hero-bars .score-bar-model img {
+      width: 24px;
+      height: 24px;
+    }
+
+    .hero-bars .score-bar-model b {
+      font-size: 13px;
+    }
+
+    .hero-bars .score-bar-model small {
+      font-size: 9px;
+    }
+
+    .hero-bars .score-bar-value {
+      font-size: 13px;
+    }
+
     .pareto-grid,
     .latest-grid {
       display: grid;
       gap: 10px;
     }
 
-    .model-row {
+    .model-card {
       display: grid;
-      grid-template-columns: 38px 42px minmax(0, 1fr) 88px 88px 96px;
+      grid-template-columns: 42px minmax(0, 1fr) 88px 88px 96px;
       gap: 12px;
       align-items: center;
       min-height: 74px;
@@ -432,16 +502,9 @@
       box-shadow: none;
     }
 
-    .model-row.hosted {
+    .model-card.hosted {
       background: linear-gradient(90deg, rgba(232, 244, 255, 0.95), rgba(255, 254, 250, 0.95));
       border-color: var(--blue-line);
-    }
-
-    .rank {
-      color: var(--quiet);
-      font-family: "JetBrains Mono", monospace;
-      font-size: 19px;
-      font-weight: 950;
     }
 
     .lab-icon {
@@ -894,7 +957,7 @@
           </div>
         </div>
         <footer class="slide-footer">
-          <span class="micro">Score · Size · Released · Coverage</span>
+          <span class="micro">Score · Size · Released · Source</span>
           <span class="slide-number">01 / 10</span>
         </footer>
       </div>
@@ -903,15 +966,15 @@
     <section class="slide" id="slide-2">
       <div class="slide-inner">
         <header class="brand-row">
-          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Current leaderboard</span></div>
+          <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Current comparison</span></div>
           <span class="slide-kicker">May 2026</span>
         </header>
         <div class="slide-main">
           <div>
-            <h2>The ranking today.</h2>
+            <h2>Scores today.</h2>
             <p class="lead" style="margin-top: 22px">Hosted references stay visible, but local 4-bit rows are the decision surface.</p>
           </div>
-          <div class="leaderboard-table" id="leaderboard-table"><span class="loading">Loading leaderboard...</span></div>
+          <div class="score-plot" id="score-plot" aria-label="Current LAIA score comparison"><span class="loading">Loading comparison...</span></div>
         </div>
         <footer class="slide-footer">
           <span class="micro">OpenAI rows are references, not local downloads.</span>
@@ -940,7 +1003,7 @@
           </div>
         </div>
         <footer class="slide-footer">
-          <span class="micro">Coverage remains visible when a row is incomplete.</span>
+          <span class="micro">Incomplete benchmark rows stay out of the public comparison.</span>
           <span class="slide-number">03 / 10</span>
         </footer>
       </div>
@@ -1118,18 +1181,18 @@
       <div class="slide-inner">
         <header class="brand-row">
           <div class="brand-lockup"><img class="brand-logo" src="/laia_primary_logo_transparent.png" alt="" /><span class="brand-name">Local AI Analysis</span></div>
-          <span class="slide-kicker">Leaderboard</span>
+          <span class="slide-kicker">Model comparison</span>
         </header>
         <div class="slide-main">
           <div class="cta-panel">
             <h2>Shortlist before you download.</h2>
-            <p class="lead">Compare local models by score, size, release date, and coverage before committing your machine memory.</p>
+            <p class="lead">Compare local models by score, size, release date, and source before committing your machine memory.</p>
             <div class="latest-grid" id="cta-models"></div>
             <span class="cta-url">laia-six.vercel.app</span>
           </div>
         </div>
         <footer class="slide-footer">
-          <span class="micro">Visit the leaderboard</span>
+          <span class="micro">Explore the model comparison</span>
           <span class="slide-number">10 / 10</span>
         </footer>
       </div>
@@ -1362,12 +1425,6 @@
       return `${(value * 100).toFixed(1)} pts`;
     }
 
-    function coverage(row) {
-      const explicit = numeric(row.model_intelligence_coverage);
-      if (explicit !== null) return explicit;
-      return LAIA_KEYS.reduce((total, [, key]) => total + (numeric(row[key]) !== null ? 0.2 : 0), 0);
-    }
-
     function comparableRows(rows) {
       const groups = new Map();
       for (const row of rows) {
@@ -1383,9 +1440,7 @@
           merged[key] = source ? numeric(source[key]) : null;
         }
         const weighted = LAIA_KEYS.reduce((total, [, key]) => total + Math.max(0, Math.min(1, numeric(merged[key]) || 0)) * 0.2, 0);
-        const covered = LAIA_KEYS.reduce((total, [, key]) => total + (numeric(merged[key]) !== null ? 0.2 : 0), 0);
         merged.model_intelligence_score = weighted;
-        merged.model_intelligence_coverage = covered;
         return merged;
       });
     }
@@ -1422,11 +1477,10 @@
       return rows.filter((row) => !isHosted(row) && isFourBit(row) && score(row) > 0);
     }
 
-    function rowCard(row, rank) {
+    function modelCard(row) {
       const p = provider(row);
       return `
-        <article class="model-row ${isHosted(row) ? "hosted" : ""}" style="--provider-color:${p.color}">
-          <span class="rank">${String(rank).padStart(2, "0")}</span>
+        <article class="model-card ${isHosted(row) ? "hosted" : ""}" style="--provider-color:${p.color}">
           <span class="lab-icon"><img src="${p.icon}" alt="" /></span>
           <span class="model-name"><b>${shortModelName(row)}</b><small>${isHosted(row) ? "Hosted reference" : `${quantizationLabel(row)} · ${p.label}`}</small></span>
           <span class="metric-cell"><b>${(score(row) * 100).toFixed(1)}</b><span>Score</span></span>
@@ -1435,22 +1489,29 @@
         </article>`;
     }
 
-    function renderBars(container, rows, limit = 6, includeHosted = false) {
+    function scoreBarRow(row) {
+      const p = provider(row);
+      const value = Math.max(0, Math.min(100, score(row) * 100));
+      return `
+        <div class="score-bar-row" role="img" aria-label="${shortModelName(row)}, ${value.toFixed(1)} LAIA score" style="--provider-color:${p.color}">
+          <span class="score-bar-model">
+            <img src="${p.icon}" alt="" />
+            <span><b>${shortModelName(row)}</b><small>${isHosted(row) ? "Reference" : formatModelSize(row)}</small></span>
+          </span>
+          <span class="score-bar-track" aria-hidden="true"><i style="width:${Math.max(1.5, value)}%"></i></span>
+          <strong class="score-bar-value">${value.toFixed(1)}</strong>
+        </div>`;
+    }
+
+    function renderHorizontalBars(container, rows, limit = 6, includeHosted = false) {
       const items = rows.filter((row) => includeHosted || !isHosted(row)).slice(0, limit);
-      const max = Math.max(...items.map(score), 0.01);
-      container.innerHTML = items.map((row) => {
-        const p = provider(row);
-        const height = Math.max(42, score(row) / max * (container.classList.contains("big-bars") ? 460 : 286));
-        return `
-          <div class="bar-item" style="--provider-color:${p.color}">
-            <div class="bar ${isHosted(row) ? "hosted" : ""}" style="height:${height}px"><b>${Math.round(score(row) * 100)}</b></div>
-            <div class="bar-meta">
-              <img src="${p.icon}" alt="" />
-              <span>${shortModelName(row)}</span>
-              <small>${isHosted(row) ? "Reference" : formatModelSize(row)}</small>
-            </div>
-          </div>`;
-      }).join("");
+      container.innerHTML = `
+        <div class="score-bar-axis" aria-hidden="true">
+          <span></span>
+          <span class="score-axis-labels"><i>0</i><i>25</i><i>50</i><i>75</i><i>100</i></span>
+          <span></span>
+        </div>
+        ${items.length ? items.map(scoreBarRow).join("") : '<span class="loading">No comparable rows.</span>'}`;
     }
 
     function scatterSvg(rows, options = {}) {
@@ -1601,15 +1662,15 @@
 
     function renderCta(rows) {
       const items = publicRows(rows).slice(0, 3);
-      document.getElementById("cta-models").innerHTML = items.map((row, index) => rowCard(row, index + 1)).join("");
+      document.getElementById("cta-models").innerHTML = items.map(modelCard).join("");
     }
 
     function render(payload) {
       const rows = comparableRows((payload.leaderboard || []).filter((row) => !isSyntheticRow(row) && !isSmokeRow(row) && !isSmolLM2Row(row)));
-      const publicRanked = publicRows(rows);
+      const comparisonRows = publicRows(rows);
       const locals = localRows(rows);
-      renderBars(document.getElementById("hero-bars"), publicRanked, 5, true);
-      document.getElementById("leaderboard-table").innerHTML = publicRanked.slice(0, 9).map((row, index) => rowCard(row, index + 1)).join("");
+      renderHorizontalBars(document.getElementById("hero-bars"), comparisonRows, 5, true);
+      renderHorizontalBars(document.getElementById("score-plot"), comparisonRows, 9, true);
       document.getElementById("fit-scatter").innerHTML = scatterSvg(locals, { frontier: false });
       document.getElementById("pareto-scatter").innerHTML = scatterSvg(locals, { frontier: true });
       const frontier = efficiencyFrontier(locals);

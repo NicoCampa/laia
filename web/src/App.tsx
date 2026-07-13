@@ -169,7 +169,7 @@ type UseCaseLeaderboard = {
 };
 
 const PAGE_LABELS: Record<Page, string> = {
-  leaderboard: "Leaderboard",
+  leaderboard: "Overview",
   benchmarks: "Benchmarks",
   models: "Models",
   methodology: "Methodology",
@@ -185,7 +185,7 @@ const PAGE_HEADLINES: Record<Page, string> = {
 };
 
 const PAGE_COPY: Record<Page, string> = {
-  leaderboard: "Rank 4-bit local models and OpenAI references by the text-only LAIA Index.",
+  leaderboard: "Compare 4-bit local models and OpenAI references with the text-only LAIA Index.",
   benchmarks: "Knowledge, instruction following, tool use, coding, and grounding are split into comparable slices.",
   models: "Ranked rows include source links, footprint, run metadata, and raw exported metrics.",
   methodology: "The public index keeps judge, safety, and vision results separate from the core local text comparison.",
@@ -212,7 +212,7 @@ const LEADERBOARD_CHAPTERS = [
   { id: "leaderboard-use-cases", label: "Use cases" },
   { id: "leaderboard-landscape", label: "Pareto" },
   { id: "leaderboard-release", label: "Release" },
-  { id: "leaderboard-top-benchmarks", label: "Top 5 by category" },
+  { id: "leaderboard-top-benchmarks", label: "Category plots" },
   { id: "leaderboard-origins", label: "Origins" },
 ];
 
@@ -825,7 +825,7 @@ const METHODOLOGY_INDEX_BENCHMARKS: MethodologyBenchmark[] = [
     measures: "Precise instruction following with verifiable formatting and constraint checks.",
     metric: "ifbench_prompt_level_loose",
     scope: "The default run uses the full 300-prompt `allenai/IFBench_test` set. Smoke mode evaluates the first 5 prompts.",
-    evaluator: "The project uses the official AllenAI verification functions. The leaderboard-facing metric is prompt-level loose accuracy.",
+    evaluator: "The project uses the official AllenAI verification functions. The public comparison metric is prompt-level loose accuracy.",
     inclusion: "Included in LAIA because it is a text-only, non-judge measure of instruction-following reliability.",
     caveat: "Strict and instruction-level metrics are reported separately, but publishable comparisons should use prompt-level loose accuracy unless a stricter target is explicitly intended.",
   },
@@ -965,7 +965,7 @@ const METHODOLOGY_AUDIT_FIELDS: string[] = [
 const METHODOLOGY_LIMITATIONS: MethodologyNamedItem[] = [
   { label: "Missing families are penalized", detail: "`model_intelligence_score` counts missing text benchmark families as zero. Compare rows only when the same five text benchmark families are present." },
   { label: "Public rows are 4-bit and reasoning-off", detail: "The public local comparison is built from 4-bit rows with reasoning disabled. Early local results did not show a large performance drop versus full-precision variants, but cross-precision rows are still kept out of the public main ranking." },
-  { label: "Global MMLU Lite is generation pass@1", detail: "Do not compare it directly with log-likelihood MMLU numbers from other leaderboards." },
+  { label: "Global MMLU Lite is generation pass@1", detail: "Do not compare it directly with log-likelihood MMLU numbers from other comparison systems." },
   { label: "BFCL scope must match", detail: "Category set, sample limit, strategy, and seed all affect the BFCL result surface." },
   { label: "RGB scope must match", detail: "Suite rows and single-dataset RGB rows are not equivalent unless dataset, noise rate, and passage settings match." },
   { label: "Vision is separate", detail: "OCRBench v2 and MMMU are reported separately because they measure multimodal capability, not text-only LAIA performance." },
@@ -976,7 +976,7 @@ const METHODOLOGY_LIMITATIONS: MethodologyNamedItem[] = [
 const METHODOLOGY_DEFINITIONS: MethodologyDefinition[] = [
   {
     term: "Benchmark row",
-    description: "A leaderboard-facing normalized result record that contains the benchmark metrics and metadata for one public row.",
+    description: "A public normalized result record that contains the benchmark metrics and metadata for one comparable row.",
   },
   {
     term: "Merged run",
@@ -2049,9 +2049,9 @@ function TopBenchmarkSection({
     <section className="chapter-section benchmark-top-section" id="leaderboard-top-benchmarks">
       <div className="section-heading compact">
         <div>
-          <h2>Top 5 by category</h2>
+          <h2>Category bar plots</h2>
         </div>
-        <p>Highest-scoring models in each LAIA category.</p>
+        <p>The five highest scores in each LAIA category, plotted on a shared 0-100 scale.</p>
       </div>
       <div className="benchmark-top-grid">
         {visibleGroups.map(({ capability, rows: topRows }) => (
@@ -2063,24 +2063,13 @@ function TopBenchmarkSection({
                 <p>{capability.benchmark} · {capability.metricLabel}</p>
               </div>
             </div>
-            <div className="benchmark-top-list">
-              {topRows.map(({ row, value }, index) => (
-                <button
-                  className={`benchmark-top-row ${rowToneClass(row)}`}
-                  key={`top-${capability.id}-${row.variant_id}`}
-                  type="button"
-                  style={{ "--provider-color": providerColor(row) } as CSSProperties}
-                  onClick={() => onOpenModel(row)}
-                >
-                  <span className="benchmark-top-rank">{index + 1}</span>
-                  <LabIcon row={row} />
-                  <span>
-                    <b>{shortModelLabel(row)}</b>
-                    <small>{formatPercent(value)}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
+            <HorizontalBarPlot
+              items={topRows.map(({ row, value }) => ({ row, value }))}
+              valueLabel={formatPercent}
+              ariaLabel={`${capability.label} model comparison`}
+              onOpenModel={onOpenModel}
+              compact
+            />
           </article>
         ))}
       </div>
@@ -2108,9 +2097,9 @@ function UseCaseLeaderboardsSection({
     <section className="chapter-section use-case-section" id="leaderboard-use-cases">
       <div className="section-heading compact">
         <div>
-          <h2>Use-case leaderboards</h2>
+          <h2>Use-case bar plots</h2>
         </div>
-        <p>Local SLM rankings by benchmark outcomes only. Runtime, latency, throughput, and hardware cost are excluded.</p>
+        <p>Local SLM comparisons by benchmark outcomes only. Runtime, latency, throughput, and hardware cost are excluded.</p>
       </div>
       <div className="use-case-grid">
         {groups.map(({ leaderboard, rows: topRows }) => (
@@ -2130,28 +2119,97 @@ function UseCaseLeaderboardsSection({
                 </span>
               ))}
             </div>
-            <div className="benchmark-top-list">
-              {topRows.map(({ row, score }, index) => (
-                <button
-                  className={`benchmark-top-row use-case-row ${rowToneClass(row)}`}
-                  key={`use-case-${leaderboard.id}-${row.variant_id}`}
-                  type="button"
-                  style={{ "--provider-color": providerColor(row) } as CSSProperties}
-                  onClick={() => onOpenModel(row)}
-                >
-                  <span className="benchmark-top-rank">{index + 1}</span>
-                  <LabIcon row={row} />
-                  <span>
-                    <b>{shortModelLabel(row)}</b>
-                    <small>{formatPoints(score)}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
+            <HorizontalBarPlot
+              items={topRows.map(({ row, score }) => ({ row, value: score }))}
+              valueLabel={formatPoints}
+              ariaLabel={`${leaderboard.label} model comparison`}
+              onOpenModel={onOpenModel}
+              compact
+            />
           </article>
         ))}
       </div>
     </section>
+  );
+}
+
+type HorizontalBarItem = {
+  row: LeaderboardRow;
+  value: number;
+  detail?: string;
+  ariaDetail?: string;
+};
+
+function HorizontalBarPlot({
+  items,
+  valueLabel,
+  ariaLabel,
+  onOpenModel,
+  colorForItem,
+  compact = false,
+}: {
+  items: HorizontalBarItem[];
+  valueLabel: (value: number) => string;
+  ariaLabel: string;
+  onOpenModel?: (row: LeaderboardRow) => void;
+  colorForItem?: (item: HorizontalBarItem) => string;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`horizontal-bar-plot ${compact ? "compact" : ""}`} aria-label={ariaLabel}>
+      <div className="horizontal-bar-axis" aria-hidden="true">
+        <span />
+        <span className="horizontal-bar-ticks">
+          <i>0</i><i>25</i><i>50</i><i>75</i><i>100</i>
+        </span>
+        <span />
+      </div>
+      <div className="horizontal-bar-rows">
+        {items.length ? items.map((item) => {
+          const { row, value, detail, ariaDetail } = item;
+          const formattedValue = valueLabel(value);
+          const width = Math.max(1.5, Math.min(100, value * 100));
+          const color = colorForItem?.(item) ?? providerColor(row);
+          const content = (
+            <>
+              <span className="horizontal-bar-model">
+                <LabIcon row={row} />
+                <span>
+                  <b>{shortModelLabel(row)}</b>
+                  {detail && <small>{detail}</small>}
+                </span>
+              </span>
+              <span className="horizontal-bar-track" aria-hidden="true">
+                <i style={{ width: `${width}%`, background: color }} />
+              </span>
+              <strong className="horizontal-bar-value">{formattedValue}</strong>
+            </>
+          );
+          const accessibleLabel = `${displayModelName(row)}, ${formattedValue}${ariaDetail ? `, ${ariaDetail}` : ""}`;
+          return onOpenModel ? (
+            <button
+              className={`horizontal-bar-row ${rowToneClass(row)}`}
+              type="button"
+              onClick={() => onOpenModel(row)}
+              aria-label={`Open ${accessibleLabel}`}
+              key={`${ariaLabel}-${row.variant_id}`}
+            >
+              {content}
+            </button>
+          ) : (
+            <div
+              className={`horizontal-bar-row ${rowToneClass(row)}`}
+              role="img"
+              aria-label={accessibleLabel}
+              title={accessibleLabel}
+              key={`${ariaLabel}-${row.variant_id}`}
+            >
+              {content}
+            </div>
+          );
+        }) : <span className="empty-note">n/a</span>}
+      </div>
+    </div>
   );
 }
 
@@ -2319,7 +2377,9 @@ function IndexPlotCard({
   rows: LeaderboardRow[];
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
-  const maxScore = Math.max(...rows.map((row) => numeric(row.model_intelligence_score) ?? 0), 0.01);
+  const items = rows
+    .map((row) => ({ row, value: numeric(row.model_intelligence_score), detail: indexColumnMetaLabel(row) }))
+    .filter((item): item is { row: LeaderboardRow; value: number; detail: string } => item.value !== null);
   return (
     <section className="index-plot-card intelligence-card">
       <div className="index-plot-heading">
@@ -2327,38 +2387,13 @@ function IndexPlotCard({
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
-        <div className="index-scale-label" aria-hidden="true">
-          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
-        </div>
       </div>
-      <div className="index-plot-list" aria-label={title}>
-        {rows.length === 0 && <p className="empty-note">No rows available for the chart.</p>}
-        {rows.map((row, index) => {
-          const score = numeric(row.model_intelligence_score);
-          const width = score === null ? 0 : Math.max(4, (score / maxScore) * 100);
-          return (
-            <button
-              className={`index-plot-column ${rowToneClass(row)}`}
-              key={`${title}-${row.variant_id}`}
-              type="button"
-              onClick={() => onOpenModel(row)}
-              style={{ "--provider-color": providerColor(row) } as CSSProperties}
-              aria-label={`Open ${displayModelName(row)} details`}
-            >
-              <span className="index-column-rank">{String(index + 1).padStart(2, "0")}</span>
-              <div className="index-column-label">
-                <LabIcon row={row} />
-                <span><b>{shortModelLabel(row)}</b><small>{indexColumnMetaLabel(row)}</small></span>
-              </div>
-              <div className="index-column-track">
-                <span className="index-column-bar"><i style={{ width: `${width}%`, background: providerColor(row) }} /></span>
-              </div>
-              <strong className="index-column-score">{formatIndexNumber(score ?? 0)}</strong>
-              <span className="index-column-open" aria-hidden="true">View ↗</span>
-            </button>
-          );
-        })}
-      </div>
+      <HorizontalBarPlot
+        items={items}
+        valueLabel={formatIndexNumber}
+        ariaLabel={title}
+        onOpenModel={onOpenModel}
+      />
     </section>
   );
 }
@@ -2395,40 +2430,6 @@ function LeaderboardRowCard({
         <CapabilityStrip row={row} compact maxModelSizeGb={maxModelSizeGb} />
       </div>
     </article>
-  );
-}
-
-function ModelIdentity({
-  row,
-  children,
-  showClosedSourceBadge = true,
-}: {
-  row: LeaderboardRow;
-  children?: ReactNode;
-  showClosedSourceBadge?: boolean;
-}) {
-  const reasoningEnabled = reasoningKey(row) !== "off";
-  const ReasoningIcon = reasoningEnabled ? Lightbulb : LightbulbOff;
-  const openai = isHostedOpenAIRow(row);
-  return (
-    <div className="model-identity">
-      <LabIcon row={row} />
-      <div>
-        <div className="model-title-line">
-          <strong>{displayModelName(row)}</strong>
-          {!openai && <span className={`model-badge quant-${quantizationTone(row)}`}>{quantizationLabel(row)}</span>}
-          <span
-            className={`model-badge icon-only reasoning-badge ${reasoningEnabled ? "on" : "off"}`}
-            title={reasoningEnabled ? `Reasoning ${reasoningValue(row)}` : "Reasoning disabled"}
-          >
-            <ReasoningIcon size={13} aria-hidden="true" />
-          </span>
-          {openai && showClosedSourceBadge && <span className="model-badge closed-source">Closed source</span>}
-        </div>
-        <span className="model-meta-line">{modelMetaLine(row)}</span>
-        {children}
-      </div>
-    </div>
   );
 }
 
@@ -2525,8 +2526,7 @@ function CapabilityStrip({
               <div
                 className={`mini-bar-fill ${normalized === null ? "missing" : ""}`}
                 style={{ width: `${width}%` }}
-              >
-              </div>
+              />
               <b>{item.display(normalized)}</b>
             </div>
           </div>
@@ -2535,6 +2535,41 @@ function CapabilityStrip({
     </div>
   );
 }
+
+function ModelIdentity({
+  row,
+  children,
+  showClosedSourceBadge = true,
+}: {
+  row: LeaderboardRow;
+  children?: ReactNode;
+  showClosedSourceBadge?: boolean;
+}) {
+  const reasoningEnabled = reasoningKey(row) !== "off";
+  const ReasoningIcon = reasoningEnabled ? Lightbulb : LightbulbOff;
+  const openai = isHostedOpenAIRow(row);
+  return (
+    <div className="model-identity">
+      <LabIcon row={row} />
+      <div>
+        <div className="model-title-line">
+          <strong>{displayModelName(row)}</strong>
+          {!openai && <span className={`model-badge quant-${quantizationTone(row)}`}>{quantizationLabel(row)}</span>}
+          <span
+            className={`model-badge icon-only reasoning-badge ${reasoningEnabled ? "on" : "off"}`}
+            title={reasoningEnabled ? `Reasoning ${reasoningValue(row)}` : "Reasoning disabled"}
+          >
+            <ReasoningIcon size={13} aria-hidden="true" />
+          </span>
+          {openai && showClosedSourceBadge && <span className="model-badge closed-source">Closed source</span>}
+        </div>
+        <span className="model-meta-line">{modelMetaLine(row)}</span>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 
 function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
   const visibleBenchmarks = useMemo(
@@ -2740,7 +2775,6 @@ function GlobalMMLURegionPlot({
   return (
     <GlobalMMLUColumnPlot
       items={items}
-      max={Math.max(...items.map((item) => item.value), 0.01)}
       subtitle={subtitle}
       title={title}
     />
@@ -2768,7 +2802,6 @@ function GlobalMMLULanguagePlot({
   return (
     <GlobalMMLUColumnPlot
       items={items}
-      max={Math.max(...items.map((item) => item.value), 0.01)}
       title={languageLabel(language)}
     />
   );
@@ -2778,12 +2811,10 @@ function GlobalMMLUColumnPlot({
   title,
   subtitle,
   items,
-  max,
 }: {
   title: string;
   subtitle?: string;
   items: Array<{ row: LeaderboardRow; score: LanguageBreakdownScore; value: number }>;
-  max: number;
 }) {
   return (
     <article className="language-card">
@@ -2794,28 +2825,17 @@ function GlobalMMLUColumnPlot({
         </div>
         <PlotBrandStamp />
       </div>
-      <div className="language-column-plot">
-        {items.length ? items.map(({ row, score, value }) => (
-          <button
-            className={`language-column ${rowToneClass(row)}`}
-            key={`${title}-${row.variant_id}`}
-            type="button"
-            title={`${displayModelName(row)} · ${formatPercent(value)} · ${formatLanguageCounts(score)}`}
-          >
-            <div className="language-column-track">
-              <i
-                style={{
-                  height: `${Math.max(5, (value / max) * 100)}%`,
-                  background: providerColor(row),
-                }}
-              />
-              <b>{Math.round(value * 100)}</b>
-            </div>
-            <LabIcon row={row} />
-            <small>{shortModelLabel(row)}</small>
-          </button>
-        )) : <span className="empty-note">n/a</span>}
-      </div>
+      <HorizontalBarPlot
+        items={items.map(({ row, score, value }) => ({
+          row,
+          value,
+          detail: quantizationLabel(row),
+          ariaDetail: formatLanguageCounts(score),
+        }))}
+        valueLabel={formatPercent}
+        ariaLabel={`${title} language comparison`}
+        compact
+      />
     </article>
   );
 }
@@ -2910,7 +2930,6 @@ function RGBLanguagePlot({
   return (
     <GlobalMMLUColumnPlot
       items={items}
-      max={Math.max(...items.map((item) => item.value), 0.01)}
       subtitle={rgbLanguageSubtitle(items)}
       title={languageLabel(language)}
     />
@@ -2927,7 +2946,6 @@ function BenchmarkTopPlot({
   rows: LeaderboardRow[];
 }) {
   const items = benchmarkMetricItems(rows, metric);
-  const max = Math.max(...items.map((item) => item.value), 0.01);
   return (
     <section className="benchmark-top-plot">
       <div className="benchmark-plot-title">
@@ -2946,30 +2964,13 @@ function BenchmarkTopPlot({
           <span>{metric.kind === "error" ? "Lower is better" : "Higher is better"}</span>
         </div>
       </div>
-      <div className="benchmark-column-plot">
-        {items.length ? items.map(({ row, value }) => (
-          <button
-            className={`benchmark-column ${rowToneClass(row)}`}
-            type="button"
-            key={`${benchmark.id}-${metric.id}-${row.variant_id}`}
-            style={{ "--provider-color": providerColor(row) } as CSSProperties}
-            title={`${displayModelName(row)} · ${formatPercent(value)}`}
-          >
-            <div className="benchmark-column-track">
-              <span
-                style={{
-                  height: `${Math.max(4, (value / max) * 100)}%`,
-                  background: metric.kind === "error" ? "var(--orange)" : providerColor(row),
-                }}
-              />
-              <b>{formatPercent(value)}</b>
-            </div>
-            <LabIcon row={row} />
-            <strong>{shortModelLabel(row)}</strong>
-            <small>{quantizationLabel(row)}</small>
-          </button>
-        )) : <p className="empty-note">No completed rows for this metric yet.</p>}
-      </div>
+      <HorizontalBarPlot
+        items={items.map(({ row, value }) => ({ row, value, detail: quantizationLabel(row) }))}
+        valueLabel={formatPercent}
+        ariaLabel={`${benchmark.title} ${metric.label} comparison`}
+        colorForItem={({ row }) => metric.kind === "error" ? "var(--orange)" : providerColor(row)}
+        compact
+      />
     </section>
   );
 }
@@ -2984,7 +2985,6 @@ function BenchmarkMiniPlot({
   rows: LeaderboardRow[];
 }) {
   const items = benchmarkMetricItems(rows, metric);
-  const max = Math.max(...items.map((item) => item.value), 0.01);
   return (
     <article className="benchmark-mini-card">
       <div className="benchmark-mini-heading">
@@ -2994,29 +2994,13 @@ function BenchmarkMiniPlot({
         </div>
         <PlotBrandStamp />
       </div>
-      <div className="mini-column-plot">
-        {items.length ? items.map(({ row, value }) => (
-          <span
-            className={`mini-column ${rowToneClass(row)}`}
-            key={`${benchmark.id}-${metric.id}-mini-${row.variant_id}`}
-            title={`${displayModelName(row)} · ${formatPercent(value)} · ${quantizationLabel(row)}`}
-            style={{ "--provider-color": providerColor(row) } as CSSProperties}
-          >
-            <span className="mini-column-track">
-              <i
-                style={{
-                  height: `${Math.max(5, (value / max) * 100)}%`,
-                  background: metric.kind === "error" ? "var(--orange)" : providerColor(row),
-                }}
-              />
-              <b>{metric.kind === "error" ? formatPercent(value) : Math.round(value * 100)}</b>
-            </span>
-            <LabIcon row={row} />
-            <small>{shortModelLabel(row)}</small>
-            <em>{quantizationLabel(row)}</em>
-          </span>
-        )) : <span className="empty-note">n/a</span>}
-      </div>
+      <HorizontalBarPlot
+        items={items.map(({ row, value }) => ({ row, value, detail: quantizationLabel(row) }))}
+        valueLabel={formatPercent}
+        ariaLabel={`${benchmark.title} ${metric.label} compact comparison`}
+        colorForItem={({ row }) => metric.kind === "error" ? "var(--orange)" : providerColor(row)}
+        compact
+      />
     </article>
   );
 }
@@ -3044,49 +3028,6 @@ function PlotInfoButton({ label, detail }: { label: string; detail: string }) {
       </span>
       <span className="plot-info-tooltip">{detail}</span>
     </button>
-  );
-}
-
-function BenchmarkBarChart({ capability, rows }: { capability: Capability; rows: LeaderboardRow[] }) {
-  const chartRows = rows
-    .map((row) => ({ row, value: capability.value(row) }))
-    .filter((item): item is { row: LeaderboardRow; value: number } => item.value !== null)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 18);
-
-  return (
-    <section className="chart-card">
-      <div className="chart-card-heading">
-        <span className="metric-icon">{capability.icon}</span>
-        <div>
-          <h3>{capability.label}</h3>
-          <p>{capability.benchmark} · {capability.metricLabel}</p>
-        </div>
-        <div className="chart-card-meta">
-          <PlotBrandStamp />
-          {capability.weight ? <b>{capability.weight} LAIA pts</b> : <b>Separate</b>}
-        </div>
-      </div>
-      <p className="chart-description">{capability.description}</p>
-      <div className="bar-list">
-        {chartRows.length ? chartRows.map(({ row, value }, index) => (
-          <BenchmarkBar row={row} value={value} index={index} key={`${capability.id}-${row.variant_id}`} />
-        )) : <p className="empty-note">No completed results yet.</p>}
-      </div>
-    </section>
-  );
-}
-
-function BenchmarkBar({ row, value, index }: { row: LeaderboardRow; value: number; index: number }) {
-  return (
-    <div className={`benchmark-bar-row ${rowToneClass(row)}`}>
-      <span className="bar-rank">{String(index + 1).padStart(2, "0")}</span>
-      <ModelIdentity row={row} />
-      <ScoreBar value={value} tone="benchmark" />
-      <strong>{formatPercent(value)}</strong>
-      <span>{formatSamples(row)}</span>
-      <span>{formatOutputCapHits(row)}</span>
-    </div>
   );
 }
 
@@ -3128,7 +3069,7 @@ function ModelsPage({
     <section className="page-grid models-page">
       <header className="models-landing">
         <div className="models-landing-copy">
-          <h1>Models</h1>
+          <h1>Model leaderboard</h1>
           <p>Search, filter, and inspect the tested rows, source links, benchmark results, and runtime metadata.</p>
         </div>
       </header>
@@ -3317,7 +3258,7 @@ function MethodologyBenchmarkCard({ benchmark }: { benchmark: MethodologyBenchma
       <MethodologySchema
         items={[
           { label: "What it measures", detail: benchmark.measures },
-          { label: "Leaderboard metric", detail: benchmark.metric },
+          { label: "Public metric", detail: benchmark.metric },
           { label: "Default evaluation scope / cap", detail: benchmark.scope },
           { label: "Evaluator / scoring note", detail: benchmark.evaluator },
           { label: "Inclusion", detail: benchmark.inclusion },
@@ -3554,7 +3495,7 @@ function MethodologyPage() {
                 In the schema, the auditable pipeline runs from <code>base_model</code>
                 {" "}and <code>model_variant</code> through <code>benchmark_run</code>,
                 {" "}<code>benchmark_task</code>, and <code>benchmark_result</code>,
-                {" "}then into the leaderboard-facing <code>normalized_result</code>
+                {" "}then into the public <code>normalized_result</code>
                 {" "}row that the site exports.
               </p>
             </div>
@@ -3566,7 +3507,7 @@ function MethodologyPage() {
               <article className="methodology-summary-card">
                 <h3>What a normalized row represents</h3>
                 <p>
-                  A normalized row is the leaderboard-facing record for one public
+                  A normalized row is the public record for one comparable
                   model surface. It contains the exported benchmark metrics,
                   intelligence fields, source and backend metadata, and the merged
                   run signals used by the site.
@@ -4065,7 +4006,7 @@ function sortModelRows(rows: LeaderboardRow[], sortBy: string) {
   const useCaseLeaderboard = useCaseLeaderboardForSort(sortBy);
   return [...rows].sort((a, b) => {
     if (sortBy === "parameter-size") {
-      const delta = compareNullableNumbers(numeric(a.parameter_size_b), numeric(b.parameter_size_b), "asc");
+      const delta = compareNullableNumbers(modelParameterSizeB(a), modelParameterSizeB(b), "asc");
       if (delta !== 0) return delta;
     } else if (sortBy === "memory-footprint") {
       const delta = compareNullableNumbers(modelSizeGb(a), modelSizeGb(b), "asc");
@@ -4376,6 +4317,11 @@ function modelSizeGb(row: LeaderboardRow) {
   const bytesPerParameter = estimatedBytesPerParameter(row);
   if (parameterSize === null || bytesPerParameter === null) return null;
   return (parameterSize * 1_000_000_000 * bytesPerParameter) / 1024 ** 3;
+}
+
+function modelParameterSizeB(row: LeaderboardRow) {
+  const value = numeric(row.parameter_size_b);
+  return value !== null && value > 0 ? value : null;
 }
 
 function estimatedBytesPerParameter(row: LeaderboardRow) {

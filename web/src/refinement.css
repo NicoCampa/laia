@@ -1,27 +1,17 @@
-/*
- * Secondary-page refinement
- *
- * The homepage intentionally keeps the original precision-instrument treatment.
- * These scoped rules give the data and editorial pages one quieter system.
- */
+/* Site-wide bright, rounded analysis refinement */
 
 :root {
   --secondary-width: 1240px;
   --secondary-gutter: 48px;
-  --secondary-rule: #dedfd9;
-  --secondary-soft: #f6f7f3;
-}
-
-html,
-body {
-  overflow-x: clip;
+  --secondary-rule: #e4e7ea;
+  --secondary-soft: #f6f7f8;
 }
 
 .app-shell {
   width: 100%;
-  overflow-x: clip;
 }
 
+.page-leaderboard,
 .page-benchmarks,
 .page-models,
 .page-methodology,
@@ -34,7 +24,7 @@ body {
 .page-methodology .site-header,
 .page-mission .site-header {
   border-bottom-color: var(--secondary-rule);
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   box-shadow: none;
 }
 
@@ -42,6 +32,13 @@ body {
 .site-header nav,
 .site-header-right {
   min-width: 0;
+}
+
+/* Overview comparison plots */
+.page-leaderboard .use-case-grid,
+.page-leaderboard .benchmark-top-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
 }
 
 /* Shared secondary-page introductions */
@@ -96,9 +93,7 @@ body {
 
 /* Benchmarks */
 .page-benchmarks .benchmarks-page {
-  --benchmark-card-min-height: 368px;
-  --benchmark-plot-min-height: 258px;
-  --benchmark-track-height: 198px;
+  --benchmark-card-min-height: 0;
 }
 
 .page-benchmarks .benchmarks-hero-tabs {
@@ -107,27 +102,28 @@ body {
   width: 100%;
   max-width: none;
   justify-content: stretch;
-  gap: 0;
+  gap: 4px;
   overflow: hidden;
-  border: 1px solid var(--line-strong);
-  background: #ffffff;
+  border: 1px solid var(--secondary-rule);
+  border-radius: var(--radius-lg);
+  background: var(--secondary-soft);
+  padding: 5px;
+  box-shadow: 0 8px 22px rgba(17, 19, 21, 0.04);
 }
 
 .page-benchmarks .benchmarks-hero-tabs button {
   min-width: 0;
-  min-height: 62px;
+  min-height: 58px;
   border: 0;
-  border-right: 1px solid var(--secondary-rule);
-  background: #ffffff;
+  border-radius: 12px;
+  background: transparent;
   padding: 11px 15px 12px;
   color: var(--ink);
   text-align: left;
   box-shadow: none;
 }
 
-.page-benchmarks .benchmarks-hero-tabs button:last-child {
-  border-right: 0;
-}
+.page-benchmarks .benchmarks-hero-tabs button:last-child { border-right: 0; }
 
 .page-benchmarks .benchmarks-hero-tabs button:hover {
   background: var(--secondary-soft);
@@ -137,9 +133,9 @@ body {
 
 .page-benchmarks .benchmarks-hero-tabs button.active,
 .page-benchmarks .benchmarks-hero-tabs button[aria-pressed="true"] {
-  background: var(--ink);
-  color: #ffffff;
-  box-shadow: inset 0 -4px 0 var(--accent);
+  background: var(--accent);
+  color: var(--ink);
+  box-shadow: 0 5px 14px rgba(114, 146, 34, 0.16);
 }
 
 .page-benchmarks .benchmarks-hero-tabs span {
@@ -172,9 +168,9 @@ body {
 .page-benchmarks .language-section,
 .page-benchmarks .language-card {
   border: 1px solid var(--secondary-rule);
-  border-radius: 0;
+  border-radius: var(--radius-lg);
   background: #ffffff;
-  box-shadow: none;
+  box-shadow: 0 10px 26px rgba(17, 19, 21, 0.04);
 }
 
 .page-benchmarks .benchmark-top-plot {
@@ -249,11 +245,12 @@ body {
   align-items: stretch;
   gap: 0;
   margin: 0;
-  border: 1px solid var(--line-strong) !important;
-  border-radius: 0;
+  overflow: hidden;
+  border: 1px solid var(--secondary-rule) !important;
+  border-radius: var(--radius-lg) !important;
   background: #ffffff !important;
   padding: 0 !important;
-  box-shadow: none;
+  box-shadow: var(--shadow);
   backdrop-filter: none;
 }
 
@@ -278,9 +275,9 @@ body {
 
 .page-models .filter-panel .search-field > div,
 .page-models .filter-panel .field select {
-  min-height: 34px;
+  min-height: 40px;
   border: 0 !important;
-  border-radius: 0;
+  border-radius: 10px;
   background: transparent !important;
   padding: 0;
   color: var(--ink);
@@ -295,7 +292,7 @@ body {
 }
 
 .page-models .filter-panel .search-field input {
-  min-height: 34px;
+  min-height: 40px;
   font-size: 0.78rem;
 }
 
@@ -304,7 +301,9 @@ body {
   grid-template-columns: 30px minmax(320px, 360px) minmax(0, 1fr);
   gap: 14px;
   align-items: end;
-  border-bottom: 1px solid var(--line-strong);
+  border: 1px solid var(--secondary-rule);
+  border-radius: var(--radius-md);
+  background: var(--secondary-soft);
   padding: 12px 14px 10px;
   color: var(--quiet);
   font-family: "JetBrains Mono", monospace;
@@ -330,11 +329,11 @@ body {
 }
 
 .page-models .models-ranking-list {
-  gap: 0;
+  gap: 12px;
   overflow: visible;
   margin: 0 0 30px;
   border: 0;
-  border-bottom: 1px solid var(--line-strong);
+  border-bottom: 0;
   background: transparent;
 }
 
@@ -343,17 +342,16 @@ body {
   grid-template-columns: 30px minmax(320px, 360px) minmax(0, 1fr);
   gap: 14px;
   min-height: 88px;
-  border: 0 !important;
-  border-bottom: 1px solid var(--secondary-rule) !important;
-  border-left: 3px solid var(--provider-color, var(--ink)) !important;
-  border-radius: 0 !important;
+  border: 1px solid var(--secondary-rule) !important;
+  border-left: 4px solid var(--provider-color, var(--ink)) !important;
+  border-radius: var(--radius-md) !important;
   background: #ffffff;
-  padding: 0 14px;
-  box-shadow: none;
+  padding: 10px 14px;
+  box-shadow: 0 8px 22px rgba(17, 19, 21, 0.04);
 }
 
 .page-models .models-ranking-list .leaderboard-row:last-child {
-  border-bottom: 0 !important;
+  border-bottom: 1px solid var(--secondary-rule) !important;
 }
 
 .page-models .models-ranking-list .leaderboard-row:hover {
@@ -396,14 +394,14 @@ body {
   gap: 10px;
   margin-top: 4px;
   border: 0;
-  border-radius: 0;
+  border-radius: 999px;
   background: transparent;
   padding: 0;
 }
 
 .page-models .models-ranking-list .leaderboard-row-actions .source-link,
 .page-models .models-ranking-list .leaderboard-row-actions .details-button {
-  min-height: 24px;
+  min-height: 34px;
   gap: 5px;
   border: 0;
   border-bottom: 1px solid transparent;
@@ -431,10 +429,10 @@ body {
 
 .page-models .models-ranking-list .compact-metric-grid {
   grid-template-columns: repeat(6, minmax(70px, 1fr));
-  gap: 0;
+  gap: 6px;
   min-width: 0;
   height: 100%;
-  border-left: 1px solid var(--secondary-rule);
+  border-left: 0;
   background: transparent;
 }
 
@@ -442,16 +440,15 @@ body {
   display: grid;
   place-items: center;
   min-width: 0;
-  border: 0;
-  border-right: 1px solid var(--secondary-rule);
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid var(--secondary-rule);
+  border-radius: 9px;
+  background: var(--secondary-soft);
   padding: 8px 6px;
   text-align: center;
 }
 
 .page-models .models-ranking-list .compact-metric:last-child {
-  border-right: 0;
+  border-right: 1px solid var(--secondary-rule);
 }
 
 .page-models .models-ranking-list .compact-metric span {
@@ -465,11 +462,194 @@ body {
 
 .page-models .models-ranking-list .compact-metric.laia-summary {
   border-color: var(--secondary-rule);
-  background: linear-gradient(90deg, #f2f9df, #f8fbe9);
+  background: var(--accent-soft);
 }
 
 .page-models .models-ranking-list .compact-metric.laia-summary b {
   font-size: 0.96rem;
+}
+
+.page-models .models-comparison-plot {
+  overflow: hidden;
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  background: #ffffff;
+}
+
+.page-models .models-comparison-head {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: 32px;
+  align-items: end;
+  min-height: 104px;
+  border-bottom: 1px solid var(--secondary-rule);
+  padding: 18px 16px;
+}
+
+.page-models .models-comparison-head > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.page-models .models-comparison-head > div:first-child > span {
+  color: var(--quiet);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.page-models .models-comparison-head h2 {
+  font-family: "Arial Narrow", "Roboto Condensed", "Inter", sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.page-models .models-comparison-head p {
+  max-width: 58ch;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.page-models .models-comparison-scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  color: var(--quiet);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.54rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-models .models-comparison-scale span:not(:first-child) {
+  text-align: right;
+}
+
+.page-models .models-comparison-list {
+  display: grid;
+  min-width: 0;
+}
+
+.page-models .models-comparison-row {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 32px minmax(300px, 360px) minmax(160px, 1fr) minmax(68px, auto);
+  gap: 14px;
+  align-items: center;
+  min-height: 84px;
+  border-bottom: 1px solid var(--secondary-rule);
+  border-left: 3px solid var(--provider-color, var(--ink));
+  padding: 10px 16px 10px 12px;
+  background: #ffffff;
+  content-visibility: auto;
+  contain-intrinsic-size: 84px;
+  transition: background 150ms ease;
+}
+
+.page-models .models-comparison-row:last-child {
+  border-bottom: 0;
+}
+
+.page-models .models-comparison-row:hover {
+  background: #fafbf8;
+}
+
+.page-models .models-comparison-rank,
+.page-models .models-comparison-value {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-models .models-comparison-rank {
+  color: var(--quiet);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.page-models .models-comparison-row .model-identity {
+  gap: 12px;
+  min-width: 0;
+}
+
+.page-models .models-comparison-row .lab-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.page-models .models-comparison-row .model-identity strong {
+  font-size: 0.95rem;
+  line-height: 1.1;
+}
+
+.page-models .models-comparison-row .model-meta-line {
+  font-size: 0.7rem;
+}
+
+.page-models .models-comparison-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.page-models .models-comparison-actions .source-link,
+.page-models .models-comparison-actions .details-button {
+  min-height: 22px;
+  gap: 5px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.5rem;
+  box-shadow: none;
+}
+
+.page-models .models-comparison-actions .source-link:hover,
+.page-models .models-comparison-actions .details-button:hover {
+  border-bottom-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.page-models .models-comparison-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 12px;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent calc(25% - 1px),
+    rgba(29, 33, 26, 0.14) calc(25% - 1px),
+    rgba(29, 33, 26, 0.14) 25%
+  );
+  box-shadow: inset 0 -1px var(--secondary-rule);
+}
+
+.page-models .models-comparison-track > span {
+  position: relative;
+  display: block;
+  height: 12px;
+  background: var(--provider-color, var(--ink));
+  opacity: 0.9;
+}
+
+.page-models .models-comparison-track.missing > span {
+  display: none;
+}
+
+.page-models .models-comparison-value {
+  justify-self: end;
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 /* Methodology */
@@ -905,6 +1085,10 @@ body {
     grid-template-columns: 30px minmax(270px, 320px) minmax(0, 1fr);
   }
 
+  .page-models .models-comparison-row {
+    grid-template-columns: 30px minmax(250px, 300px) minmax(140px, 1fr) minmax(64px, auto);
+  }
+
   .page-methodology .methodology-shell {
     grid-template-columns: 200px minmax(0, 1fr);
     gap: 42px;
@@ -950,6 +1134,40 @@ body {
     display: block;
     min-height: 0;
     font-size: 0.52rem;
+  }
+
+  .page-models .models-comparison-head {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    align-items: start;
+    padding: 18px 12px;
+  }
+
+  .page-models .models-comparison-row {
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank model value"
+      ". track track";
+    gap: 10px 12px;
+    min-height: 104px;
+    padding: 14px 12px;
+    contain-intrinsic-size: 104px;
+  }
+
+  .page-models .models-comparison-rank {
+    grid-area: rank;
+  }
+
+  .page-models .models-comparison-row .model-identity {
+    grid-area: model;
+  }
+
+  .page-models .models-comparison-track {
+    grid-area: track;
+  }
+
+  .page-models .models-comparison-value {
+    grid-area: value;
   }
 
   .page-methodology .methodology-shell {
@@ -1108,6 +1326,26 @@ body {
     border-radius: 0;
   }
 
+  .page-models .models-comparison-head h2 {
+    font-size: 1.7rem;
+  }
+
+  .page-models .models-comparison-scale {
+    font-size: 0.48rem;
+  }
+
+  .page-models .models-comparison-row .model-title-line {
+    gap: 5px;
+  }
+
+  .page-models .models-comparison-row .model-identity strong {
+    font-size: 0.86rem;
+  }
+
+  .page-models .models-comparison-value {
+    font-size: 0.68rem;
+  }
+
   .page-methodology .methodology-shell {
     padding-top: 18px;
   }
@@ -1171,5 +1409,143 @@ body {
 @media (min-width: 900px) {
   .site-mark strong {
     display: block;
+  }
+}
+
+/* Final rounded-white consistency contract */
+.page-leaderboard .use-case-card,
+.page-leaderboard .benchmark-top-card,
+.page-benchmarks .benchmark-top-plot,
+.page-benchmarks .benchmark-mini-card,
+.page-benchmarks .language-section,
+.page-benchmarks .language-card,
+.page-methodology .methodology-summary-card,
+.page-methodology .methodology-score-card,
+.page-methodology .methodology-key-item,
+.page-methodology .methodology-definition,
+.page-methodology .methodology-weight-item,
+.page-methodology .methodology-benchmark,
+.page-methodology .methodology-note,
+.page-mission .mission-pillar,
+.page-mission .mission-panel,
+.page-mission .mission-statement,
+.page-models .empty-state-card {
+  border-radius: var(--radius-lg);
+}
+
+.page-methodology .methodology-summary-card,
+.page-methodology .methodology-score-card,
+.page-methodology .methodology-key-item,
+.page-methodology .methodology-definition,
+.page-methodology .methodology-weight-item,
+.page-methodology .methodology-benchmark,
+.page-methodology .methodology-note,
+.page-mission .mission-pillar,
+.page-mission .mission-panel {
+  border: 1px solid var(--secondary-rule);
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgba(17, 19, 21, 0.04);
+}
+
+.page-methodology .methodology-chapter-nav,
+.page-methodology .methodology-shell .chapter-nav,
+.page-benchmarks .language-filter,
+.page-benchmarks .plot-info-button,
+.page-models .drawer-close {
+  border-radius: 12px;
+}
+
+.page-models .models-page > .filter-panel,
+.page-models .models-ranking-list .leaderboard-row {
+  border-radius: var(--radius-md) !important;
+}
+
+.page-models .models-ranking-list .compact-metric {
+  border-radius: 9px;
+}
+
+.page-models .models-ranking-list .leaderboard-row-actions .source-link,
+.page-models .models-ranking-list .leaderboard-row-actions .details-button {
+  min-height: 34px;
+  border-radius: 999px;
+  padding-inline: 8px;
+}
+
+.page-mission .mission-statement {
+  overflow: hidden;
+  border: 1px solid var(--secondary-rule);
+  padding-inline: clamp(28px, 5vw, 72px);
+}
+
+@media (max-width: 760px) {
+  .page-leaderboard .use-case-grid,
+  .page-leaderboard .benchmark-top-grid,
+  .page-benchmarks .benchmark-small-multiples,
+  .page-benchmarks .language-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-leaderboard .leaderboard-landing-copy h1 {
+    font-size: clamp(2.75rem, 13vw, 4.5rem);
+  }
+
+  .page-leaderboard .use-case-card,
+  .page-leaderboard .benchmark-top-card,
+  .page-benchmarks .benchmark-top-plot,
+  .page-benchmarks .language-section,
+  .page-benchmarks .language-card {
+    padding: 18px 14px;
+  }
+
+  .page-models .filter-panel .search-field > div,
+  .page-models .filter-panel .field select,
+  .page-models .filter-panel .search-field input,
+  .page-models .models-ranking-list .leaderboard-row-actions .source-link,
+  .page-models .models-ranking-list .leaderboard-row-actions .details-button {
+    min-height: 44px;
+  }
+
+  .page-models .models-ranking-list .leaderboard-row-actions .source-link,
+  .page-models .models-ranking-list .leaderboard-row-actions .details-button {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  .page-models .drawer-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .page-models .models-ranking-list .compact-metric-grid {
+    gap: 6px;
+  }
+
+  .page-models .models-ranking-list .compact-metric {
+    border-radius: 9px;
+  }
+
+  .origin-map-scroll,
+  .origin-map-stage-shell {
+    display: none;
+  }
+
+  .origin-mobile-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .page-methodology .methodology-benchmark,
+  .page-mission .mission-pillar,
+  .page-mission .mission-panel,
+  .page-mission .mission-panel + .mission-panel {
+    padding: 18px 14px;
+  }
+}
+
+@media (max-width: 430px) {
+  .origin-mobile-list,
+  .footer-columns {
+    grid-template-columns: 1fr;
   }
 }
