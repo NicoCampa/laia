@@ -187,7 +187,7 @@ const PAGE_HEADLINES: Record<Page, string> = {
 const PAGE_COPY: Record<Page, string> = {
   leaderboard: "Rank 4-bit local models and OpenAI references by the text-only LAIA Index.",
   benchmarks: "Knowledge, instruction following, tool use, coding, and grounding are split into comparable slices.",
-  models: "Ranked rows include source links, footprint, benchmark coverage, run metadata, and raw exported metrics.",
+  models: "Ranked rows include source links, footprint, run metadata, and raw exported metrics.",
   methodology: "The public index keeps judge, safety, and vision results separate from the core local text comparison.",
   mission: "The project exists to make local model capability easier to see, compare, and trust on consumer and edge hardware.",
 };
@@ -195,7 +195,7 @@ const PAGE_COPY: Record<Page, string> = {
 const PAGE_SIGNALS: Record<Page, string[]> = {
   leaderboard: ["4-bit rows + OpenAI refs", "Merged benchmark runs", "Text-only LAIA Index"],
   benchmarks: [],
-  models: ["Source and backend metadata", "Coverage status per benchmark", "Raw metric table"],
+  models: ["Source and backend metadata", "Runtime and token signals", "Raw metric table"],
   methodology: ["100-point formula", "No external judge in the score", "4-bit public scope"],
   mission: ["Consumer hardware", "Edge deployment", "Private by default"],
 };
@@ -720,7 +720,7 @@ const METHODOLOGY_CHAPTERS: MethodologyChapter[] = [
     id: "method-laia-index",
     label: "LAIA Index",
     title: "LAIA Index",
-    intro: "The headline score is stored as normalized data and rendered as points, alongside coverage and available-score fields.",
+    intro: "The headline score is stored as normalized data and rendered as points out of 100.",
   },
   {
     id: "method-index-benchmarks",
@@ -784,17 +784,13 @@ const METHODOLOGY_ROW_BUILD_STEPS = [
   "For each benchmark metric family, take the newest comparable run that actually contains that metric. Global MMLU Lite and RGB language breakdown arrays follow the newest run that exported them.",
   "Merge run signals across the contributing runs. Count-like values, runtime, tokens, costs, and cap-hit counts are summed; latency-style fields keep the maximum exposed value; derived rates are recalculated on the merged row.",
   "Carry forward the newest run identity fields (`started_at`, `run_uuid`, and `normalized_result_id`) and record how many rows contributed through `merged_run_count`.",
-  "Compute `model_intelligence_score`, `model_intelligence_coverage`, and `model_intelligence_available_score` on the merged row that the website exports.",
+  "Compute the public intelligence score fields on the merged row that the website exports.",
 ];
 
 const METHODOLOGY_LAIA_FIELDS: MethodologyDefinition[] = [
   {
     term: "model_intelligence_score",
     description: "Full-suite weighted text score with missing benchmark families counted as zero. The database stores a normalized 0-1 value; the site renders it as points out of 100.",
-  },
-  {
-    term: "model_intelligence_coverage",
-    description: "Total benchmark-family weight actually present in that row. Coverage tells you how much of the text suite was run before ranking the row by its full score.",
   },
   {
     term: "model_intelligence_available_score",
@@ -967,7 +963,7 @@ const METHODOLOGY_AUDIT_FIELDS: string[] = [
 ];
 
 const METHODOLOGY_LIMITATIONS: MethodologyNamedItem[] = [
-  { label: "Missing families are penalized", detail: "`model_intelligence_score` counts missing text benchmark families as zero, so check `model_intelligence_coverage` before treating rows as fully comparable." },
+  { label: "Missing families are penalized", detail: "`model_intelligence_score` counts missing text benchmark families as zero. Compare rows only when the same five text benchmark families are present." },
   { label: "Public rows are 4-bit and reasoning-off", detail: "The public local comparison is built from 4-bit rows with reasoning disabled. Early local results did not show a large performance drop versus full-precision variants, but cross-precision rows are still kept out of the public main ranking." },
   { label: "Global MMLU Lite is generation pass@1", detail: "Do not compare it directly with log-likelihood MMLU numbers from other leaderboards." },
   { label: "BFCL scope must match", detail: "Category set, sample limit, strategy, and seed all affect the BFCL result surface." },
@@ -997,10 +993,6 @@ const METHODOLOGY_DEFINITIONS: MethodologyDefinition[] = [
   {
     term: "OpenAI reference",
     description: "A closed-source API row shown on the same public surface for context, but not a 4-bit local model row.",
-  },
-  {
-    term: "Coverage",
-    description: "`model_intelligence_coverage`, the total benchmark-family weight present in the row.",
   },
   {
     term: "Available score",
@@ -1356,14 +1348,27 @@ function LeaderboardPage({
   originRows: LeaderboardRow[];
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
-  const chartRows = useMemo(() => topIndexRows(rows), [rows]);
+  const chartRows = useMemo(() => topIndexRows(rows).slice(0, 8), [rows]);
+  const localRows = useMemo(() => rows.filter((row) => !isHostedOpenAIRow(row)), [rows]);
+  const tinyRows = useMemo(
+    () => localRows.filter((row) => row.parameter_size_b <= 3),
+    [localRows],
+  );
 
   return (
     <>
       <section className="leaderboard-landing">
-        <div className="leaderboard-landing-copy">
-          <h1>Independently benchmarked SML and TML</h1>
-          <p>SML/TML means small and tiny language models, compared with the same text-only LAIA score.</p>
+        <div className="leaderboard-topline">
+          <div className="leaderboard-landing-copy">
+            <h1>Independently benchmarked SML and TML</h1>
+            <p>SML/TML means small and tiny language models, compared with the same text-only LAIA score.</p>
+          </div>
+          <dl className="leaderboard-summary" aria-label="Live dataset summary">
+            <div><dt>Models evaluated</dt><dd>{rows.length}</dd></div>
+            <div><dt>Local models</dt><dd>{localRows.length}</dd></div>
+            <div><dt>Tiny models (≤3B)</dt><dd>{tinyRows.length}</dd></div>
+            <div><dt>Index benchmarks</dt><dd>{TEXT_CAPABILITIES.length}</dd></div>
+          </dl>
         </div>
         <IndexPlotCard
           title="LAIA score"
@@ -2116,7 +2121,7 @@ function UseCaseLeaderboardsSection({
               ))}
             </div>
             <div className="benchmark-top-list">
-              {topRows.map(({ row, score, coverage }, index) => (
+              {topRows.map(({ row, score }, index) => (
                 <button
                   className={`benchmark-top-row use-case-row ${rowToneClass(row)}`}
                   key={`use-case-${leaderboard.id}-${row.variant_id}`}
@@ -2312,13 +2317,15 @@ function IndexPlotCard({
           <h3>{title}</h3>
           <p>{subtitle}</p>
         </div>
-        <PlotBrandStamp />
+        <div className="index-scale-label" aria-hidden="true">
+          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+        </div>
       </div>
       <div className="index-plot-list" aria-label={title}>
         {rows.length === 0 && <p className="empty-note">No rows available for the chart.</p>}
         {rows.map((row, index) => {
           const score = numeric(row.model_intelligence_score);
-          const height = score === null ? 0 : Math.max(4, (score / maxScore) * 100);
+          const width = score === null ? 0 : Math.max(4, (score / maxScore) * 100);
           return (
             <button
               className={`index-plot-column ${rowToneClass(row)}`}
@@ -2328,22 +2335,16 @@ function IndexPlotCard({
               style={{ "--provider-color": providerColor(row) } as CSSProperties}
               aria-label={`Open ${displayModelName(row)} details`}
             >
-              <div className="index-column-track">
-                <span className="index-column-bar">
-                  <i
-                    style={{
-                      height: `${height}%`,
-                      background: providerColor(row),
-                    }}
-                  />
-                </span>
-                <strong>{formatIndexNumber(score ?? 0)}</strong>
-              </div>
+              <span className="index-column-rank">{String(index + 1).padStart(2, "0")}</span>
               <div className="index-column-label">
                 <LabIcon row={row} />
-                <b>{shortModelLabel(row)}</b>
-                <span>{indexColumnMetaLabel(row)}</span>
+                <span><b>{shortModelLabel(row)}</b><small>{indexColumnMetaLabel(row)}</small></span>
               </div>
+              <div className="index-column-track">
+                <span className="index-column-bar"><i style={{ width: `${width}%`, background: providerColor(row) }} /></span>
+              </div>
+              <strong className="index-column-score">{formatIndexNumber(score ?? 0)}</strong>
+              <span className="index-column-open" aria-hidden="true">View ↗</span>
             </button>
           );
         })}
@@ -3117,7 +3118,7 @@ function ModelsPage({
       <header className="models-landing">
         <div className="models-landing-copy">
           <h1>Models</h1>
-          <p>Search, filter, and inspect the tested rows, source links, benchmark coverage, and runtime metadata.</p>
+          <p>Search, filter, and inspect the tested rows, source links, benchmark results, and runtime metadata.</p>
         </div>
       </header>
 
@@ -3184,21 +3185,6 @@ function ModelsPage({
   );
 }
 
-function BenchmarkCoverage({ row }: { row: LeaderboardRow }) {
-  return (
-    <div className="benchmark-coverage" aria-label="Benchmark coverage">
-      {CAPABILITIES.map((capability) => {
-        const complete = capability.value(row) !== null;
-        return (
-          <span className={complete ? "complete" : "missing"} key={`coverage-${row.variant_id}-${capability.id}`}>
-            {capability.label}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 function ModelSourceLink({ row }: { row: LeaderboardRow }) {
   const link = modelSourceLink(row);
   if (!link.href) {
@@ -3243,10 +3229,6 @@ function ModelDetailsDrawer({ row, onClose }: { row: LeaderboardRow; onClose: ()
               <ExternalLink size={13} aria-hidden="true" />
             </a>
           )}
-        </div>
-        <div className="drawer-section">
-          <h3>Benchmark Coverage</h3>
-          <BenchmarkCoverage row={row} />
         </div>
         <div className="drawer-section">
           <h3>Run Signals</h3>
@@ -3440,10 +3422,9 @@ function MethodologyPage() {
                 while the website renders them as points out of 100.
               </p>
               <p>
-                The three intelligence fields serve different jobs: the full
-                ranking score, the benchmark-family coverage check, and the
-                within-coverage average for rows that are still missing parts of
-                the text suite.
+                The full ranking score counts missing text benchmark families as
+                zero. The available-score field remains in exported data for
+                analysis of incomplete historical runs.
               </p>
             </div>
             <div className="methodology-score-grid">
@@ -4414,11 +4395,6 @@ function formatOutputCapHits(row: LeaderboardRow) {
   );
   if (rate === null) return "cap hits n/a";
   return count === null ? `${(rate * 100).toFixed(1)}% cap hits` : `${(rate * 100).toFixed(1)}% cap hits · ${count}`;
-}
-
-function coverageLabel(row: LeaderboardRow) {
-  const complete = CAPABILITIES.filter((capability) => capability.value(row) !== null).length;
-  return `${complete}/${CAPABILITIES.length}`;
 }
 
 function modelSourceLink(row: LeaderboardRow) {
