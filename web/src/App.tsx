@@ -1079,6 +1079,16 @@ export function App() {
   );
   const options = useMemo(() => optionSets(publicRows), [publicRows]);
 
+  const navigateTo = (nextPage: Page) => {
+    setPage(nextPage);
+    if (nextPage !== "models") {
+      setSelectedModelId(null);
+    }
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+  };
+
   if (error) {
     return <StateShell title="Benchmark data failed to load" detail={error} />;
   }
@@ -1088,10 +1098,10 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell page-${page}`}>
       <SiteHeader
         page={page}
-        onNavigate={setPage}
+        onNavigate={navigateTo}
       />
 
       {page === "leaderboard" && (
@@ -1100,7 +1110,7 @@ export function App() {
           originRows={publicRows}
           onOpenModel={(row) => {
             setSelectedModelId(row.variant_id);
-            setPage("models");
+            navigateTo("models");
           }}
         />
       )}
@@ -2570,6 +2580,7 @@ function BenchmarksPage({ rows }: { rows: LeaderboardRow[] }) {
               className={benchmark.id === activeBenchmark.id ? "active" : ""}
               key={benchmark.id}
               type="button"
+              aria-pressed={benchmark.id === activeBenchmark.id}
               onClick={() => setActiveBenchmarkId(benchmark.id)}
             >
               <span>{benchmark.title}</span>
@@ -3166,6 +3177,16 @@ function ModelsPage({
         </div>
       ) : (
         <>
+          <div className="models-table-head" aria-hidden="true">
+            <span>#</span>
+            <span>Model</span>
+            <div className="models-table-metrics">
+              <span>LAIA Index</span>
+              {TEXT_CAPABILITIES.map((capability) => (
+                <span key={`models-head-${capability.id}`}>{capability.label}</span>
+              ))}
+            </div>
+          </div>
           <div className="ranking-list models-ranking-list">
             {rankedRows.map((row, index) => (
               <LeaderboardRowCard
