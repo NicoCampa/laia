@@ -1415,47 +1415,16 @@ function OverviewHighlights({
   rows: LeaderboardRow[];
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
-  const highlights = useMemo<OverviewHighlight[]>(() => {
-    const capabilityGroups = new Map(
-      topRowsByCapability(rows).map((group) => [group.capability.id, group] as const),
-    );
-    const overallItems = topIndexRows(rows).map((row) => ({
+  const items = useMemo<VerticalBarItem[]>(
+    () => topIndexRows(rows).map((row) => ({
       row,
       value: numeric(row.model_intelligence_score) ?? 0,
       detail: indexColumnMetaLabel(row),
-    }));
-    const cards: OverviewHighlight[] = [
-      {
-        id: "laia",
-        title: "LAIA score",
-        subtitle: "Composite text quality · Higher is better",
-        color: "#7c4dff",
-        items: overallItems,
-        valueLabel: formatIndexNumber,
-      },
-    ];
+    })),
+    [rows],
+  );
 
-    for (const [id, color] of [["coding", "#1683ff"], ["rag", "#ff6b35"]] as const) {
-      const group = capabilityGroups.get(id);
-      if (!group?.rows.length) continue;
-      cards.push({
-        id,
-        title: group.capability.label,
-        subtitle: `${group.capability.benchmark} · ${group.capability.metricLabel} · Higher is better`,
-        color,
-        items: group.rows.map(({ row, value }) => ({
-          row,
-          value,
-          detail: indexColumnMetaLabel(row),
-        })),
-        valueLabel: formatPercent,
-      });
-    }
-
-    return cards.filter((card) => card.items.length);
-  }, [rows]);
-
-  if (!highlights.length) return null;
+  if (!items.length) return null;
 
   return (
     <section className="overview-highlights" aria-labelledby="overview-highlights-title">
@@ -1463,13 +1432,15 @@ function OverviewHighlights({
         <h2 id="overview-highlights-title">Highlights</h2>
       </div>
       <div className="overview-highlights-grid">
-        {highlights.map((highlight) => (
-          <OverviewHighlightCard
-            {...highlight}
-            key={highlight.id}
-            onOpenModel={onOpenModel}
-          />
-        ))}
+        <OverviewHighlightCard
+          id="laia"
+          title="LAIA score"
+          subtitle="Composite text quality · Higher is better"
+          color="#7c4dff"
+          items={items}
+          valueLabel={formatIndexNumber}
+          onOpenModel={onOpenModel}
+        />
       </div>
     </section>
   );
