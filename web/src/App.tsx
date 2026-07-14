@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { WORLD_COUNTRY_PATH } from "./worldMapPaths";
 
 const WORLD_COUNTRY_PATH_WITHOUT_ANTARCTICA = WORLD_COUNTRY_PATH
@@ -1084,6 +1084,9 @@ export function App() {
     if (nextPage !== "models") {
       setSelectedModelId(null);
     }
+    if (window.location.hash) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     });
@@ -1413,6 +1416,19 @@ function ChapterNav({
 }) {
   const [activeId, setActiveId] = useState<string>(chapters[0]?.id ?? "");
 
+  const handleChapterClick = (event: ReactMouseEvent<HTMLAnchorElement>, chapterId: string) => {
+    event.preventDefault();
+    const target = document.getElementById(chapterId);
+    if (!target) return;
+
+    setActiveId(chapterId);
+    window.history.replaceState(null, "", `#${chapterId}`);
+    target.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start",
+    });
+  };
+
   useEffect(() => {
     if (!chapters.length) return;
 
@@ -1452,6 +1468,7 @@ function ChapterNav({
           href={`#${chapter.id}`}
           key={chapter.id}
           aria-current={activeId === chapter.id ? "true" : undefined}
+          onClick={(event) => handleChapterClick(event, chapter.id)}
         >
           {chapter.label}
         </a>

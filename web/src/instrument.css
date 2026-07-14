@@ -126,10 +126,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible {
   border-top:0; padding-top:24px;
 }
 .chapter-nav { top:92px; border:1px solid var(--line); border-radius:var(--radius-md); background:var(--surface-soft); padding:8px; box-shadow:0 8px 22px rgba(17,19,21,.04); }
-.chapter-nav>span { margin-bottom:14px; color:var(--quiet); font-family:"JetBrains Mono",monospace; font-size:.55rem; letter-spacing:.12em; text-transform:uppercase; }
-.chapter-nav button { min-height:38px; border:0; border-radius:9px; background:transparent; padding:0 10px; color:var(--muted); font-size:.65rem; text-align:left; }
-.chapter-nav button:last-child { border-bottom:0; }
-.chapter-nav button.active,.chapter-nav button:hover { background:var(--accent); color:var(--ink); }
+.chapter-nav>strong { margin-bottom:14px; color:var(--quiet); font-family:"JetBrains Mono",monospace; font-size:.55rem; letter-spacing:.12em; text-transform:uppercase; }
+.chapter-nav a { min-height:38px; border:0; border-radius:9px; background:transparent; padding:0 10px; color:var(--muted); font-size:.65rem; text-align:left; }
+.chapter-nav a:last-child { border-bottom:0; }
+.chapter-nav a.active,.chapter-nav a:hover { background:var(--accent); color:var(--ink); }
 .leaderboard-view .section-heading.compact,.section-heading.compact { border-top:0; padding-top:0; }
 .section-heading h2,.leaderboard-view .section-heading h2,.mission-section-head h2,.methodology-section-head h2 {
   font-family:"Arial Narrow","Roboto Condensed","Inter",sans-serif; font-size:clamp(2rem,3vw,3.4rem); font-weight:900; line-height:.95; letter-spacing:-.055em;
@@ -296,9 +296,9 @@ button.horizontal-bar-row:hover,button.horizontal-bar-row:focus-visible { backgr
   .leaderboard-landing-copy h1,.page-hero h1,.benchmarks-landing h1,.models-landing h1,.methodology-landing h1,.mission-landing h1 { max-width:11ch; font-size:clamp(2.8rem,13vw,4.7rem); line-height:.88; }
   .index-plot-heading { grid-template-columns:1fr; gap:12px; padding-right:0; }
   .leaderboard-shell { grid-template-columns:1fr; gap:28px; }
-  .chapter-nav { top:64px; display:flex; overflow-x:auto; border:1px solid var(--line); border-radius:14px; background:#fff; padding:5px; box-shadow:0 8px 20px rgba(17,19,21,.05); }
-  .chapter-nav>span { display:none; }
-  .chapter-nav button { flex:0 0 auto; min-height:42px; border:0; border-radius:10px; padding:0 14px; }
+  .chapter-nav { position:sticky; z-index:9; top:64px; display:flex; overflow-x:auto; border:1px solid var(--line); border-radius:14px; background:#fff; padding:5px; box-shadow:0 8px 20px rgba(17,19,21,.05); }
+  .chapter-nav>strong { display:none; }
+  .chapter-nav a { display:inline-flex; flex:0 0 auto; min-height:44px; align-items:center; border:0; border-radius:10px; padding:0 14px; }
   .page-hero,.benchmarks-landing,.models-landing,.methodology-landing,.mission-landing { min-height:0; padding-top:56px; padding-bottom:28px; }
   .page-hero,.benchmarks-landing,.models-landing { grid-template-columns:1fr; gap:28px; }
   .filter-panel { grid-template-columns:1fr; }

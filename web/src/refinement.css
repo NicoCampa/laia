@@ -7,8 +7,14 @@
   --secondary-soft: #f6f7f8;
 }
 
+html,
+body {
+  overflow-x: clip;
+}
+
 .app-shell {
   width: 100%;
+  overflow-x: clip;
 }
 
 .page-leaderboard,
