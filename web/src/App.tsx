@@ -1361,7 +1361,6 @@ function LeaderboardPage({
   originRows: LeaderboardRow[];
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
-  const chartRows = useMemo(() => topIndexRows(rows).slice(0, 8), [rows]);
   const localRows = useMemo(() => rows.filter((row) => !isHostedOpenAIRow(row)), [rows]);
   const tinyRows = useMemo(
     () => localRows.filter((row) => row.parameter_size_b <= 3),
@@ -1383,12 +1382,7 @@ function LeaderboardPage({
             <div><dt>Index benchmarks</dt><dd>{TEXT_CAPABILITIES.length}</dd></div>
           </dl>
         </div>
-        <IndexPlotCard
-          title="LAIA score"
-          subtitle="Higher is better"
-          rows={chartRows}
-          onOpenModel={onOpenModel}
-        />
+        <OverviewHighlights rows={rows} onOpenModel={onOpenModel} />
       </section>
 
       <section className="leaderboard-shell">
@@ -1402,6 +1396,117 @@ function LeaderboardPage({
         </div>
       </section>
     </>
+  );
+}
+
+type OverviewHighlight = {
+  id: string;
+  title: string;
+  subtitle: string;
+  color: string;
+  items: HorizontalBarItem[];
+  valueLabel: (value: number) => string;
+};
+
+function OverviewHighlights({
+  rows,
+  onOpenModel,
+}: {
+  rows: LeaderboardRow[];
+  onOpenModel: (row: LeaderboardRow) => void;
+}) {
+  const highlights = useMemo<OverviewHighlight[]>(() => {
+    const capabilityGroups = new Map(
+      topRowsByCapability(rows, 6).map((group) => [group.capability.id, group] as const),
+    );
+    const overallItems = topIndexRows(rows).slice(0, 6).map((row) => ({
+      row,
+      value: numeric(row.model_intelligence_score) ?? 0,
+      detail: indexColumnMetaLabel(row),
+    }));
+    const cards: OverviewHighlight[] = [
+      {
+        id: "laia",
+        title: "LAIA score",
+        subtitle: "Composite text quality · Higher is better",
+        color: "#7c4dff",
+        items: overallItems,
+        valueLabel: formatIndexNumber,
+      },
+    ];
+
+    for (const [id, color] of [["coding", "#1683ff"], ["rag", "#ff6b35"]] as const) {
+      const group = capabilityGroups.get(id);
+      if (!group?.rows.length) continue;
+      cards.push({
+        id,
+        title: group.capability.label,
+        subtitle: `${group.capability.benchmark} · ${group.capability.metricLabel} · Higher is better`,
+        color,
+        items: group.rows.map(({ row, value }) => ({
+          row,
+          value,
+          detail: indexColumnMetaLabel(row),
+        })),
+        valueLabel: formatPercent,
+      });
+    }
+
+    return cards.filter((card) => card.items.length);
+  }, [rows]);
+
+  if (!highlights.length) return null;
+
+  return (
+    <section className="overview-highlights" aria-labelledby="overview-highlights-title">
+      <div className="overview-highlights-heading">
+        <h2 id="overview-highlights-title">Highlights</h2>
+      </div>
+      <div className="overview-highlights-grid">
+        {highlights.map((highlight) => (
+          <OverviewHighlightCard
+            {...highlight}
+            key={highlight.id}
+            onOpenModel={onOpenModel}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OverviewHighlightCard({
+  id,
+  title,
+  subtitle,
+  color,
+  items,
+  valueLabel,
+  onOpenModel,
+}: OverviewHighlight & { onOpenModel: (row: LeaderboardRow) => void }) {
+  const titleId = `overview-highlight-${id}-title`;
+  return (
+    <article
+      className="overview-highlight-card"
+      aria-labelledby={titleId}
+      style={{ "--metric-color": color } as CSSProperties}
+    >
+      <header className="overview-highlight-card-head">
+        <div className="overview-highlight-title-row">
+          <span className="overview-highlight-marker" aria-hidden="true" />
+          <h3 id={titleId}>{title}</h3>
+        </div>
+        <p>{subtitle}</p>
+      </header>
+      <HorizontalBarPlot
+        items={items}
+        valueLabel={valueLabel}
+        ariaLabel={`${title} model comparison`}
+        onOpenModel={onOpenModel}
+        compact
+        showAxis={false}
+      />
+    </article>
   );
 }
 
@@ -2164,6 +2269,7 @@ function HorizontalBarPlot({
   onOpenModel,
   colorForItem,
   compact = false,
+  showAxis = true,
 }: {
   items: HorizontalBarItem[];
   valueLabel: (value: number) => string;
@@ -2171,18 +2277,21 @@ function HorizontalBarPlot({
   onOpenModel?: (row: LeaderboardRow) => void;
   colorForItem?: (item: HorizontalBarItem) => string;
   compact?: boolean;
+  showAxis?: boolean;
 }) {
   return (
-    <div className={`horizontal-bar-plot ${compact ? "compact" : ""}`} aria-label={ariaLabel}>
-      <div className="horizontal-bar-axis" aria-hidden="true">
-        <span />
-        <span className="horizontal-bar-ticks">
-          <i>0</i><i>25</i><i>50</i><i>75</i><i>100</i>
-        </span>
-        <span />
-      </div>
+    <div className={`horizontal-bar-plot ${compact ? "compact" : ""}`} role="group" aria-label={ariaLabel}>
+      {showAxis ? (
+        <div className="horizontal-bar-axis" aria-hidden="true">
+          <span />
+          <span className="horizontal-bar-ticks">
+            <i>0</i><i>25</i><i>50</i><i>75</i><i>100</i>
+          </span>
+          <span />
+        </div>
+      ) : null}
       <div className="horizontal-bar-rows">
-        {items.length ? items.map((item) => {
+        {items.length ? items.map((item, itemIndex) => {
           const { row, value, detail, ariaDetail } = item;
           const formattedValue = valueLabel(value);
           const width = Math.max(1.5, Math.min(100, value * 100));
@@ -2197,7 +2306,13 @@ function HorizontalBarPlot({
                 </span>
               </span>
               <span className="horizontal-bar-track" aria-hidden="true">
-                <i style={{ width: `${width}%`, background: color }} />
+                <i
+                  style={{
+                    width: `${width}%`,
+                    background: color,
+                    "--bar-index": itemIndex,
+                  } as CSSProperties}
+                />
               </span>
               <strong className="horizontal-bar-value">{formattedValue}</strong>
             </>
@@ -2209,6 +2324,7 @@ function HorizontalBarPlot({
               type="button"
               onClick={() => onOpenModel(row)}
               aria-label={`Open ${accessibleLabel}`}
+              title={accessibleLabel}
               key={`${ariaLabel}-${row.variant_id}`}
             >
               {content}
@@ -2381,38 +2497,6 @@ function dateTicks(minTime: number, maxTime: number) {
 
 function formatYearTick(time: number) {
   return String(new Date(time).getUTCFullYear());
-}
-
-function IndexPlotCard({
-  title,
-  subtitle,
-  rows,
-  onOpenModel,
-}: {
-  title: string;
-  subtitle: string;
-  rows: LeaderboardRow[];
-  onOpenModel: (row: LeaderboardRow) => void;
-}) {
-  const items = rows
-    .map((row) => ({ row, value: numeric(row.model_intelligence_score), detail: indexColumnMetaLabel(row) }))
-    .filter((item): item is { row: LeaderboardRow; value: number; detail: string } => item.value !== null);
-  return (
-    <section className="index-plot-card intelligence-card">
-      <div className="index-plot-heading">
-        <div>
-          <h3>{title}</h3>
-          <p>{subtitle}</p>
-        </div>
-      </div>
-      <HorizontalBarPlot
-        items={items}
-        valueLabel={formatIndexNumber}
-        ariaLabel={title}
-        onOpenModel={onOpenModel}
-      />
-    </section>
-  );
 }
 
 function LeaderboardRowCard({

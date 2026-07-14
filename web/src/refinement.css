@@ -41,6 +41,116 @@ body {
 }
 
 /* Overview comparison plots */
+.page-leaderboard .overview-highlights {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  min-width: 0;
+  justify-self: stretch;
+}
+
+.page-leaderboard .overview-highlights-heading {
+  border-bottom: 1px solid var(--secondary-rule);
+  padding-bottom: 12px;
+}
+
+.page-leaderboard .overview-highlights-heading h2 {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 850;
+  letter-spacing: -0.015em;
+}
+
+.page-leaderboard .overview-highlights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  align-items: stretch;
+  gap: 16px;
+}
+
+.page-leaderboard .overview-highlight-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+  border: 1px solid #d8dadd;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 22px;
+}
+
+.page-leaderboard .overview-highlight-card-head {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 72px;
+}
+
+.page-leaderboard .overview-highlight-title-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.page-leaderboard .overview-highlight-marker {
+  width: 18px;
+  height: 18px;
+  background: var(--metric-color);
+}
+
+.page-leaderboard .overview-highlight-card h3 {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.page-leaderboard .overview-highlight-card-head p {
+  min-height: 2.5em;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact {
+  align-self: end;
+  gap: 0;
+}
+
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-row {
+  grid-template-columns: minmax(96px, 122px) minmax(68px, 1fr) minmax(34px, auto);
+  gap: 8px;
+  min-height: 46px;
+  border-radius: 8px;
+  padding: 5px 2px;
+}
+
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-model {
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-model b {
+  font-size: 0.65rem;
+}
+
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-model small {
+  font-size: 0.43rem;
+}
+
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-track {
+  height: 8px;
+}
+
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-value {
+  font-size: 0.66rem;
+}
+
 .page-leaderboard .use-case-grid,
 .page-leaderboard .benchmark-top-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1484,6 +1594,24 @@ body {
 }
 
 @media (max-width: 760px) {
+  .page-leaderboard .overview-highlight-card {
+    padding: 18px 14px;
+  }
+
+  .page-leaderboard .overview-highlight-card-head {
+    min-height: 0;
+  }
+
+  .page-leaderboard .overview-highlight-card-head p {
+    min-height: 0;
+  }
+
+  .page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-row {
+    grid-template-columns: minmax(92px, 114px) minmax(64px, 1fr) minmax(40px, auto);
+    gap: 7px;
+    min-height: 46px;
+  }
+
   .page-leaderboard .use-case-grid,
   .page-leaderboard .benchmark-top-grid,
   .page-benchmarks .benchmark-small-multiples,
