@@ -1404,7 +1404,7 @@ type OverviewHighlight = {
   title: string;
   subtitle: string;
   color: string;
-  items: HorizontalBarItem[];
+  items: VerticalBarItem[];
   valueLabel: (value: number) => string;
 };
 
@@ -1498,11 +1498,12 @@ function OverviewHighlightCard({
         </div>
         <p>{subtitle}</p>
       </header>
-      <HorizontalBarPlot
+      <VerticalBarPlot
         items={items}
         valueLabel={valueLabel}
         ariaLabel={`${title} model comparison`}
         onOpenModel={onOpenModel}
+        compact
       />
     </article>
   );
@@ -2183,7 +2184,7 @@ function TopBenchmarkSection({
                 <p>{capability.benchmark} · {capability.metricLabel}</p>
               </div>
             </div>
-            <HorizontalBarPlot
+            <VerticalBarPlot
               items={topRows.map(({ row, value }) => ({ row, value }))}
               valueLabel={formatPercent}
               ariaLabel={`${capability.label} model comparison`}
@@ -2239,7 +2240,7 @@ function UseCaseLeaderboardsSection({
                 </span>
               ))}
             </div>
-            <HorizontalBarPlot
+            <VerticalBarPlot
               items={topRows.map(({ row, score }) => ({ row, value: score }))}
               valueLabel={formatPoints}
               ariaLabel={`${leaderboard.label} model comparison`}
@@ -2253,14 +2254,14 @@ function UseCaseLeaderboardsSection({
   );
 }
 
-type HorizontalBarItem = {
+type VerticalBarItem = {
   row: LeaderboardRow;
   value: number;
   detail?: string;
   ariaDetail?: string;
 };
 
-function HorizontalBarPlot({
+function VerticalBarPlot({
   items,
   valueLabel,
   ariaLabel,
@@ -2268,53 +2269,64 @@ function HorizontalBarPlot({
   colorForItem,
   compact = false,
 }: {
-  items: HorizontalBarItem[];
+  items: VerticalBarItem[];
   valueLabel: (value: number) => string;
   ariaLabel: string;
   onOpenModel?: (row: LeaderboardRow) => void;
-  colorForItem?: (item: HorizontalBarItem) => string;
+  colorForItem?: (item: VerticalBarItem) => string;
   compact?: boolean;
 }) {
+  const isScrollable = items.length > 6;
   return (
-    <div className={`horizontal-bar-plot ${compact ? "compact" : ""}`} role="group" aria-label={ariaLabel}>
-      <div className="horizontal-bar-axis" aria-hidden="true">
-        <span />
-        <span className="horizontal-bar-ticks">
-          <i>0</i><i>25</i><i>50</i><i>75</i><i>100</i>
-        </span>
-        <span />
-      </div>
-      <div className="horizontal-bar-rows">
+    <div
+      className={`vertical-comparison-plot ${compact ? "compact" : ""} ${isScrollable ? "is-scrollable" : ""}`}
+      role="group"
+      aria-label={ariaLabel}
+    >
+      <div
+        className="vertical-comparison-scroll"
+        role={isScrollable ? "region" : undefined}
+        aria-label={isScrollable ? `${ariaLabel}. Scroll horizontally to view every model.` : undefined}
+        tabIndex={isScrollable ? 0 : undefined}
+      >
+        <div className="vertical-comparison-columns">
         {items.length ? items.map((item, itemIndex) => {
           const { row, value, detail, ariaDetail } = item;
           const formattedValue = valueLabel(value);
-          const width = Math.max(1.5, Math.min(100, value * 100));
+          const height = Math.max(1.5, Math.min(100, value * 100));
           const color = colorForItem?.(item) ?? providerColor(row);
           const content = (
             <>
-              <span className="horizontal-bar-model">
-                <LabIcon row={row} />
-                <span>
-                  <b>{shortModelLabel(row)}</b>
-                  {detail && <small>{detail}</small>}
-                </span>
-              </span>
-              <span className="horizontal-bar-track" aria-hidden="true">
+              <span
+                className="vertical-comparison-track"
+                aria-hidden="true"
+                style={{ "--laia-bar-height": `${height}%` } as CSSProperties}
+              >
                 <i
+                  className="vertical-comparison-fill"
                   style={{
-                    width: `${width}%`,
+                    height: `${height}%`,
                     background: color,
-                    "--bar-index": itemIndex,
+                    "--laia-bar-index": Math.min(itemIndex, 8),
                   } as CSSProperties}
                 />
+                <strong className="vertical-comparison-value">
+                  {formattedValue}
+                </strong>
               </span>
-              <strong className="horizontal-bar-value">{formattedValue}</strong>
+              <span className="vertical-comparison-provider" aria-hidden="true">
+                <LabIcon row={row} />
+              </span>
+              <span className="vertical-comparison-model">
+                <b>{shortModelLabel(row)}</b>
+                {detail && <small>{detail}</small>}
+              </span>
             </>
           );
           const accessibleLabel = `${displayModelName(row)}, ${formattedValue}${ariaDetail ? `, ${ariaDetail}` : ""}`;
           return onOpenModel ? (
             <button
-              className={`horizontal-bar-row ${rowToneClass(row)}`}
+              className={`vertical-comparison-column ${rowToneClass(row)}`}
               type="button"
               onClick={() => onOpenModel(row)}
               aria-label={`Open ${accessibleLabel}`}
@@ -2325,7 +2337,7 @@ function HorizontalBarPlot({
             </button>
           ) : (
             <div
-              className={`horizontal-bar-row ${rowToneClass(row)}`}
+              className={`vertical-comparison-column ${rowToneClass(row)}`}
               role="img"
               aria-label={accessibleLabel}
               title={accessibleLabel}
@@ -2335,6 +2347,7 @@ function HorizontalBarPlot({
             </div>
           );
         }) : <span className="empty-note">n/a</span>}
+        </div>
       </div>
     </div>
   );
@@ -2920,7 +2933,7 @@ function LanguageBarPlotCard({
         </div>
         <PlotBrandStamp />
       </div>
-      <HorizontalBarPlot
+      <VerticalBarPlot
         items={items.map(({ row, score, value }) => ({
           row,
           value,
@@ -3059,7 +3072,7 @@ function BenchmarkTopPlot({
           <span>{metric.kind === "error" ? "Lower is better" : "Higher is better"}</span>
         </div>
       </div>
-      <HorizontalBarPlot
+      <VerticalBarPlot
         items={items.map(({ row, value }) => ({ row, value, detail: quantizationLabel(row) }))}
         valueLabel={formatPercent}
         ariaLabel={`${benchmark.title} ${metric.label} comparison`}
@@ -3089,7 +3102,7 @@ function BenchmarkMiniPlot({
         </div>
         <PlotBrandStamp />
       </div>
-      <HorizontalBarPlot
+      <VerticalBarPlot
         items={items.map(({ row, value }) => ({ row, value, detail: quantizationLabel(row) }))}
         valueLabel={formatPercent}
         ariaLabel={`${benchmark.title} ${metric.label} compact comparison`}
