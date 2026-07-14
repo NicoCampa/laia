@@ -1503,8 +1503,6 @@ function OverviewHighlightCard({
         valueLabel={valueLabel}
         ariaLabel={`${title} model comparison`}
         onOpenModel={onOpenModel}
-        compact
-        showAxis={false}
       />
     </article>
   );
@@ -2269,7 +2267,6 @@ function HorizontalBarPlot({
   onOpenModel,
   colorForItem,
   compact = false,
-  showAxis = true,
 }: {
   items: HorizontalBarItem[];
   valueLabel: (value: number) => string;
@@ -2277,19 +2274,16 @@ function HorizontalBarPlot({
   onOpenModel?: (row: LeaderboardRow) => void;
   colorForItem?: (item: HorizontalBarItem) => string;
   compact?: boolean;
-  showAxis?: boolean;
 }) {
   return (
     <div className={`horizontal-bar-plot ${compact ? "compact" : ""}`} role="group" aria-label={ariaLabel}>
-      {showAxis ? (
-        <div className="horizontal-bar-axis" aria-hidden="true">
-          <span />
-          <span className="horizontal-bar-ticks">
-            <i>0</i><i>25</i><i>50</i><i>75</i><i>100</i>
-          </span>
-          <span />
-        </div>
-      ) : null}
+      <div className="horizontal-bar-axis" aria-hidden="true">
+        <span />
+        <span className="horizontal-bar-ticks">
+          <i>0</i><i>25</i><i>50</i><i>75</i><i>100</i>
+        </span>
+        <span />
+      </div>
       <div className="horizontal-bar-rows">
         {items.length ? items.map((item, itemIndex) => {
           const { row, value, detail, ariaDetail } = item;
@@ -2874,7 +2868,7 @@ function GlobalMMLURegionPlot({
   const title = `${region.label} (${region.languages.length})`;
 
   return (
-    <GlobalMMLUColumnPlot
+    <LanguageBarPlotCard
       items={items}
       subtitle={subtitle}
       title={title}
@@ -2901,14 +2895,14 @@ function GlobalMMLULanguagePlot({
   const items = limit === null ? allItems : allItems.slice(0, limit);
 
   return (
-    <GlobalMMLUColumnPlot
+    <LanguageBarPlotCard
       items={items}
       title={languageLabel(language)}
     />
   );
 }
 
-function GlobalMMLUColumnPlot({
+function LanguageBarPlotCard({
   title,
   subtitle,
   items,
@@ -3029,7 +3023,7 @@ function RGBLanguagePlot({
   const items = limit === null ? allItems : allItems.slice(0, limit);
 
   return (
-    <GlobalMMLUColumnPlot
+    <LanguageBarPlotCard
       items={items}
       subtitle={rgbLanguageSubtitle(items)}
       title={languageLabel(language)}

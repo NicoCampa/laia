@@ -63,9 +63,9 @@ body {
 
 .page-leaderboard .overview-highlights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
-  gap: 16px;
+  gap: 18px;
 }
 
 .page-leaderboard .overview-highlight-card {
@@ -117,38 +117,9 @@ body {
   line-height: 1.3;
 }
 
-.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact {
+.page-leaderboard .overview-highlight-card .horizontal-bar-plot {
   align-self: end;
-  gap: 0;
-}
-
-.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-row {
-  grid-template-columns: minmax(96px, 122px) minmax(68px, 1fr) minmax(34px, auto);
-  gap: 8px;
-  min-height: 46px;
-  border-radius: 8px;
-  padding: 5px 2px;
-}
-
-.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-model {
-  grid-template-columns: 24px minmax(0, 1fr);
   gap: 6px;
-}
-
-.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-model b {
-  font-size: 0.65rem;
-}
-
-.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-model small {
-  font-size: 0.43rem;
-}
-
-.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-track {
-  height: 8px;
-}
-
-.page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-value {
-  font-size: 0.66rem;
 }
 
 .page-leaderboard .use-case-grid,
@@ -290,8 +261,26 @@ body {
 }
 
 .page-benchmarks .benchmark-top-plot {
-  min-height: var(--benchmark-card-min-height);
+  min-height: 0;
+  gap: 18px;
   padding: 24px;
+}
+
+.page-benchmarks .benchmark-mini-card,
+.page-benchmarks .language-card {
+  min-height: 0;
+  gap: 14px;
+}
+
+.page-benchmarks .language-card {
+  overflow: visible;
+}
+
+.page-benchmarks .benchmark-top-plot::after,
+.page-benchmarks .benchmark-mini-card::after,
+.page-benchmarks .language-card::after {
+  display: none !important;
+  content: none !important;
 }
 
 .page-benchmarks .benchmark-plot-title {
@@ -310,38 +299,6 @@ body {
 .page-benchmarks .benchmark-plot-title p {
   font-size: 0.78rem;
   font-weight: 600;
-}
-
-.page-benchmarks .benchmark-column-plot {
-  gap: 11px;
-  min-height: var(--benchmark-plot-min-height);
-  padding-top: 20px;
-}
-
-.page-benchmarks .benchmark-column {
-  flex-basis: 80px;
-  min-width: 80px;
-  grid-template-rows: var(--benchmark-track-height) 24px auto auto;
-}
-
-.page-benchmarks .benchmark-column-track {
-  height: var(--benchmark-track-height);
-  background: repeating-linear-gradient(
-    90deg,
-    var(--secondary-soft) 0,
-    var(--secondary-soft) calc(25% - 1px),
-    #e6e8e1 calc(25% - 1px),
-    #e6e8e1 25%
-  );
-}
-
-.page-benchmarks .benchmark-column-track span {
-  border-radius: 4px 4px 0 0;
-}
-
-.page-benchmarks .benchmark-column strong {
-  font-size: 0.62rem;
-  line-height: 1.15;
 }
 
 .page-benchmarks .plot-info-button {
@@ -1604,12 +1561,6 @@ body {
 
   .page-leaderboard .overview-highlight-card-head p {
     min-height: 0;
-  }
-
-  .page-leaderboard .overview-highlight-card .horizontal-bar-plot.compact .horizontal-bar-row {
-    grid-template-columns: minmax(92px, 114px) minmax(64px, 1fr) minmax(40px, auto);
-    gap: 7px;
-    min-height: 46px;
   }
 
   .page-leaderboard .use-case-grid,
