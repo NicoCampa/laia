@@ -62,7 +62,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible {
   width:min(1280px,calc(100% - 48px)); min-height:0; margin:0 auto;
   padding:clamp(48px,6vw,82px) 0 clamp(64px,8vw,104px);
 }
-.leaderboard-topline { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(300px,.65fr); gap:clamp(44px,8vw,120px); align-items:end; }
 .leaderboard-landing-copy { position:static; display:grid; gap:18px; align-content:start; padding-top:10px; text-align:left; }
 .leaderboard-landing-copy::before {
   content:"LAIA / 2026"; width:fit-content; border-bottom:3px solid var(--accent); padding-bottom:7px;
@@ -73,12 +72,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible {
   font-size:clamp(3.8rem,6.5vw,6.8rem); font-weight:900; line-height:.83; letter-spacing:-.075em; text-wrap:balance;
 }
 .leaderboard-landing-copy p { max-width:43ch; color:var(--muted); font-size:1rem; line-height:1.55; text-align:left; }
-.leaderboard-summary { display:grid; gap:0; margin:0; border:1px solid var(--line); border-radius:var(--radius-lg); background:#fff; padding:16px 20px; box-shadow:var(--shadow); }
-.leaderboard-summary::before { content:"Live dataset summary"; display:block; padding:2px 0 12px; color:var(--quiet); font-family:"JetBrains Mono",monospace; font-size:.58rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
-.leaderboard-summary>div { display:grid; grid-template-columns:1fr auto; gap:20px; border-top:1px solid var(--line); padding:11px 0; }
-.leaderboard-summary dt,.leaderboard-summary dd { margin:0; font-family:"JetBrains Mono",monospace; font-size:.66rem; }
-.leaderboard-summary dt { color:var(--muted); }
-.leaderboard-summary dd { color:var(--ink); font-weight:900; font-variant-numeric:tabular-nums; }
 .leaderboard-landing .index-plot-card {
   min-height:0; border:1px solid var(--line);
   border-radius:var(--radius-xl); background:#fff; padding:22px; box-shadow:var(--shadow);
@@ -297,7 +290,6 @@ button.vertical-comparison-column:focus-visible { outline:3px solid var(--blue-s
 @media (max-width:1080px) {
   .site-header { grid-template-columns:auto 1fr auto; }
   .site-mark strong { display:none; }
-  .leaderboard-topline { grid-template-columns:1fr; gap:36px; }
   .leaderboard-landing-copy h1 { max-width:11ch; font-size:clamp(4rem,9vw,7rem); }
   .filter-panel { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .search-field { grid-column:1/-1; }
@@ -316,7 +308,6 @@ button.vertical-comparison-column:focus-visible { outline:3px solid var(--blue-s
   .app-shell { padding-bottom:calc(82px + env(safe-area-inset-bottom)); }
   .leaderboard-landing,.leaderboard-shell,.hero-band,.filter-panel,.page-grid,.methodology-landing,.methodology-shell,.footer { width:min(100% - 28px,1280px); }
   .leaderboard-landing { gap:42px; padding:48px 0 64px; }
-  .leaderboard-topline { grid-template-columns:1fr; gap:30px; }
   .leaderboard-landing-copy { gap:18px; }
   .leaderboard-landing-copy h1,.page-hero h1,.benchmarks-landing h1,.models-landing h1,.methodology-landing h1,.mission-landing h1 { max-width:11ch; font-size:clamp(2.8rem,13vw,4.7rem); line-height:.88; }
   .index-plot-heading { grid-template-columns:1fr; gap:12px; padding-right:0; }
@@ -340,7 +331,6 @@ button.vertical-comparison-column:focus-visible { outline:3px solid var(--blue-s
 }
 
 @media (max-width:430px) {
-  .leaderboard-summary { grid-template-columns:1fr; }
   .footer-columns { grid-template-columns:1fr; }
   .site-mark-logo { width:62px; }
   .site-mark strong { display:none; }

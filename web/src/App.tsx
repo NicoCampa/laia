@@ -1361,26 +1361,12 @@ function LeaderboardPage({
   originRows: LeaderboardRow[];
   onOpenModel: (row: LeaderboardRow) => void;
 }) {
-  const localRows = useMemo(() => rows.filter((row) => !isHostedOpenAIRow(row)), [rows]);
-  const tinyRows = useMemo(
-    () => localRows.filter((row) => row.parameter_size_b <= 3),
-    [localRows],
-  );
-
   return (
     <>
       <section className="leaderboard-landing">
-        <div className="leaderboard-topline">
-          <div className="leaderboard-landing-copy">
-            <h1>Independently benchmarked SML and TML</h1>
-            <p>SML/TML means small and tiny language models, compared with the same text-only LAIA score.</p>
-          </div>
-          <dl className="leaderboard-summary" aria-label="Live dataset summary">
-            <div><dt>Models evaluated</dt><dd>{rows.length}</dd></div>
-            <div><dt>Local models</dt><dd>{localRows.length}</dd></div>
-            <div><dt>Tiny models (≤3B)</dt><dd>{tinyRows.length}</dd></div>
-            <div><dt>Index benchmarks</dt><dd>{TEXT_CAPABILITIES.length}</dd></div>
-          </dl>
+        <div className="leaderboard-landing-copy">
+          <h1>Independently benchmarked SML and TML</h1>
+          <p>SML/TML means small and tiny language models, compared with the same text-only LAIA score.</p>
         </div>
         <OverviewHighlights rows={rows} onOpenModel={onOpenModel} />
       </section>

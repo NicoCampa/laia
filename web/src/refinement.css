@@ -44,9 +44,9 @@ body {
 .page-leaderboard .overview-highlights {
   display: grid;
   gap: 18px;
-  width: 100%;
+  width: min(100%, 1040px);
   min-width: 0;
-  justify-self: stretch;
+  justify-self: center;
 }
 
 .page-leaderboard .overview-highlights-heading {
