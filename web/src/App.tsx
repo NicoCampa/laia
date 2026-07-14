@@ -1417,9 +1417,9 @@ function OverviewHighlights({
 }) {
   const highlights = useMemo<OverviewHighlight[]>(() => {
     const capabilityGroups = new Map(
-      topRowsByCapability(rows, 6).map((group) => [group.capability.id, group] as const),
+      topRowsByCapability(rows).map((group) => [group.capability.id, group] as const),
     );
-    const overallItems = topIndexRows(rows).slice(0, 6).map((row) => ({
+    const overallItems = topIndexRows(rows).map((row) => ({
       row,
       value: numeric(row.model_intelligence_score) ?? 0,
       detail: indexColumnMetaLabel(row),
@@ -2172,7 +2172,7 @@ function TopBenchmarkSection({
         <div>
           <h2>Category bar plots</h2>
         </div>
-        <p>The five highest scores in each LAIA category, plotted on a shared 0-100 scale.</p>
+        <p>Every scored model in each LAIA category, plotted on a shared 0-100 scale.</p>
       </div>
       <div className="benchmark-top-grid">
         {visibleGroups.map(({ capability, rows: topRows }) => (
@@ -2220,7 +2220,7 @@ function UseCaseLeaderboardsSection({
         <div>
           <h2>Use-case bar plots</h2>
         </div>
-        <p>Local SLM comparisons by benchmark outcomes only. Runtime, latency, throughput, and hardware cost are excluded.</p>
+        <p>All scored models compared by benchmark outcomes only. Runtime, latency, throughput, and hardware cost are excluded.</p>
       </div>
       <div className="use-case-grid">
         {groups.map(({ leaderboard, rows: topRows }) => (
@@ -4022,26 +4022,23 @@ function topIndexRows(rows: LeaderboardRow[]) {
     .sort((a, b) => scoreForRank(b) - scoreForRank(a));
 }
 
-function topRowsByCapability(rows: LeaderboardRow[], limit = 5) {
+function topRowsByCapability(rows: LeaderboardRow[]) {
   return TEXT_CAPABILITIES.map((capability) => ({
     capability,
     rows: rows
       .map((row) => ({ row, value: capability.value(row) }))
       .filter((item): item is { row: LeaderboardRow; value: number } => item.value !== null)
-      .sort((a, b) => b.value - a.value || scoreForRank(b.row) - scoreForRank(a.row))
-      .slice(0, limit),
+      .sort((a, b) => b.value - a.value || scoreForRank(b.row) - scoreForRank(a.row)),
   }));
 }
 
-function topRowsByUseCase(rows: LeaderboardRow[], leaderboard: UseCaseLeaderboard, limit = 5) {
+function topRowsByUseCase(rows: LeaderboardRow[], leaderboard: UseCaseLeaderboard) {
   return rows
-    .filter((row) => !isHostedOpenAIRow(row))
     .map((row) => ({ row, ...useCaseLeaderboardScore(row, leaderboard) }))
     .filter((item): item is { row: LeaderboardRow; score: number; coverage: number } =>
       item.score !== null && item.coverage >= leaderboard.minCoverage
     )
-    .sort((a, b) => b.score - a.score || scoreForRank(b.row) - scoreForRank(a.row))
-    .slice(0, limit);
+    .sort((a, b) => b.score - a.score || scoreForRank(b.row) - scoreForRank(a.row));
 }
 
 function useCaseLeaderboardScore(row: LeaderboardRow, leaderboard: UseCaseLeaderboard) {
