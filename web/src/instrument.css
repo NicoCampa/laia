@@ -105,7 +105,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible {
 .leaderboard-landing .index-column-label {
   display:grid; grid-template-columns:28px minmax(0,1fr); grid-template-rows:1fr; align-items:center; gap:10px; min-width:0;
 }
-.leaderboard-landing .index-column-label .lab-icon { width:28px; height:28px; border:1px solid var(--line); border-radius:0; background:#fff; }
+.leaderboard-landing .index-column-label .lab-icon { width:28px; height:28px; border:0; border-radius:0; background:transparent; }
 .leaderboard-landing .index-column-label>span { display:grid; gap:2px; min-width:0; }
 .leaderboard-landing .index-column-label b { overflow:hidden; font-size:.74rem; line-height:1.15; text-overflow:ellipsis; white-space:nowrap; }
 .leaderboard-landing .index-column-label small { overflow:hidden; color:var(--muted); font-family:"JetBrains Mono",monospace; font-size:.48rem; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
@@ -189,22 +189,23 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible {
 /* Shared Artificial Analysis-style vertical comparison plots */
 .vertical-comparison-plot {
   --laia-plot-height:240px; --laia-column-width:60px; --laia-track-width:40px;
-  width:100%; min-width:0;
+  width:100%; max-width:100%; min-width:0; contain:inline-size;
 }
 .vertical-comparison-plot.compact {
   --laia-plot-height:210px; --laia-column-width:50px; --laia-track-width:34px;
 }
 .vertical-comparison-scroll {
   width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; overscroll-behavior-inline:contain;
-  scroll-snap-type:x proximity; scrollbar-width:none;
+  -webkit-overflow-scrolling:touch; touch-action:pan-x pan-y; scroll-snap-type:x proximity; scroll-padding-inline:6px;
+  scrollbar-width:none;
 }
 .vertical-comparison-scroll::-webkit-scrollbar { display:none; }
-.vertical-comparison-plot.is-scrollable .vertical-comparison-scroll {
+.vertical-comparison-plot.has-horizontal-overflow .vertical-comparison-scroll {
   padding-bottom:7px; scrollbar-color:rgba(17,19,21,.28) transparent; scrollbar-width:thin;
 }
-.vertical-comparison-plot.is-scrollable .vertical-comparison-scroll::-webkit-scrollbar { display:block; height:6px; }
-.vertical-comparison-plot.is-scrollable .vertical-comparison-scroll::-webkit-scrollbar-track { background:transparent; }
-.vertical-comparison-plot.is-scrollable .vertical-comparison-scroll::-webkit-scrollbar-thumb { border-radius:999px; background:rgba(17,19,21,.28); }
+.vertical-comparison-plot.has-horizontal-overflow .vertical-comparison-scroll::-webkit-scrollbar { display:block; height:6px; }
+.vertical-comparison-plot.has-horizontal-overflow .vertical-comparison-scroll::-webkit-scrollbar-track { background:transparent; }
+.vertical-comparison-plot.has-horizontal-overflow .vertical-comparison-scroll::-webkit-scrollbar-thumb { border-radius:999px; background:rgba(17,19,21,.28); }
 .vertical-comparison-scroll:focus-visible { border-radius:8px; outline:3px solid var(--blue-strong); outline-offset:2px; }
 .vertical-comparison-columns {
   position:relative; display:flex; width:max-content; min-width:100%; align-items:flex-start; justify-content:space-around;
@@ -239,7 +240,7 @@ button.vertical-comparison-column:focus-visible { outline:3px solid var(--blue-s
   line-height:1; text-shadow:0 1px 0 #fff,0 0 5px #fff; white-space:nowrap; transform:translateX(-50%);
 }
 .vertical-comparison-provider { display:grid; width:28px; height:28px; place-items:center; }
-.vertical-comparison-provider .lab-icon { width:26px; height:26px; border:1px solid var(--line); background:#fff; }
+.vertical-comparison-provider .lab-icon { width:26px; height:26px; border:0; background:transparent; box-shadow:none; }
 .vertical-comparison-model {
   display:grid; width:calc(var(--laia-column-width) + 8px); min-width:0; align-content:start; justify-items:center; gap:3px;
 }
@@ -267,7 +268,7 @@ button.vertical-comparison-column:focus-visible { outline:3px solid var(--blue-s
 .models-ranking-list,.ranking-list { gap:12px; border:0; background:transparent; }
 .leaderboard-row { min-height:94px; border:1px solid var(--line)!important; border-left:4px solid var(--provider-color,var(--ink))!important; border-radius:var(--radius-md)!important; background:var(--surface); padding:16px 18px; box-shadow:0 7px 20px rgba(17,19,21,.035); }
 .leaderboard-row:hover { background:#fbfcf8; transform:none; }
-.lab-icon { border-radius:9px; }
+.lab-icon { border:0!important; border-radius:9px; box-shadow:none!important; }
 .model-badge { border-radius:999px; }
 .compact-metric { border-radius:8px; }
 .model-badge { min-height:20px; border-color:var(--line); background:var(--surface-soft); padding:0 6px; font-family:"JetBrains Mono",monospace; font-size:.52rem; letter-spacing:.04em; }

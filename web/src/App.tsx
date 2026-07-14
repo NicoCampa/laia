@@ -17,7 +17,7 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { WORLD_COUNTRY_PATH } from "./worldMapPaths";
 
@@ -2276,18 +2276,37 @@ function VerticalBarPlot({
   colorForItem?: (item: VerticalBarItem) => string;
   compact?: boolean;
 }) {
-  const isScrollable = items.length > 6;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+
+  useEffect(() => {
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    const updateOverflowState = () => {
+      setHasHorizontalOverflow(viewport.scrollWidth > viewport.clientWidth + 1);
+    };
+    const frame = window.requestAnimationFrame(updateOverflowState);
+    const observer = new ResizeObserver(updateOverflowState);
+    observer.observe(viewport);
+    if (viewport.firstElementChild) observer.observe(viewport.firstElementChild);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [compact, items.length]);
+
   return (
     <div
-      className={`vertical-comparison-plot ${compact ? "compact" : ""} ${isScrollable ? "is-scrollable" : ""}`}
+      className={`vertical-comparison-plot ${compact ? "compact" : ""} ${hasHorizontalOverflow ? "has-horizontal-overflow" : ""}`}
       role="group"
       aria-label={ariaLabel}
     >
       <div
+        ref={scrollRef}
         className="vertical-comparison-scroll"
-        role={isScrollable ? "region" : undefined}
-        aria-label={isScrollable ? `${ariaLabel}. Scroll horizontally to view every model.` : undefined}
-        tabIndex={isScrollable ? 0 : undefined}
+        role={hasHorizontalOverflow ? "region" : undefined}
+        aria-label={hasHorizontalOverflow ? `${ariaLabel}. Scroll horizontally to view every model.` : undefined}
+        tabIndex={hasHorizontalOverflow ? 0 : undefined}
       >
         <div className="vertical-comparison-columns">
         {items.length ? items.map((item, itemIndex) => {
