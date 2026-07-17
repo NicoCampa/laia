@@ -14,7 +14,7 @@ with familiar closed-source API models that come with usage cost.
 ![LAIA Index leaderboard](docs/images/laia-index.png)
 
 The homepage centers the **LAIA Index**, the public text-only comparison surface for
-4-bit local rows plus OpenAI reference rows.
+4-bit local rows, Prism ML's 1-bit Bonsai row, and OpenAI reference rows.
 
 ![Benchmark evidence page](docs/images/benchmark-evidence.png)
 
@@ -43,7 +43,8 @@ What local SLMs and TLMs unlock:
 The public comparison surface is intentionally narrow:
 
 - **Included in the main LAIA Index surface:** 4-bit local text rows served through
-  Ollama, LM Studio, and oMLX, plus OpenAI reference rows for context.
+  Ollama, LM Studio, and oMLX, Prism ML's 1-bit Bonsai row, plus OpenAI reference rows
+  for context.
 - **Included in the public website, but outside the LAIA Index:** OCRBench v2 and
   MMMU as separate vision benchmarks.
 - **Reported separately, not included in the LAIA Index:** SimpleQA and HarmBench,

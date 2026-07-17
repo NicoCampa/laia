@@ -179,13 +179,13 @@ const PAGE_LABELS: Record<Page, string> = {
 const PAGE_HEADLINES: Record<Page, string> = {
   leaderboard: "Local model intelligence, measured on your machine.",
   benchmarks: "Benchmarks",
-  models: "A practical catalog of 4-bit local models and OpenAI references.",
+  models: "A practical catalog of 4-bit local models, 1-bit Bonsai, and OpenAI references.",
   methodology: "A score built for transparent comparison.",
   mission: "Why local models matter.",
 };
 
 const PAGE_COPY: Record<Page, string> = {
-  leaderboard: "Compare 4-bit local models and OpenAI references with the text-only LAIA Index.",
+  leaderboard: "Compare 4-bit local models, 1-bit Bonsai, and OpenAI references with the text-only LAIA Index.",
   benchmarks: "Knowledge, instruction following, tool use, coding, and grounding are split into comparable slices.",
   models: "Ranked rows include source links, footprint, run metadata, and raw exported metrics.",
   methodology: "The public index keeps judge, safety, and vision results separate from the core local text comparison.",
@@ -193,10 +193,10 @@ const PAGE_COPY: Record<Page, string> = {
 };
 
 const PAGE_SIGNALS: Record<Page, string[]> = {
-  leaderboard: ["4-bit rows + OpenAI refs", "Merged benchmark runs", "Text-only LAIA Index"],
+  leaderboard: ["4-bit rows + 1-bit Bonsai + OpenAI refs", "Merged benchmark runs", "Text-only LAIA Index"],
   benchmarks: [],
   models: ["Source and backend metadata", "Runtime and token signals", "Raw metric table"],
-  methodology: ["100-point formula", "No external judge in the score", "4-bit public scope"],
+  methodology: ["100-point formula", "No external judge in the score", "4-bit + Bonsai public scope"],
   mission: ["Consumer hardware", "Edge deployment", "Private by default"],
 };
 
@@ -763,6 +763,7 @@ const METHODOLOGY_CHAPTERS: MethodologyChapter[] = [
 const METHODOLOGY_PUBLIC_SCOPE = {
   main: [
     "Publishable 4-bit local rows.",
+    "Prism ML's 1-bit Bonsai row.",
     "OpenAI reference rows shown on the same score surface for context.",
     "The five text-only, non-judge benchmark families used by LAIA.",
   ],
@@ -772,7 +773,7 @@ const METHODOLOGY_PUBLIC_SCOPE = {
     "Supporting benchmark metrics that explain a row without changing the headline LAIA ranking.",
   ],
   excluded: [
-    "Non-4-bit local precision variants from the public main ranking.",
+    "Other non-4-bit local precision variants from the public main ranking.",
     "Smoke rows, synthetic rows, and other non-publishable export rows.",
     "Judge-dependent and multimodal metrics from the text-only LAIA score itself.",
   ],
@@ -964,7 +965,7 @@ const METHODOLOGY_AUDIT_FIELDS: string[] = [
 
 const METHODOLOGY_LIMITATIONS: MethodologyNamedItem[] = [
   { label: "Missing families are penalized", detail: "`model_intelligence_score` counts missing text benchmark families as zero. Compare rows only when the same five text benchmark families are present." },
-  { label: "Public rows are 4-bit and reasoning-off", detail: "The public local comparison is built from 4-bit rows with reasoning disabled. Early local results did not show a large performance drop versus full-precision variants, but cross-precision rows are still kept out of the public main ranking." },
+  { label: "Public rows are 4-bit, plus 1-bit Bonsai", detail: "The public local comparison is built from 4-bit rows with reasoning disabled, with Prism ML's 1-bit Bonsai included as an explicit efficiency-focused exception. Other cross-precision rows remain outside the public main ranking." },
   { label: "Global MMLU Lite is generation pass@1", detail: "Do not compare it directly with log-likelihood MMLU numbers from other comparison systems." },
   { label: "BFCL scope must match", detail: "Category set, sample limit, strategy, and seed all affect the BFCL result surface." },
   { label: "RGB scope must match", detail: "Suite rows and single-dataset RGB rows are not equivalent unless dataset, noise rate, and passage settings match." },
@@ -3375,8 +3376,8 @@ function MethodologyPage() {
           <h1>How LAIA works</h1>
           <p>
             How Local AI Analysis builds comparable rows, computes the LAIA Index,
-            and keeps benchmark evidence auditable for local 4-bit models and
-            OpenAI references.
+            and keeps benchmark evidence auditable for local 4-bit models,
+            1-bit Bonsai, and OpenAI references.
           </p>
         </div>
       </section>
@@ -3394,10 +3395,10 @@ function MethodologyPage() {
             <div className="methodology-prose">
               <p>
                 Local AI Analysis publishes a public text-only comparison surface
-                for 4-bit local rows plus OpenAI reference rows. The headline
-                LAIA score is meant to answer one question: how strong is this
-                row on a comparable text benchmark mix without relying on an
-                external judge.
+                for 4-bit local rows, Prism ML's 1-bit Bonsai row, and OpenAI
+                reference rows. The headline LAIA score is meant to answer one
+                question: how strong is this row on a comparable text benchmark
+                mix without relying on an external judge.
               </p>
               <p>
                 Vision, factuality, and safety are still part of the project, but
@@ -4127,11 +4128,15 @@ function isHostedOpenAIRow(row: LeaderboardRow) {
 }
 
 function isPublicLeaderboardRow(row: LeaderboardRow) {
-  return isFourBitRow(row) || isHostedOpenAIRow(row);
+  return isFourBitRow(row) || isBonsaiRow(row) || isHostedOpenAIRow(row);
 }
 
 function isFourBitRow(row: LeaderboardRow) {
   return quantizationLabel(row).toLowerCase() === "4 bit";
+}
+
+function isBonsaiRow(row: LeaderboardRow) {
+  return providerLabel(row) === "Prism ML";
 }
 
 function isSmolLM2Row(row: LeaderboardRow) {
@@ -4322,6 +4327,7 @@ function quantizationLabel(row: LeaderboardRow) {
   if (/\b(?:q6|6\s*bit|6bit)\b/.test(source)) return "6 bit";
   if (/\b(?:q5|5\s*bit|5bit)\b/.test(source)) return "5 bit";
   if (/\b(?:q4(?:[_-][a-z0-9]+)*|4\s*bit|4bit)\b/.test(source)) return "4 bit";
+  if (/\b(?:q1(?:[_-][a-z0-9]+)*|1\s*bit|1bit)\b/.test(source)) return "1 bit";
   if (row.quantization && row.quantization.toUpperCase() !== "SERVER") return titleCaseModelName(row.quantization.replace(/_/g, " "));
   return "Closed source";
 }
