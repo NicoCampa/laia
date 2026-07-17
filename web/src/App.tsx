@@ -4254,6 +4254,7 @@ function modelMetaLine(row: LeaderboardRow) {
 function providerLabel(row: LeaderboardRow) {
   const source = `${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.model_repo ?? ""} ${row.variant_name}`.toLowerCase();
   if (source.includes("openai") || /\bgpt-[\w.-]+/.test(source)) return "OpenAI";
+  if (source.includes("bonsai") || source.includes("prism-ml")) return "Prism ML";
   if (source.includes("nemotron") || source.includes("nvidia")) return "NVIDIA";
   if (source.includes("liquid") || source.includes("lfm")) return "Liquid AI";
   if (source.includes("qwen") || source.includes("alibaba")) return "Alibaba";
@@ -4286,12 +4287,14 @@ function providerColorName(provider: string) {
     TII: "#e56f52",
     Microsoft: "#2f80ed",
     "Hugging Face": "#b88700",
+    "Prism ML": "#111111",
   };
   return colors[provider] ?? "#7a7a74";
 }
 
 function labKey(row: LeaderboardRow) {
-  const source = `${providerLabel(row)} ${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.variant_name}`.toLowerCase();
+  const source = `${providerLabel(row)} ${row.family} ${row.base_model_name} ${apiModel(row) ?? ""} ${row.model_repo ?? ""} ${row.variant_name}`.toLowerCase();
+  if (source.includes("bonsai") || source.includes("prism-ml")) return "bonsai";
   if (source.includes("nvidia") || source.includes("nemotron")) return "nvidia";
   if (source.includes("qwen") || source.includes("alibaba")) return "qwen";
   if (source.includes("google") || source.includes("gemma")) return "google";
