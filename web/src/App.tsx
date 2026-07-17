@@ -4334,7 +4334,7 @@ function quantizationLabel(row: LeaderboardRow) {
 
 function indexColumnMetaLabel(row: LeaderboardRow) {
   if (isHostedOpenAIRow(row)) return "Closed source";
-  return `${quantizationLabel(row)} · ${formatModelSize(row)}`;
+  return formatModelSize(row);
 }
 
 function quantizationRank(row: LeaderboardRow) {
